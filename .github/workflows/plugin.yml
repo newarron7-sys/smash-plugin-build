@@ -1,0 +1,51 @@
+name: Compilation du plugin (code seulement ; donnees chiffrees, sortie chiffree)
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: plugin
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Donnees (dechiffrees seulement ici, jamais affichees)
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          printf '%s' "$CLE" > /tmp/cle && openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/cle -in donnees/generated.rs.enc -out plugin/src/generated.rs && rm -f /tmp/cle
+          test -s plugin/src/generated.rs
+      - name: Cache outils (cargo-skyline, toolchain Switch)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-skyline
+            ~/.cargo/skyline
+            ~/.rustup/toolchains/*skyline*
+            ~/.cargo/registry
+            ~/.cargo/git
+            plugin/target
+          key: skyline-v1-${{ hashFiles('plugin/Cargo.toml') }}
+          restore-keys: skyline-v1-
+      - name: Compiler
+        working-directory: plugin
+        timeout-minutes: 40
+        run: |
+          command -v cargo-skyline >/dev/null || cargo install cargo-skyline
+          if ! (rustup toolchain list | grep -qi skyline && [ -d ~/.cargo/skyline/toolchain ]); then for i in 1 2 3 4 5; do cargo skyline update-std && break; sleep 20; done; fi
+          set +o pipefail; yes | cargo skyline build --release 2>&1 | grep -E "^(error|warning: unused)|-->|Finished|could not compile" | head -60; set -o pipefail
+          N=$(ls target/aarch64-skyline-switch/release/*.nro | head -1); test -s "$N"
+          rm -f src/generated.rs
+          printf '%s' "$CLE" > /tmp/cle && openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/cle -in "$N" -out /tmp/plugin.nro.enc && rm -f /tmp/cle
+        env:
+          CLE: ${{ secrets.CLE }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-chiffre
+          path: /tmp/plugin.nro.enc
+          retention-days: 7
