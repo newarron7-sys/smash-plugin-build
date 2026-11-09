@@ -139,7 +139,7 @@ unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     let Some(mv) = find(script) else { return };
     // retouches demandées (jab 3 et up smash en plusieurs coups, down smash plus tard) : construites à partir des
     // coups de REX eux-mêmes
-    let evs_v = retouches::evs(script, evs);
+    let evs_v = retouches::evs(script, mv.evs);
     let evs: &[Ev] = &evs_v;
     let lua = agent.lua_state_agent;
     let boma = agent.module_accessor;
