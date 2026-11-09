@@ -4,7 +4,7 @@ on:
     branches: [ main ]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: plugin
   cancel-in-progress: true
@@ -44,8 +44,9 @@ jobs:
           printf '%s' "$CLE" > /tmp/cle && openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/cle -in "$N" -out /tmp/plugin.nro.enc && rm -f /tmp/cle
         env:
           CLE: ${{ secrets.CLE }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: plugin-chiffre
-          path: /tmp/plugin.nro.enc
-          retention-days: 7
+      - name: Sortie chiffree (branche sortie)
+        run: |
+          mkdir -p /tmp/sortie && cp /tmp/plugin.nro.enc /tmp/sortie/ && cd /tmp/sortie
+          git init -q -b sortie && git config user.name "github-actions" && git config user.email "github-actions@users.noreply.github.com"
+          git add -A && git commit -q -m "plugin chiffre ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" sortie
