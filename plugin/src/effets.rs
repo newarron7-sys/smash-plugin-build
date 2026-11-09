@@ -143,11 +143,20 @@ unsafe extern "C" fn e_attack12(agent: &mut L2CAgentBase) {
 }
 // jab 3 (demandé) : sys_explosion_sign devant lui (sa « Shadow Ball » de REX), image 11
 unsafe extern "C" fn e_attack13(agent: &mut L2CAgentBase) {
-    frame(agent.lua_state_agent, 11.0);
+    // demandé : rafale de 4 petits coups puis le coup final ; l'effet est celui du nair du Shadow d'Ultimate (explosion
+    // rouge + flamme), à l'endroit de sa « Shadow Ball » devant lui
+    let p = (0.0, 8.35, 16.5);
+    for f in [10.0, 13.0, 16.0, 19.0] {
+        salve_courte(agent, f, "top", p, 0.6);
+    }
+    salve_courte(agent, 22.0, "top", p, 1.1);
+    frame(agent.lua_state_agent, 27.0);
     if is_excute(agent) {
-        EFFECT_FOLLOW(agent, Hash40::new("sys_explosion_sign"), Hash40::new("top"), 0, 9, 10, 0, 0, 0, 1.0, true);
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_smartbomb_finish"), true, true);
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_flame"), true, true);
     }
 }
+
 // attaque en courant (REX : traînée n° 12 devant lui de l'image 0 à 18)
 unsafe extern "C" fn e_attackdash(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
@@ -180,12 +189,35 @@ unsafe extern "C" fn e_attacklw3(agent: &mut L2CAgentBase) {
 }
 // smash avant (REX : éclat de charge sur la jambe droite à l'image 6, puis il fonce)
 unsafe extern "C" fn e_attacks4(agent: &mut L2CAgentBase) {
+    // demandé : l'effet du down B aérien du Shadow d'Ultimate (corps rouge brûlant, traînée rouge), mais droit comme un
+    // dash, à partir de l'image 17, avec de la fumée blanche au sol qui le suit
     let lua = agent.lua_state_agent;
     frame(lua, 6.0);
     fx(agent, "sys_smash_flash", "legr", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
-    frame(lua, 8.0);
-    poussiere(agent, "sys_dash_smoke", 0.9);
+    frame(lua, 17.0);
+    if is_excute(agent) {
+        BURN_COLOR(agent, 2.0, 0.0, 0.1, 0.9);
+    }
+    let mut f = 17.0;
+    while f < 39.0 {
+        frame(lua, f);
+        if is_excute(agent) {
+            EFFECT_FOLLOW(agent, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 8, -4, 0, 0, 0, 1.2, true);
+            LAST_EFFECT_SET_COLOR(agent, 2.0, 0.0, 0.1);
+            EFFECT_FOLLOW(agent, Hash40::new("sys_attack_line_b"), Hash40::new("top"), 0, 8, 2, 0, 0, 0, 1.0, true);
+            LAST_EFFECT_SET_COLOR(agent, 2.0, 0.0, 0.1);
+            LAST_EFFECT_SET_ALPHA(agent, 0.6);
+            FOOT_EFFECT(agent, Hash40::new("sys_dash_smoke"), Hash40::new("top"), -4, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
+        }
+        f += 3.0;
+    }
+    frame(lua, 39.0);
+    if is_excute(agent) {
+        BURN_COLOR_NORMAL(agent);
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_attack_line_b"), false, false);
+    }
 }
+
 // charges des smashs (REX : éclats répétés)
 unsafe extern "C" fn e_charge_jambe(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
@@ -214,9 +246,37 @@ unsafe fn sb(agent: &mut L2CAgentBase, eff: &str, bone: &str, y: f32, sc: f32, c
         }
     }
 }
+unsafe fn sbz(agent: &mut L2CAgentBase, eff: &str, bone: &str, p: (f32, f32, f32), sc: f32, c: (f32, f32, f32), alpha: f32, rate: f32) {
+    if is_excute(agent) {
+        EFFECT_FOLLOW(agent, Hash40::new(eff), Hash40::new(bone), p.0, p.1, p.2, 0, 0, 0, sc, true);
+        LAST_EFFECT_SET_COLOR(agent, c.0, c.1, c.2);
+        LAST_EFFECT_SET_ALPHA(agent, alpha);
+        if rate > 0.0 {
+            LAST_EFFECT_SET_RATE(agent, rate);
+        }
+    }
+}
 const ROUGE: (f32, f32, f32) = (3.5, 0.0, 0.2);
 const ROUGE2: (f32, f32, f32) = (4.5, 0.0, 0.2);
 const CYAN: (f32, f32, f32) = (0.0, 1.0, 1.0);
+
+/// salve courte (2 images) à une position quelconque : pour les coups en rafale
+unsafe fn salve_courte(agent: &mut L2CAgentBase, f0: f32, bone: &str, p: (f32, f32, f32), k: f32) {
+    let lua = agent.lua_state_agent;
+    frame(lua, f0);
+    sbz(agent, "sys_smartbomb_finish", bone, p, 0.25 * k, ROUGE, 0.4, 0.3);
+    sbz(agent, "sys_smartbomb_finish", bone, p, 0.25 * k, CYAN, 0.3, 0.5);
+    sbz(agent, "sys_flame", bone, p, 0.9 * k, ROUGE, 0.3, 0.0);
+    frame(lua, f0 + 1.0);
+    sbz(agent, "sys_smartbomb_finish", bone, p, 0.2 * k, ROUGE2, 0.4, 0.6);
+}
+
+/// onde de choc au sol (demandé)
+unsafe fn onde(agent: &mut L2CAgentBase, sc: f32) {
+    if is_excute(agent) {
+        LANDING_EFFECT(agent, Hash40::new("sys_ground_shockwave"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, sc, 0, 0, 0, 0, 0, 0, false);
+    }
+}
 
 /// une salve d'explosions + flamme comme celles du Shadow d'Ultimate, à partir de l'image f0, sur l'os et la hauteur
 /// donnés, éteinte 4 images plus tard
@@ -241,6 +301,8 @@ unsafe fn salve(agent: &mut L2CAgentBase, f0: f32, bone: &str, y: f32, k: f32) {
 // smash haut (demandé : celui du Shadow d'Ultimate) : fumée au sol, puis au coup explosions rouges sur les hanches,
 // flamme au-dessus de lui et tourbillons ; ses coups de REX touchent aux images 33 et 52
 unsafe extern "C" fn e_attackhi4(agent: &mut L2CAgentBase) {
+    // demandé : coups en rafale de l'image 33 jusqu'au coup final (52), avec les effets du Shadow d'Ultimate à chaque
+    // coup, et une onde de choc au sol
     let lua = agent.lua_state_agent;
     frame(lua, 22.0);
     poussiere(agent, "sys_landing_smoke", 1.0);
@@ -249,27 +311,25 @@ unsafe extern "C" fn e_attackhi4(agent: &mut L2CAgentBase) {
         LANDING_EFFECT(agent, Hash40::new("sys_jump_smoke"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, false);
     }
     frame(lua, 33.0);
+    onde(agent, 1.0);
     sb(agent, "sys_smartbomb_finish", "hip", 0.0, 0.36, (5.5, 0.0, 0.2), 0.2, 0.1);
     sb(agent, "sys_smartbomb_finish", "hip", 0.0, 0.26, CYAN, 0.1, 0.3);
     sb(agent, "sys_flame", "top", 8.0, 1.0, (5.5, 0.0, 0.2), 0.3, 0.0);
     if is_excute(agent) {
         EFFECT_FLIP(agent, Hash40::new("sys_whirlwind_l"), Hash40::new("sys_whirlwind_r"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, true, *EF_FLIP_YZ);
     }
-    frame(lua, 35.0);
-    sb(agent, "sys_smartbomb_finish", "hip", 0.0, 0.16, CYAN, 0.1, 0.6);
-    frame(lua, 37.0);
-    sb(agent, "sys_smartbomb_finish", "hip", 0.0, 0.26, (6.5, 0.0, 0.2), 0.2, 0.4);
-    frame(lua, 41.0);
-    sb(agent, "sys_smartbomb_finish", "hip", 0.0, 0.16, CYAN, 0.2, 1.0);
-    if is_excute(agent) {
-        LAST_EFFECT_SET_RATE(agent, 1.1);
-        EFFECT_OFF_KIND(agent, Hash40::new("sys_smartbomb_finish"), true, true);
+    let mut f = 37.0;
+    while f < 50.0 {
+        salve_courte(agent, f, "hip", (0.0, 0.0, 0.0), 1.0);
+        f += 4.0;
     }
-    // 2e coup de REX (image 52)
-    salve(agent, 52.0, "hip", 0.0, 1.2);
+    frame(lua, 52.0);
+    onde(agent, 1.3);
+    salve(agent, 52.0, "hip", 0.0, 1.3);
     frame(lua, 64.0);
     poussiere(agent, "sys_landing_smoke", 1.0);
 }
+
 // smash bas (REX : éclat à l'image 2, puis traces n° 10 aux deux mains, images 12 à 21)
 unsafe extern "C" fn e_attacklw4(agent: &mut L2CAgentBase) {
     // demandé : la bulle rose-rouge du down B du Shadow d'Ultimate (sys_smartbomb_finish) sur ses DEUX mains, à ses
@@ -282,7 +342,6 @@ unsafe extern "C" fn e_attacklw4(agent: &mut L2CAgentBase) {
         sb(agent, "sys_smartbomb_finish", m, 0.0, 0.3, (5.5, 0.0, 0.2), 0.2, 0.1);
         sb(agent, "sys_smartbomb_finish", m, 0.0, 0.22, CYAN, 0.1, 0.3);
     }
-    poussiere(agent, "sys_atk_smoke", 0.8);
     frame(lua, 14.0);
     for m in ["handl", "handr"] {
         sb(agent, "sys_smartbomb_finish", m, 0.0, 0.14, CYAN, 0.1, 0.6);
@@ -295,7 +354,11 @@ unsafe extern "C" fn e_attacklw4(agent: &mut L2CAgentBase) {
     for m in ["handl", "handr"] {
         sb(agent, "sys_smartbomb_finish", m, 0.0, 0.14, CYAN, 0.2, 1.0);
     }
-    frame(lua, 22.0);
+    // demandé : onde de choc au sol quand il frappe (sa hitbox vient maintenant à l'image 20)
+    frame(lua, 20.0);
+    onde(agent, 1.1);
+    poussiere(agent, "sys_atk_smoke", 0.8);
+    frame(lua, 30.0);
     if is_excute(agent) {
         EFFECT_OFF_KIND(agent, Hash40::new("sys_smartbomb_finish"), true, true);
     }
@@ -303,9 +366,26 @@ unsafe extern "C" fn e_attacklw4(agent: &mut L2CAgentBase) {
 // aériens
 // nair (demandé : feu et fumée du Shadow d'Ultimate) : une salve à chacun de ses 2 coups de REX (images 5 et 14)
 unsafe extern "C" fn e_attackairn(agent: &mut L2CAgentBase) {
+    // demandé : le feu et la fumée du back air du Shadow d'Ultimate (fumée de la ceinture-fusée, flamme) qui suivent
+    // ses DEUX pieds pendant le coup, en plus des salves à ses 2 coups de REX (images 5 et 14)
+    let lua = agent.lua_state_agent;
+    frame(lua, 5.0);
+    if is_excute(agent) {
+        for pied in ["toel", "toer"] {
+            EFFECT_FOLLOW(agent, Hash40::new("sys_rocketbelt_smoke_loop"), Hash40::new(pied), 0, 0, 0, 0, 0, 0, 0.8, true);
+            EFFECT_FOLLOW(agent, Hash40::new("sys_flame"), Hash40::new(pied), 0, 1.5, 0, 0, 0, 0, 0.5, true);
+            LAST_EFFECT_SET_COLOR(agent, 3.5, 0.6, 0.1);
+        }
+    }
     salve(agent, 5.0, "top", 8.0, 1.0);
     salve(agent, 14.0, "top", 8.0, 1.0);
+    frame(lua, 40.0);
+    if is_excute(agent) {
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_rocketbelt_smoke_loop"), false, false);
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_flame"), false, false);
+    }
 }
+
 // fair (demandé : celui du Shadow d'Ultimate) : salve sur le poing gauche à son coup de REX (image 19)
 unsafe extern "C" fn e_attackairf(agent: &mut L2CAgentBase) {
     salve(agent, 19.0, "handl", -1.5, 1.0);

@@ -96,6 +96,7 @@ pub struct Mv {
 include!("generated.rs");
 
 mod effets;
+mod retouches;
 
 /// perso de base (nom interne) : Sonic
 pub const BASE: &str = "sonic";
@@ -136,13 +137,17 @@ fn son(attr: &str) -> i32 {
 /// joue le coup de Super Shadow (REX) sur l'animation de Sonic
 unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     let Some(mv) = find(script) else { return };
+    // retouches demandées (jab 3 et up smash en plusieurs coups, down smash plus tard) : construites à partir des
+    // coups de REX eux-mêmes
+    let evs_v = retouches::evs(script, evs);
+    let evs: &[Ev] = &evs_v;
     let lua = agent.lua_state_agent;
     let boma = agent.module_accessor;
     // FT_MOTION_RATE = images de jeu par image d'animation : l'animation de Sonic dure alors autant que la sienne
     let end = MotionModule::end_frame(boma);
     let r = if end > 1.0 && mv.total > 1.0 { (mv.total / end).clamp(0.25, 4.0) } else { 1.0 };
     FT_MOTION_RATE(agent, r);
-    let first_hit = mv.evs.iter().find(|e| !e.clear && e.body < 0 && e.rate <= 0.0).map(|e| e.f).unwrap_or(1.0);
+    let first_hit = evs.iter().find(|e| !e.clear && e.body < 0 && e.rate <= 0.0).map(|e| e.f).unwrap_or(1.0);
     let mut cur = 0.0f32;
     let mut smash_hold_done = false;
     let mut landing_on = false;
@@ -151,7 +156,7 @@ unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     let lr_check = if script == "game_attackairb" { *ATTACK_LR_CHECK_B } else { *ATTACK_LR_CHECK_F };
     // smash : image où la charge commence (juste avant le coup si REX n'a pas de sous-action « Start »)
     let hold_f = if mv.hold > 0.0 { mv.hold / r } else { ((first_hit - 2.0) / r).max(1.0) };
-    for e in mv.evs {
+    for e in evs {
         let af = if e.rate > 0.0 { (e.f + delay) / r } else { ((e.f + delay) / r).max(1.0) };
         if mv.kind == 1 && !smash_hold_done && af >= hold_f {
             // le smash se charge à son image (avant les événements qui viennent après)
@@ -205,7 +210,7 @@ unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     }
     if mv.kind == 2 {
         // fin du coup en l'air : l'atterrissage redevient normal un peu après
-        let after = (mv.evs.last().map(|e| e.f).unwrap_or(1.0) + 5.0) / r;
+        let after = (evs.last().map(|e| e.f).unwrap_or(1.0) + 5.0) / r;
         if after > cur {
             frame(lua, after);
         }
