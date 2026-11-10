@@ -1,0 +1,28 @@
+name: Recherche (scripts publics de Sonic)
+on:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/recherche.yml' ]
+permissions:
+  contents: write
+jobs:
+  chercher:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Scripts de Sonic (ssbu-dumped-scripts, HDR)
+        run: |
+          mkdir -p /tmp/out && cd /tmp
+          git clone -q --depth 1 --filter=blob:none --sparse https://github.com/WuBoytH/ssbu-dumped-scripts d && cd d && git sparse-checkout set --no-cone '*sonic*' >/dev/null 2>&1; cd /tmp
+          find d -ipath '*sonic*' -type f | head -50 > /tmp/out/fichiers.txt; cat /tmp/out/fichiers.txt
+          for f in $(find d -ipath '*sonic*' -type f -name '*.txt' -o -ipath '*sonic*' -type f -name '*.lua' -o -ipath '*sonic*' -type f -name '*.c' | head -20); do echo "== $f"; done
+          find d -ipath '*sonic*' -type f -exec cat {} + > /tmp/out/sonic_tout.txt 2>/dev/null || true
+          wc -c /tmp/out/sonic_tout.txt
+          git clone -q --depth 1 --filter=blob:none --sparse https://github.com/HDR-Development/HewDraw-Remix hdr && cd hdr && git sparse-checkout set fighters/sonic >/dev/null 2>&1; cd /tmp
+          find hdr/fighters/sonic -name '*.rs' -exec cat {} + > /tmp/out/hdr_sonic.rs 2>/dev/null || true
+          wc -c /tmp/out/hdr_sonic.rs
+      - name: Publier (branche recherche)
+        run: |
+          cd /tmp/out && git init -q -b recherche && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m recherche --allow-empty
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" recherche
