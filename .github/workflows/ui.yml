@@ -1,0 +1,43 @@
+name: Interface (chiffree)
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'donnees/ui.tgz.enc' ]
+permissions:
+  contents: write
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Cache ultimate_tex_cli
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/ultimate_tex_cli
+          key: ultimate-tex-cli-v1
+      - name: ultimate_tex_cli
+        env:
+          RUSTFLAGS: -C link-arg=-lstdc++
+        run: command -v ultimate_tex_cli >/dev/null || cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli >/dev/null 2>&1
+      - name: Rendu (rien n'est affiche)
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          sudo apt-get install -y fonts-dejavu-core >/dev/null 2>&1 || true
+          pip install -q ssbh_data_py numpy pillow >/dev/null 2>&1
+          printf '%s' "$CLE" > /tmp/k
+          mkdir -p /tmp/a /tmp/out /tmp/pub
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/k -in donnees/ui.tgz.enc | tar xz -C /tmp/a
+          bash /tmp/a/run.sh || true
+          echo "images : $(find /tmp/out/mod -name '*.bntx' | wc -l)"
+          tar cz -C /tmp/out . | openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -out /tmp/pub/ui.tgz.enc
+          rm -f /tmp/k
+      - name: Publier (branche ui, chiffre)
+        run: |
+          cd /tmp/pub && git init -q -b ui && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m ui
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" ui
