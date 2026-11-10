@@ -974,6 +974,40 @@ unsafe extern "C" fn e_catchattack(agent: &mut L2CAgentBase) {
     }
 }
 
+// ------------------------------------------------------------------ esquives (demandé : l'effet de son up B)
+// REX : roulades et esquive sur place intangibles (EscapeN images 1 à 24, EscapeF 3 à 19, EscapeB 4 à 19), esquive
+// aérienne invisible (images 6 à 35). Demandé : le même effet que le up B (Chaos Control) : éclair bleu, il
+// disparaît pendant l'esquive, éclair bleu quand il réapparaît.
+static mut ESQ_CACHE: [bool; 8] = [false; 8];
+pub unsafe fn frame_esquive(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    let st = StatusModule::status_kind(boma);
+    let (a, b) = if st == *FIGHTER_STATUS_KIND_ESCAPE {
+        (1.0, 24.0)
+    } else if st == *FIGHTER_STATUS_KIND_ESCAPE_F {
+        (3.0, 19.0)
+    } else if st == *FIGHTER_STATUS_KIND_ESCAPE_B {
+        (4.0, 19.0)
+    } else if st == *FIGHTER_STATUS_KIND_ESCAPE_AIR {
+        (6.0, 35.0)
+    } else {
+        (-1.0, -1.0)
+    };
+    let f = MotionModule::frame(boma);
+    let cache = f >= a && f < b;
+    if cache && !ESQ_CACHE[e] {
+        eclat_bleu(boma);
+        VisibilityModule::set_whole(boma, false);
+        ESQ_CACHE[e] = true;
+    } else if !cache && ESQ_CACHE[e] {
+        VisibilityModule::set_whole(boma, true);
+        eclat_bleu(boma);
+        ESQ_CACHE[e] = false;
+    }
+}
+
+
 pub fn install(a: &mut Agent) {
     a.acmd("game_specialnhoming", g_specialnhoming, Priority::Low);
     a.acmd("game_specialnhit", g_combo, Priority::Low);
@@ -1004,7 +1038,8 @@ pub fn install(a: &mut Agent) {
     a.acmd("sound_throwlw", s_throwlw, Priority::Low);
     a.acmd("game_catchattack", g_catchattack, Priority::Low);
     // provocations de REX : les effets de Sonic (traînées de course, boule) ne vont pas avec
-    for n in ["effect_appealhil", "effect_appealhir", "effect_appealsl", "effect_appealsr", "effect_appeallwl", "effect_appeallwr"] {
+    for n in ["effect_appealhil", "effect_appealhir", "effect_appealsl", "effect_appealsr", "effect_appeallwl", "effect_appeallwr",
+              "game_appealhil", "game_appealhir", "game_appealsl", "game_appealsr", "game_appeallwl", "game_appeallwr"] {
         a.acmd(n, rien, Priority::Low);
     }
     a.acmd("effect_catchattack", e_catchattack, Priority::Low);
