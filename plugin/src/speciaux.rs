@@ -520,8 +520,13 @@ unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
             PostureModule::update_rot_y_lr(boma);
         }
         s_vitesse(fighter, S_VITESSE);
+        // vol plané de REX (AirBoost) : la pose tourne en boucle tant qu'il fonce
+        if MotionModule::frame(boma) >= MotionModule::end_frame(boma) - 1.0 {
+            MotionModule::set_frame(boma, 0.0, false);
+        }
         let tenu = ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_SPECIAL);
-        if (!tenu && S_T[e] > 8) || S_T[e] >= S_COURSE_MAX {
+        // vidéo REX : une poussée courte (~15 images) par appui, plus longue si B reste enfoncé
+        if (!tenu && S_T[e] > 15) || S_T[e] >= S_COURSE_MAX {
             // coup de pied de fin, il glisse en ralentissant
             S_PHASE[e] = 1;
             MotionModule::change_motion(boma, Hash40::new("special_s_end_start"), 0.0, 1.0, false, 0.0, false, false);
@@ -550,6 +555,14 @@ unsafe extern "C" fn s_end(fighter: &mut L2CFighterCommon) -> L2CValue {
 
 /// coup de pied de fin : REX SpecialSEnd (9 % à l'image 5, 6 % à l'image 10, fin à 25)
 unsafe extern "C" fn g_specialsendstart(agent: &mut L2CAgentBase) { crate::run(agent, "game_specialsendstart"); }
+
+/// freinage : il se redresse, petit éclat et fumée au sol (vidéo REX)
+unsafe extern "C" fn e_specialsendstart(agent: &mut L2CAgentBase) {
+    if is_excute(agent) {
+        smash_script::macros::EFFECT(agent, Hash40::new("sys_smash_flash"), Hash40::new("top"), 0, 9, 2, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, true);
+        smash_script::macros::FOOT_EFFECT(agent, Hash40::new("sys_turn_smoke"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, false);
+    }
+}
 
 /// projection vers le haut, même technique que Zero : le passer en l'air pendant la prise la cassait (l'adversaire
 /// restait au sol). La montée reste dans l'animation (pose qui monte, Trans à 0) tant qu'il tient l'adversaire ;
@@ -600,6 +613,10 @@ pub fn install(a: &mut Agent) {
     a.acmd("game_specialsdashlw", g_specialsdashlw, Priority::Low);
     a.acmd("game_specialsspin", g_specialsspin, Priority::Low);
     a.acmd("game_specialsendstart", g_specialsendstart, Priority::Low);
+    // effets de Sonic (boule jaune, traînée de la boule) retirés : le boost doré est posé par effets::boost_side_b
+    a.acmd("effect_specialsdashlw", rien, Priority::Low);
+    a.acmd("effect_specialsdashhi", rien, Priority::Low);
+    a.acmd("effect_specialsendstart", e_specialsendstart, Priority::Low);
     a.status(Main, *FIGHTER_STATUS_KIND_SPECIAL_S, s_main);
     a.status(End, *FIGHTER_STATUS_KIND_SPECIAL_S, s_end);
     a.acmd("game_throwhi", g_throwhi, Priority::Low);
