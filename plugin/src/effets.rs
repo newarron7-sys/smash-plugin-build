@@ -318,10 +318,20 @@ unsafe extern "C" fn e_attackhi4(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         EFFECT_FLIP(agent, Hash40::new("sys_whirlwind_l"), Hash40::new("sys_whirlwind_r"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, true, *EF_FLIP_YZ);
     }
-    let mut f = 37.0;
-    while f < 50.0 {
+    // demandé : moins d'effets (le jeu ralentissait) : une salve toutes les 8 images au lieu de 4, et les
+    // explosions précédentes éteintes avant chaque salve (elles s'accumulaient)
+    for f in [39.0, 47.0] {
+        frame(lua, f - 1.0);
+        if is_excute(agent) {
+            EFFECT_OFF_KIND(agent, Hash40::new("sys_smartbomb_finish"), true, true);
+            EFFECT_OFF_KIND(agent, Hash40::new("sys_flame"), true, true);
+        }
         salve_courte(agent, f, "hip", (0.0, 0.0, 0.0), 1.0);
-        f += 4.0;
+    }
+    frame(lua, 51.0);
+    if is_excute(agent) {
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_smartbomb_finish"), true, true);
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_flame"), true, true);
     }
     frame(lua, 52.0);
     onde(agent, 1.3);
