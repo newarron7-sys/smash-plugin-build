@@ -216,12 +216,63 @@ unsafe extern "C" fn e_combo(agent: &mut L2CAgentBase) {
 }
 unsafe extern "C" fn rien(_agent: &mut L2CAgentBase) {}
 
+// ------------------------------------------------------------------ side B de REX (demandé)
+// Course du spin dash de Sonic avec ses animations et ses dégâts de REX (SpecialSDashHi 8 %, SpecialSDashLw 4 %,
+// SpecialSSpin 4 % aux images 10 et 20). Structure des scripts de Sonic gardée (id d'attaque du statut, attaque
+// prise en même temps) pour que la course réagisse comme avant aux coups donnés.
+unsafe fn coup_course(agent: &mut L2CAgentBase, dmg: f32, ang: u64, kbg: i32, bkb: i32, size: f32) {
+    let boma = agent.module_accessor;
+    let id = *FIGHTER_SONIC_STATUS_SPECIAL_S_DASH_ATTACK_ID_DEFAULT;
+    ATTACK(agent, id as u64, 0, Hash40::new("hip"), dmg, ang, kbg, 0, bkb, size, 0.0, 1.5, 0.0, None, None, None,
+           1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, false, false, false, false, true,
+           *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
+           Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_KICK, *ATTACK_REGION_BODY);
+    AttackModule::set_captured_same_time_attack(boma, id, true);
+}
+unsafe extern "C" fn g_specialsdashhi(agent: &mut L2CAgentBase) {
+    if is_excute(agent) {
+        JostleModule::set_status(agent.module_accessor, false);
+        AttackModule::clear_all(agent.module_accessor);
+        coup_course(agent, 8.0, 55, 72, 67, 3.1);
+    }
+}
+unsafe extern "C" fn g_specialsdashlw(agent: &mut L2CAgentBase) {
+    if is_excute(agent) {
+        JostleModule::set_status(agent.module_accessor, false);
+        AttackModule::clear_all(agent.module_accessor);
+        coup_course(agent, 4.0, 59, 96, 64, 3.5);
+    }
+}
+unsafe extern "C" fn g_specialsspin(agent: &mut L2CAgentBase) {
+    if is_excute(agent) {
+        JostleModule::set_status(agent.module_accessor, false);
+    }
+    for f in [10.0, 20.0] {
+        frame(agent.lua_state_agent, f);
+        if is_excute(agent) {
+            AttackModule::clear_all(agent.module_accessor);
+            ATTACK(agent, 0, 0, Hash40::new("hip"), 4.0, 65, 110, 0, 55, 2.8, 0.0, 1.5, 0.0, None, None, None, 1.0, 1.0,
+                   *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, false, false, false, false, true,
+                   *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
+                   Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_KICK,
+                   *ATTACK_REGION_BODY);
+        }
+    }
+    frame(agent.lua_state_agent, 34.0);
+    if is_excute(agent) {
+        AttackModule::clear_all(agent.module_accessor);
+    }
+}
+
 pub fn install(a: &mut Agent) {
     a.acmd("game_specialnhoming", g_specialnhoming, Priority::Low);
     a.acmd("game_specialnhit", g_combo, Priority::Low);
     a.acmd("sound_specialnhit", s_combo, Priority::Low);
     a.acmd("effect_specialnhit", e_combo, Priority::Low);
     a.acmd("expression_specialnhit", rien, Priority::Low);
+    a.acmd("game_specialsdashhi", g_specialsdashhi, Priority::Low);
+    a.acmd("game_specialsdashlw", g_specialsdashlw, Priority::Low);
+    a.acmd("game_specialsspin", g_specialsspin, Priority::Low);
     a.status(Main, *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_HIT, n_hit_main);
     a.status(End, *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_HIT, n_hit_end);
 }
