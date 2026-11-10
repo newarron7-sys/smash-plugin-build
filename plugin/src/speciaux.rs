@@ -842,14 +842,18 @@ unsafe extern "C" fn g_throwf(agent: &mut L2CAgentBase) {
     smash_script::macros::FT_MOTION_RATE(agent, 1.0 / 1.15);
     frame(lua, 10.0);
     smash_script::macros::FT_MOTION_RATE(agent, 1.0 / 1.6);
-    frame(lua, 59.0);
-    if is_excute(agent) {
-        // les 12 % de la charge, sur l'adversaire encore tenu
-        coup_tenu(agent, 12.0, 40, 0, 0, 6.0, "collision_attr_fire", *COLLISION_SOUND_ATTR_FIRE);
-    }
     frame(lua, 60.0);
     if is_excute(agent) {
-        AttackModule::clear_all(agent.module_accessor);
+        // les 12 % de la charge, ajoutés directement à l'adversaire (vidéo : en coup, ils figeaient l'action juste
+        // avant le lâcher avec une grosse explosion : pas fluide)
+        let boma = agent.module_accessor;
+        let id = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_OBJECT) as u32;
+        if id != 0 && id != 0x50000000 {
+            let cible = smash::app::sv_battle_object::module_accessor(id);
+            if !cible.is_null() {
+                DamageModule::add_damage(cible, 12.0, 0);
+            }
+        }
         smash_script::macros::CHECK_FINISH_CAMERA(agent, 12, 6);
         lacher(agent);
     }
