@@ -115,6 +115,7 @@ static mut CORPS_CHANGE: [bool; 8] = [false; 8];
 
 unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
     effets::aura(fighter);
+    speciaux::frame_b(fighter);
     let boma = fighter.module_accessor;
     let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
     if id < 8 && CORPS_CHANGE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_S4 {
@@ -138,7 +139,7 @@ fn son(attr: &str) -> i32 {
 /// joue le coup de Super Shadow (REX) sur l'animation de Sonic
 pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     // B neutre : le combo n'a pas d'entrée à lui (construit dans retouches.rs à partir de ses 3 coups de REX)
-    let combo = Mv { script: "game_specialnhit", total: speciaux::SEG[4], hold: 0.0, kind: 0, evs: &[] };
+    let combo = Mv { script: "game_specialnhit", total: speciaux::SEG[5], hold: 0.0, kind: 0, evs: &[] };
     let mv: &Mv = if script == "game_specialnhit" { &combo } else { match find(script) { Some(m) => m, None => return } };
     // retouches demandées (jab 3 et up smash en plusieurs coups, down smash plus tard) : construites à partir des
     // coups de REX eux-mêmes

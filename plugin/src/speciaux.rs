@@ -1,8 +1,15 @@
 //! Super Shadow, spéciaux de REX.
 //!
-//! B neutre : le homing de Sonic, puis, s'il touche, le combo de REX (SpecialNHit2 poing, SpecialNHit3 pied,
-//! SpecialNHit4 pied qui éjecte, SpecialNHit5 pose de fin), mis bout à bout dans l'animation special_n_hit de Sonic.
-//! Le coup suivant part dès que le précédent a touché ; s'il rate, le combo s'arrête à la fin de l'animation.
+//! B neutre « Chaos Attack », d'après ses scripts de REX (FitSuperShadow.pac, actions 0x117/0x118/0x11C) :
+//! - le homing de Sonic sert de trajet ; pendant le trajet il est invisible (REX : il se téléporte), un éclat au départ
+//!   et à l'arrivée ;
+//! - à l'arrivée (SpecialNHit) : un coup qui PARALYSE (1 %, angle 270, recul 80, taille 10, élément paralysie) ;
+//! - ensuite c'est le joueur qui enchaîne : un appui sur A ou B pendant la fenêtre de REX lance le coup suivant
+//!   (SpecialNHit : images 6 à 33 -> poing SpecialNHit2 ; poing / pied : images 9 à 24 -> coup suivant) ;
+//!   sans appui, à l'image 25 du poing ou du pied, pose de fin (SpecialNHit5), et à l'image 45 de SpecialNHit, fin ;
+//! - le dernier pied (SpecialNHit4) éjecte et le fait monter (élan 2,8), la pose de fin le fait sauter (élan 3).
+//! Les 5 animations de REX sont mises bout à bout dans special_n_hit de Sonic (de nouvelles animations restaient en
+//! T-pose) ; hitbox, dégâts et vitesses : ceux de REX (generated.rs, assemblés dans retouches.rs).
 
 use smash::app::lua_bind::*;
 use smash::app::sv_animcmd::frame;
@@ -15,22 +22,55 @@ use smash_script::macros::*;
 use smash_script::*;
 use smashline::*;
 
-/// début de chaque partie du combo dans l'animation special_n_hit (REX : SpecialNHit2 26 images, SpecialNHit3 26,
-/// SpecialNHit4 30, SpecialNHit5 44), et sa fin
-pub const SEG: [f32; 5] = [0.0, 26.0, 52.0, 82.0, 126.0];
-/// images d'animation après le coup avant de passer à la partie suivante (poing, pied, dernier pied -> pose)
-const ENCHAINE: [f32; 3] = [2.0, 2.0, 8.0];
+/// début de chaque partie dans l'animation special_n_hit : SpecialNHit (88 images), SpecialNHit2 (26),
+/// SpecialNHit3 (26), SpecialNHit4 (30), SpecialNHit5 (44), et la fin
+pub const SEG: [f32; 6] = [0.0, 88.0, 114.0, 140.0, 170.0, 214.0];
 
 static mut ETAPE: [usize; 8] = [0; 8];
-static mut TOUCHE: [bool; 8] = [false; 8];
-static mut F_TOUCHE: [f32; 8] = [0.0; 8];
+static mut APPUI: [bool; 8] = [false; 8];
+static mut ELAN: [bool; 8] = [false; 8];
+static mut CACHE: [bool; 8] = [false; 8];
 
 unsafe fn slot(boma: *mut BattleObjectModuleAccessor) -> usize {
     (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7)
 }
 
-/// le homing a touché : au lieu du rebond de Sonic, le combo de REX en l'air sur place. Ses 4 animations sont mises
-/// bout à bout dans special_n_hit (une animation que le jeu charge déjà : de nouvelles animations restaient en T-pose)
+/// partie du combo en cours (les sons / éclats des parties sautées ne sont pas joués)
+unsafe fn en_cours(agent: &mut L2CAgentBase, k: usize) -> bool {
+    ETAPE[slot(agent.module_accessor)] == k
+}
+
+unsafe fn eclat(boma: *mut BattleObjectModuleAccessor) {
+    let z = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let p = smash::phx::Vector3f { x: 0.0, y: 6.0, z: 0.0 };
+    let h = EffectModule::req_follow(boma, Hash40::new("sys_smash_flash"), Hash40::new("top"), &p, &z, 1.4, true, 0, 0, 0, 0, 0, false, false);
+    EffectModule::set_rgb(boma, h as u32, 1.0, 0.85, 0.3);
+}
+
+/// chaque image (ss_frame) : invisible pendant le trajet du homing (téléportation de REX), visible sinon
+pub unsafe fn frame_b(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    let trajet = StatusModule::status_kind(boma) == *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_HOMING;
+    if trajet && !CACHE[e] {
+        eclat(boma);
+        VisibilityModule::set_whole(boma, false);
+        CACHE[e] = true;
+    } else if !trajet && CACHE[e] {
+        VisibilityModule::set_whole(boma, true);
+        eclat(boma);
+        CACHE[e] = false;
+    }
+}
+
+unsafe fn etape(boma: *mut BattleObjectModuleAccessor, e: usize, n: usize) {
+    ETAPE[e] = n;
+    APPUI[e] = false;
+    ELAN[e] = false;
+    MotionModule::set_frame(boma, SEG[n], true);
+}
+
+/// arrivée : le coup qui paralyse, puis le combo au rythme des appuis du joueur
 unsafe extern "C" fn n_hit_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
     let e = slot(boma);
@@ -39,7 +79,8 @@ unsafe extern "C" fn n_hit_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     KineticModule::clear_speed_all(boma);
     KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_MOTION_AIR);
     ETAPE[e] = 0;
-    TOUCHE[e] = false;
+    APPUI[e] = false;
+    ELAN[e] = false;
     MotionModule::change_motion(boma, Hash40::new("special_n_hit"), 0.0, 1.0, false, 0.0, false, false);
     fighter.sub_shift_status_main(L2CValue::Ptr(n_hit_loop as *const () as _))
 }
@@ -53,32 +94,64 @@ unsafe fn fin(fighter: &mut L2CFighterCommon) {
     }
 }
 
+/// élan vers le haut (REX : 0E010200 0 2,8 sur le dernier pied, 0 3 sur la pose de fin)
+unsafe fn elan(fighter: &mut L2CFighterCommon, vy: f32) {
+    let boma = fighter.module_accessor;
+    KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_FALL);
+    sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY, vy);
+}
+
 unsafe extern "C" fn n_hit_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
     let e = slot(boma);
-    if AttackModule::is_infliction(boma, *COLLISION_KIND_MASK_HIT) && !TOUCHE[e] {
-        TOUCHE[e] = true;
-        F_TOUCHE[e] = MotionModule::frame(boma);
+    // REX : un appui sur A ou B est retenu pendant toute la partie (bit 0x1200007A)
+    if ControlModule::check_button_trigger(boma, *CONTROL_PAD_BUTTON_ATTACK)
+        || ControlModule::check_button_trigger(boma, *CONTROL_PAD_BUTTON_SPECIAL)
+    {
+        APPUI[e] = true;
     }
     if StopModule::is_stop(boma) {
         return 0.into();
     }
     let n = ETAPE[e];
-    let f = MotionModule::frame(boma);
-    if n < 3 {
-        if TOUCHE[e] && f >= F_TOUCHE[e] + ENCHAINE[n] {
-            // touché : partie suivante tout de suite
-            ETAPE[e] = n + 1;
-            TOUCHE[e] = false;
-            MotionModule::set_frame(boma, SEG[n + 1], true);
-        } else if f >= SEG[n + 1] - 1.0 && !TOUCHE[e] {
-            // raté : le combo s'arrête
-            fin(fighter);
+    let f = MotionModule::frame(boma) - SEG[n];
+    match n {
+        // arrivée (coup qui paralyse) : appui entre les images 6 et 33 -> poing ; sinon fin à l'image 45
+        0 => {
+            if APPUI[e] && (6.0..=33.0).contains(&f) {
+                etape(boma, e, 1);
+            } else if f >= 45.0 {
+                fin(fighter);
+            }
         }
-        return 0.into();
-    }
-    if MotionModule::is_end(boma) || f >= SEG[4] - 1.0 {
-        fin(fighter);
+        // poing, 1er pied : appui entre les images 9 et 24 -> coup suivant ; sinon pose de fin à l'image 25
+        1 | 2 => {
+            if APPUI[e] && (9.0..25.0).contains(&f) {
+                etape(boma, e, n + 1);
+            } else if f >= 25.0 {
+                etape(boma, e, 4);
+            }
+        }
+        // dernier pied : il monte à l'image 5, fin avec l'animation
+        3 => {
+            if f >= 5.0 && !ELAN[e] {
+                ELAN[e] = true;
+                elan(fighter, 2.8);
+            }
+            if f >= SEG[4] - SEG[3] - 1.0 {
+                fin(fighter);
+            }
+        }
+        // pose de fin : petit saut, puis il reprend la main (REX : actions permises à l'image 5)
+        _ => {
+            if !ELAN[e] {
+                ELAN[e] = true;
+                elan(fighter, 3.0);
+            }
+            if f >= 20.0 || MotionModule::is_end(boma) {
+                fin(fighter);
+            }
+        }
     }
     0.into()
 }
@@ -86,46 +159,52 @@ unsafe extern "C" fn n_hit_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
 unsafe extern "C" fn n_hit_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     let e = slot(fighter.module_accessor);
     ETAPE[e] = 0;
-    TOUCHE[e] = false;
+    APPUI[e] = false;
+    ELAN[e] = false;
     smashline::original_status(End, fighter, *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_HIT)(fighter)
 }
 
-/// homing de Sonic (même script) mais avec un petit recul fixe : l'adversaire reste près de lui pour le combo
+/// trajet du homing : REX n'y a pas de coup, il arrive juste sur l'adversaire. Ici une hitbox sans effet (0 %, aucun
+/// recul) sert seulement à déclencher l'arrivée ; le vrai premier coup (paralysie) part à l'arrivée
 unsafe extern "C" fn g_specialnhoming(agent: &mut L2CAgentBase) {
     let boma = agent.module_accessor;
     if is_excute(agent) {
         JostleModule::set_status(boma, false);
         MotionModule::set_rate(boma, 80.0);
         let os = if WorkModule::is_flag(boma, *FIGHTER_SONIC_STATUS_SPECIAL_N_HOMING_FLAG_IS_KIRBY) { "rot" } else { "hip" };
-        ATTACK(agent, 0, 0, Hash40::new(os), 1.0, 366, 100, 40, 0, 5.0, 0.5, 1.5, 0.0, Some(0.5), Some(1.5), Some(0.0),
-               1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_SPEED, false, 2, 0.0, 0, false, false, false, false,
+        ATTACK(agent, 0, 0, Hash40::new(os), 0.0, 361, 0, 0, 0, 5.0, 0.5, 1.5, 0.0, Some(0.5), Some(1.5), Some(0.0),
+               0.1, 0.0, *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_SPEED, false, 0, 0.0, 0, false, false, false, false,
                true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
-               Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_M, *COLLISION_SOUND_ATTR_KICK,
+               Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE,
                *ATTACK_REGION_BODY);
-        ATK_SET_SHIELD_SETOFF_MUL(agent, 0, 0.5);
         AttackModule::set_captured_same_time_attack(boma, 0, true);
-        AttackModule::set_attack_keep_rumble(boma, 0, true);
     }
 }
 
-// sons et effets du combo : à chaque coup (image 5 de chaque partie)
+// combo : hitbox de REX ; sons et éclats dorés à chaque coup (image 5 de chaque partie)
 unsafe extern "C" fn g_combo(agent: &mut L2CAgentBase) { crate::run(agent, "game_specialnhit"); }
 unsafe extern "C" fn s_combo(agent: &mut L2CAgentBase) {
-    for (k, se) in ["se_sonic_swing_ll", "se_sonic_swing_s", "se_sonic_swing_m"].iter().enumerate() {
-        frame(agent.lua_state_agent, SEG[k] + 3.0);
-        if is_excute(agent) {
+    for (k, se) in [(0usize, "se_sonic_special_n02"), (1, "se_sonic_swing_ll"), (2, "se_sonic_swing_s"), (3, "se_sonic_swing_m")] {
+        frame(agent.lua_state_agent, SEG[k] + if k == 0 { 1.0 } else { 5.0 });
+        if is_excute(agent) && en_cours(agent, k) {
             PLAY_SE(agent, Hash40::new(se));
-            PLAY_SEQUENCE(agent, Hash40::new("seq_sonic_rnd_attack"));
+            if k > 0 {
+                PLAY_SEQUENCE(agent, Hash40::new("seq_sonic_rnd_attack"));
+            }
         }
     }
 }
 unsafe extern "C" fn e_combo(agent: &mut L2CAgentBase) {
-    for (k, (os, sc)) in [("handl", 1.0), ("footr", 1.0), ("footl", 1.4)].iter().enumerate() {
-        frame(agent.lua_state_agent, SEG[k] + 3.0);
-        if is_excute(agent) {
-            EFFECT_FOLLOW(agent, Hash40::new("sys_attack_impact"), Hash40::new(os), 0, 0, 0, 0, 0, 0, *sc, true);
-            LAST_EFFECT_SET_COLOR(agent, 1.0, 0.78, 0.22);
-            EFFECT_FOLLOW(agent, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 8, 2, 0, 0, 0, 0.8, true);
+    // paralysie à l'arrivée : éclat électrique doré
+    frame(agent.lua_state_agent, 1.0);
+    if is_excute(agent) {
+        EFFECT_FOLLOW(agent, Hash40::new("sys_hit_elec"), Hash40::new("hip"), 0, 0, 0, 0, 0, 0, 1.2, true);
+        LAST_EFFECT_SET_COLOR(agent, 1.0, 0.85, 0.3);
+    }
+    for (k, os, sc) in [(1usize, "handl", 1.0), (2, "footr", 1.0), (3, "footl", 1.4)] {
+        frame(agent.lua_state_agent, SEG[k] + 5.0);
+        if is_excute(agent) && en_cours(agent, k) {
+            EFFECT_FOLLOW(agent, Hash40::new("sys_attack_impact"), Hash40::new(os), 0, 0, 0, 0, 0, 0, sc, true);
             LAST_EFFECT_SET_COLOR(agent, 1.0, 0.78, 0.22);
         }
     }
