@@ -126,7 +126,8 @@ pub unsafe fn boost_side_b(fighter: &mut L2CFighterCommon) {
     } else if st == *FIGHTER_STATUS_KIND_SPECIAL_LW {
         BOOST_SIDE[id] = false;
     }
-    let course = BOOST_SIDE[id] && st == *FIGHTER_SONIC_STATUS_KIND_SPECIAL_S_DASH;
+    let course = crate::speciaux::side_b_course(boma);
+    let _ = (st, BOOST_SIDE[id]);
     if !course {
         for h in BOOST[id].iter_mut() {
             if *h != 0 && EffectModule::is_exist_effect(boma, *h) {

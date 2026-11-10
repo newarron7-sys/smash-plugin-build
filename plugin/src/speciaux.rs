@@ -295,44 +295,52 @@ unsafe extern "C" fn hi_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     fighter.sub_shift_status_main(L2CValue::Ptr(hi_loop as *const () as _))
 }
 
+static mut HI_DIR: [(f32, f32); 8] = [(0.0, 1.0); 8];
+
 unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
     let e = slot(boma);
     let f = MotionModule::frame(boma);
-    if HI_PHASE[e] == 0 && f >= HI_TRAJET {
-        // départ : direction du stick (vers le haut si le stick est au repos)
-        HI_PHASE[e] = 1;
-        let mut sx = ControlModule::get_stick_x(boma);
-        let mut sy = ControlModule::get_stick_y(boma);
+    if HI_PHASE[e] == 0 {
+        // REX : la direction est lue pendant la concentration (la dernière direction tenue compte)
+        let sx = ControlModule::get_stick_x(boma);
+        let sy = ControlModule::get_stick_y(boma);
         let n = (sx * sx + sy * sy).sqrt();
-        if n < 0.25 {
-            sx = 0.0;
-            sy = 1.0;
-        } else {
-            sx /= n;
-            sy /= n;
+        if n >= 0.25 {
+            HI_DIR[e] = (sx / n, sy / n);
+        } else if f < 2.0 {
+            HI_DIR[e] = (0.0, 1.0);
         }
-        if sx * PostureModule::lr(boma) < -0.2 {
-            PostureModule::reverse_lr(boma);
-            PostureModule::update_rot_y_lr(boma);
+        if f >= HI_TRAJET {
+            HI_PHASE[e] = 1;
+            let (dx, _) = HI_DIR[e];
+            if dx * PostureModule::lr(boma) < -0.2 {
+                PostureModule::reverse_lr(boma);
+                PostureModule::update_rot_y_lr(boma);
+            }
+            eclat_bleu(boma);
+            VisibilityModule::set_whole(boma, false);
+            HitModule::set_whole(boma, HitStatus(*HIT_STATUS_XLU), 0);
+            StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
+            GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
+            KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
+            KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
         }
-        eclat_bleu(boma);
-        VisibilityModule::set_whole(boma, false);
-        HitModule::set_whole(boma, HitStatus(*HIT_STATUS_XLU), 0);
-        StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
-        GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
-        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
-        KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
-        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, sx * HI_VITESSE, sy * HI_VITESSE);
     }
-    if HI_PHASE[e] == 1 && (f >= HI_FIN - 1.0 || MotionModule::is_end(boma)) {
-        // arrivée : il réapparaît et chute sans pouvoir rien faire
-        HI_PHASE[e] = 2;
-        VisibilityModule::set_whole(boma, true);
-        HitModule::set_whole(boma, HitStatus(*HIT_STATUS_NORMAL), 0);
-        eclat_bleu(boma);
-        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
-        fighter.change_status(FIGHTER_STATUS_KIND_FALL_SPECIAL.into(), false.into());
+    if HI_PHASE[e] == 1 {
+        // trajet : déplacé image par image (REX : élan = direction x 4 à chaque image)
+        let (dx, dy) = HI_DIR[e];
+        KineticModule::clear_speed_all(boma);
+        let d = smash::phx::Vector3f { x: dx * HI_VITESSE, y: dy * HI_VITESSE, z: 0.0 };
+        PostureModule::add_pos(boma, &d);
+        if f >= HI_FIN - 1.0 || MotionModule::is_end(boma) {
+            // arrivée : il réapparaît et chute sans pouvoir rien faire
+            HI_PHASE[e] = 2;
+            VisibilityModule::set_whole(boma, true);
+            HitModule::set_whole(boma, HitStatus(*HIT_STATUS_NORMAL), 0);
+            eclat_bleu(boma);
+            fighter.change_status(FIGHTER_STATUS_KIND_FALL_SPECIAL.into(), false.into());
+        }
     }
     0.into()
 }
@@ -462,6 +470,85 @@ unsafe extern "C" fn s_throwhi(agent: &mut L2CAgentBase) {
     }
 }
 
+// ------------------------------------------------------------------ side B de REX (demandé : comme dans REX)
+// REX (actions 0x115 / 0x11E / 0x121) : pas de boule ni de charge : il fonce en courant (SpecialSDashLw, vitesse 3,5
+// dans sa direction, coup de 4 % sur lui), tant que B est tenu ; stick en arrière : demi-tour ; B relâché (ou
+// course trop longue) : coup de pied de fin (SpecialSEnd : 9 % puis 6 %). Effet du Boost du f-smash pendant la course.
+const S_VITESSE: f32 = 3.5;
+const S_COURSE_MAX: i32 = 90;
+static mut S_PHASE: [u8; 8] = [0; 8];
+static mut S_T: [i32; 8] = [0; 8];
+
+/// pour l'effet du Boost (effets.rs) : il est en train de foncer
+pub unsafe fn side_b_course(boma: *mut BattleObjectModuleAccessor) -> bool {
+    StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_SPECIAL_S && S_PHASE[slot(boma)] == 0
+}
+
+unsafe fn s_vitesse(fighter: &mut L2CFighterCommon, v: f32) {
+    let boma = fighter.module_accessor;
+    let lr = PostureModule::lr(boma);
+    sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, v * lr, 0.0_f32);
+}
+
+unsafe extern "C" fn s_main(fighter: &mut L2CFighterCommon) -> L2CValue {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    S_PHASE[e] = 0;
+    S_T[e] = 0;
+    if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_GROUND_STOP);
+        GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_GROUND_CLIFF_STOP));
+    } else {
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
+        KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+    }
+    MotionModule::change_motion(boma, Hash40::new("special_s_dash_lw"), 0.0, 1.0, false, 0.0, false, false);
+    s_vitesse(fighter, S_VITESSE);
+    fighter.sub_shift_status_main(L2CValue::Ptr(s_loop as *const () as _))
+}
+
+unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    if S_PHASE[e] == 0 {
+        S_T[e] += 1;
+        // demi-tour : stick franchement en arrière
+        if ControlModule::get_stick_x(boma) * PostureModule::lr(boma) < -0.6 {
+            PostureModule::reverse_lr(boma);
+            PostureModule::update_rot_y_lr(boma);
+        }
+        s_vitesse(fighter, S_VITESSE);
+        let tenu = ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_SPECIAL);
+        if (!tenu && S_T[e] > 8) || S_T[e] >= S_COURSE_MAX {
+            // coup de pied de fin, il glisse en ralentissant
+            S_PHASE[e] = 1;
+            MotionModule::change_motion(boma, Hash40::new("special_s_end_start"), 0.0, 1.0, false, 0.0, false, false);
+        }
+        return 0.into();
+    }
+    let f = MotionModule::frame(boma);
+    s_vitesse(fighter, (S_VITESSE * (1.0 - f / 20.0)).max(0.0));
+    if MotionModule::is_end(boma) {
+        KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+        if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
+            fighter.change_status(FIGHTER_STATUS_KIND_WAIT.into(), false.into());
+        } else {
+            fighter.change_status(FIGHTER_STATUS_KIND_FALL_SPECIAL.into(), false.into());
+        }
+    }
+    0.into()
+}
+
+unsafe extern "C" fn s_end(fighter: &mut L2CFighterCommon) -> L2CValue {
+    let boma = fighter.module_accessor;
+    S_PHASE[slot(boma)] = 0;
+    KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+    0.into()
+}
+
+/// coup de pied de fin : REX SpecialSEnd (9 % à l'image 5, 6 % à l'image 10, fin à 25)
+unsafe extern "C" fn g_specialsendstart(agent: &mut L2CAgentBase) { crate::run(agent, "game_specialsendstart"); }
+
 pub fn install(a: &mut Agent) {
     a.acmd("game_specialnhoming", g_specialnhoming, Priority::Low);
     a.acmd("game_specialnhit", g_combo, Priority::Low);
@@ -471,6 +558,9 @@ pub fn install(a: &mut Agent) {
     a.acmd("game_specialsdashhi", g_specialsdashhi, Priority::Low);
     a.acmd("game_specialsdashlw", g_specialsdashlw, Priority::Low);
     a.acmd("game_specialsspin", g_specialsspin, Priority::Low);
+    a.acmd("game_specialsendstart", g_specialsendstart, Priority::Low);
+    a.status(Main, *FIGHTER_STATUS_KIND_SPECIAL_S, s_main);
+    a.status(End, *FIGHTER_STATUS_KIND_SPECIAL_S, s_end);
     a.acmd("game_throwhi", g_throwhi, Priority::Low);
     a.acmd("effect_throwhi", e_throwhi, Priority::Low);
     a.acmd("sound_throwhi", s_throwhi, Priority::Low);
