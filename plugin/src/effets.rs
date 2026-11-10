@@ -109,6 +109,72 @@ pub unsafe fn aura(fighter: &mut L2CFighterCommon) {
     }
 }
 
+// ------------------------------------------------------------------ side B (demandé) : l'effet du Boost du f-smash
+// pendant toute la course du spin dash (pas sur le bas B, qui reste celui de Sonic). Aura couchée devant lui, traînée,
+// éclat au départ, fumée au sol toutes les 4 images ; tout est retiré quand la course s'arrête.
+static mut BOOST: [[u32; 2]; 8] = [[0; 2]; 8];
+static mut BOOST_T: [u32; 8] = [0; 8];
+static mut BOOST_SIDE: [bool; 8] = [false; 8];
+
+pub unsafe fn boost_side_b(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let id = (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7);
+    let st = StatusModule::status_kind(boma);
+    // side B : B côté -> charge (SPECIAL_S_HOLD) -> course ; le bas B passe par sa propre charge
+    if st == *FIGHTER_STATUS_KIND_SPECIAL_S || st == *FIGHTER_SONIC_STATUS_KIND_SPECIAL_S_HOLD {
+        BOOST_SIDE[id] = true;
+    } else if st == *FIGHTER_STATUS_KIND_SPECIAL_LW {
+        BOOST_SIDE[id] = false;
+    }
+    let course = BOOST_SIDE[id] && st == *FIGHTER_SONIC_STATUS_KIND_SPECIAL_S_DASH;
+    if !course {
+        for h in BOOST[id].iter_mut() {
+            if *h != 0 && EffectModule::is_exist_effect(boma, *h) {
+                EffectModule::kill(boma, *h, false, false);
+            }
+            *h = 0;
+        }
+        BOOST_T[id] = 0;
+        return;
+    }
+    let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    if BOOST_T[id] == 0 {
+        let p = Vector3f { x: 0.0, y: 7.0, z: 4.0 };
+        let n = EffectModule::req_follow(boma, Hash40::new("sys_smash_flash"), Hash40::new("top"), &p, &z, 1.0, false,
+            0, 0, 0, 0, 0, false, false) as u32;
+        if n != 0 {
+            EffectModule::set_rgb(boma, n, OR.0, OR.1, OR.2);
+        }
+    }
+    BOOST_T[id] = BOOST_T[id].wrapping_add(1);
+    let h = BOOST[id][0];
+    if h == 0 || !EffectModule::is_exist_effect(boma, h) {
+        let p = Vector3f { x: 0.0, y: 6.0, z: 4.0 };
+        let r = Vector3f { x: -90.0, y: 0.0, z: 0.0 };
+        let n = EffectModule::req_follow(boma, Hash40::new("sys_score_aura"), Hash40::new("top"), &p, &r, 1.2, false,
+            0, 0, 0, 0, 0, false, false) as u32;
+        if n != 0 {
+            EffectModule::set_rgb(boma, n, OR.0, OR.1, OR.2);
+        }
+        BOOST[id][0] = n;
+    }
+    let h = BOOST[id][1];
+    if h == 0 || !EffectModule::is_exist_effect(boma, h) {
+        let p = Vector3f { x: 0.0, y: 7.0, z: 0.0 };
+        let n = EffectModule::req_follow(boma, Hash40::new("sonic_spintrace"), Hash40::new("top"), &p, &z, 0.8, false,
+            0, 0, 0, 0, 0, false, false) as u32;
+        if n != 0 {
+            EffectModule::set_alpha(boma, n, 0.7);
+        }
+        BOOST[id][1] = n;
+    }
+    if BOOST_T[id] % 4 == 1 && StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
+        let p = Vector3f { x: 0.0, y: 0.0, z: -4.0 };
+        EffectModule::req_follow(boma, Hash40::new("sys_dash_smoke"), Hash40::new("top"), &p, &z, 0.8, false,
+            0, 0, 0, 0, 0, false, false);
+    }
+}
+
 // ------------------------------------------------------------------ effets de ses coups (étape effets 2, demandé)
 // Mêmes images et mêmes os que le script d'effets (GFX) de REX ; ses effets de Brawl (traces, cercles, flammes des
 // chaussures) sont refaits avec des effets du jeu teintés or. Remplacent ceux de Sonic.
