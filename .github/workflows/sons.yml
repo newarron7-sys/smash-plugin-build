@@ -1,0 +1,60 @@
+name: Sons REX (extraction, chiffre)
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'outils/lancer_sons.txt' ]
+permissions:
+  contents: write
+jobs:
+  sons:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Banque 1BB (branche rex, dechiffree ; rien n'est affiche)
+        shell: bash
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          printf '%s' "$CLE" > "$RUNNER_TEMP/k"
+          git fetch -q origin +rex:refs/remotes/origin/rex
+          mkdir -p "$RUNNER_TEMP/rex" "$RUNNER_TEMP/x"
+          for f in $(git ls-tree --name-only origin/rex | sort); do git show "origin/rex:$f" >> "$RUNNER_TEMP/rex.enc"; done
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"$RUNNER_TEMP/k" -in "$RUNNER_TEMP/rex.enc" -out "$RUNNER_TEMP/rex.tgz"
+          tar xzf "$RUNNER_TEMP/rex.tgz" -C "$RUNNER_TEMP/x" --wildcards '*sfx*' 2>/dev/null || tar xzf "$RUNNER_TEMP/rex.tgz" -C "$RUNNER_TEMP/x"
+          find "$RUNNER_TEMP/x" -ipath '*sfx/*1bb*' -name '*.sawnd' -exec cp {} "$RUNNER_TEMP/rex/" \;
+          echo "banques : $(ls "$RUNNER_TEMP/rex" | wc -l)"
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Extraire (DSP -> WAV -> IDSP)
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "VGAudioCli.zip"
+          Invoke-WebRequest "https://github.com/Thealexbarney/VGAudio/releases/download/v2.2.1/VGAudioCli.zip" -OutFile $zip
+          $vg = Join-Path $env:RUNNER_TEMP "VGAudio"
+          Expand-Archive -Path $zip -DestinationPath $vg -Force
+          $vgexe = (Get-ChildItem -Path $vg -Filter "VGAudioCli.exe" -Recurse | Select-Object -First 1).FullName
+          git clone -q --depth 1 https://github.com/QuickLava/super-sawndz.git "$env:RUNNER_TEMP\super-sawndz"
+          $src = "$env:RUNNER_TEMP\super-sawndz\lavaResawndz"
+          cl /nologo /EHsc /std:c++17 /O2 /I"$src" /Fe:"$env:RUNNER_TEMP\extract_sawnd.exe" "$src\lavaBRSARLib.cpp" "$src\lavaDSP.cpp" "$src\lavaResawndz.cpp" "$src\lavaUtility.cpp" "$src\md5.cpp" "$PWD\outils\extract_sawnd.cpp" | Out-Null
+          $out = "$env:RUNNER_TEMP\out"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Get-ChildItem "$env:RUNNER_TEMP\rex\*.sawnd" | ForEach-Object {
+            $d = Join-Path $out $_.BaseName
+            New-Item -ItemType Directory -Force -Path $d | Out-Null
+            & "$env:RUNNER_TEMP\extract_sawnd.exe" $_.FullName $d > "$d\extraction.txt"
+            Get-ChildItem -Path $d -Filter "*.dsp" | ForEach-Object { & $vgexe -i $_.FullName -o ([System.IO.Path]::ChangeExtension($_.FullName, ".wav")) | Out-Null }
+            Remove-Item "$d\*.dsp"
+            python "$PWD\outils\normalize.py" $d | Out-Null
+            Get-ChildItem -Path $d -Filter "*.wav" | ForEach-Object { & $vgexe -i $_.FullName -o ([System.IO.Path]::ChangeExtension($_.FullName, ".idsp")) | Out-Null }
+          }
+          Write-Host "ondes : $((Get-ChildItem -Recurse "$out\*.idsp").Count)"
+      - name: Chiffrer et publier (branche sons)
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/pub"
+          tar czf "$RUNNER_TEMP/sons.tgz" -C "$RUNNER_TEMP/out" .
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$RUNNER_TEMP/k" -in "$RUNNER_TEMP/sons.tgz" -out "$RUNNER_TEMP/pub/sons.tgz.enc"
+          rm -f "$RUNNER_TEMP/k"
+          cd "$RUNNER_TEMP/pub" && git init -q -b sons && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "sons chiffres"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" sons
