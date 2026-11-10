@@ -1,0 +1,32 @@
+name: Recuperer un mod (chiffre)
+on:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/mod.yml' ]
+permissions:
+  contents: write
+jobs:
+  recuperer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DL: "1588030"
+    steps:
+      - name: Telecharger, extraire, chiffrer (rien n'est affiche)
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
+          mkdir -p /tmp/m /tmp/out && cd /tmp/m
+          curl -sSL -A "Mozilla/5.0" -o f.bin "https://gamebanana.com/dl/$DL"
+          7z x -y -ox f.bin >/dev/null 2>&1 || true
+          echo "fichiers extraits : $(find x -type f | wc -l)"
+          tar czf /tmp/mod.tgz -C /tmp/m x
+          printf '%s' "$CLE" > /tmp/k
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -in /tmp/mod.tgz -out /tmp/out/mod.tgz.enc
+          rm -f /tmp/k
+      - name: Publier (branche mod, chiffre)
+        run: |
+          cd /tmp/out && git init -q -b mod && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "mod $DL chiffre"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" mod
