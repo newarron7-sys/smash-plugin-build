@@ -229,13 +229,44 @@ unsafe fn coup_course(agent: &mut L2CAgentBase, dmg: f32, ang: u64, kbg: i32, bk
            Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_KICK, *ATTACK_REGION_BODY);
     AttackModule::set_captured_same_time_attack(boma, id, true);
 }
-unsafe extern "C" fn g_specialsdashlw(agent: &mut L2CAgentBase) {
+/// side B : la course (en boucle sur ses L premières images) et, dans le même fichier, la fin de REX à partir de
+/// l'image L (demandé : l'animation de fin ; dans un fichier à part elle ne se chargeait pas)
+const S_L_SOL: f32 = 17.0; // Run
+const S_L_AIR: f32 = 31.0; // AirBoost
+unsafe fn g_course(agent: &mut L2CAgentBase, l: f32) {
+    let lua = agent.lua_state_agent;
     if is_excute(agent) {
         JostleModule::set_status(agent.module_accessor, false);
         AttackModule::clear_all(agent.module_accessor);
         coup_course(agent, 4.0, 59, 96, 64, 3.5);
     }
+    // fin (REX SpecialSEnd : 9 % puis 6 %, jambe droite)
+    for (k, d, a, kbg, bkb) in [(2.0, 9.0, 40u64, 85, 65), (7.0, 6.0, 55u64, 100, 24)] {
+        frame(lua, l + k);
+        if is_excute(agent) {
+            AttackModule::clear_all(agent.module_accessor);
+            for (id, os, sz, x, y) in [(0u64, "legr", 2.5, 0.0, 0.0), (1u64, "kneer", 2.9, 0.0, 0.0), (2u64, "kneer", 3.5, 4.0, -2.0)] {
+                ATTACK(agent, id, 0, Hash40::new(os), d, a, kbg, 0, bkb, sz, x, y, 0.0, None, None, None, 1.0, 1.0,
+                       *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, false, false, false, false, true,
+                       *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
+                       Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_M, *COLLISION_SOUND_ATTR_KICK,
+                       *ATTACK_REGION_KICK);
+            }
+        }
+    }
+    frame(lua, l + 12.0);
+    if is_excute(agent) {
+        AttackModule::clear_all(agent.module_accessor);
+    }
 }
+unsafe extern "C" fn g_specialsdashlw(agent: &mut L2CAgentBase) { g_course(agent, S_L_SOL); }
+unsafe extern "C" fn g_specialsdashhi(agent: &mut L2CAgentBase) { g_course(agent, S_L_AIR); }
+unsafe fn e_course(agent: &mut L2CAgentBase, l: f32) {
+    frame(agent.lua_state_agent, l);
+    e_specialsendstart(agent);
+}
+unsafe extern "C" fn e_specialsdashlw(agent: &mut L2CAgentBase) { e_course(agent, S_L_SOL); }
+unsafe extern "C" fn e_specialsdashhi(agent: &mut L2CAgentBase) { e_course(agent, S_L_AIR); }
 unsafe extern "C" fn g_specialsspin(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         JostleModule::set_status(agent.module_accessor, false);
@@ -471,6 +502,7 @@ const S_VITESSE: f32 = 3.5;
 const S_COURSE_MAX: i32 = 90;
 static mut S_PHASE: [u8; 8] = [0; 8];
 static mut S_T: [i32; 8] = [0; 8];
+static mut S_L: [f32; 8] = [S_L_SOL; 8];
 
 /// pour l'effet du Boost (effets.rs) : il est en train de foncer
 pub unsafe fn side_b_course(boma: *mut BattleObjectModuleAccessor) -> bool {
@@ -498,7 +530,9 @@ unsafe extern "C" fn s_main(fighter: &mut L2CFighterCommon) -> L2CValue {
         KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
     }
     // REX (Dash Boost) : au sol sa course en lévitation (Run), en l'air son vol plané (AirBoost)
-    let mot = if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND { "special_s_dash_lw" } else { "special_s_dash_hi" };
+    let sol = StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND;
+    let mot = if sol { "special_s_dash_lw" } else { "special_s_dash_hi" };
+    S_L[e] = if sol { S_L_SOL } else { S_L_AIR };
     MotionModule::change_motion(boma, Hash40::new(mot), 0.0, 1.0, false, 0.0, false, false);
     s_vitesse(fighter, S_VITESSE);
     fighter.sub_shift_status_main(L2CValue::Ptr(s_loop as *const () as _))
@@ -516,7 +550,7 @@ unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         }
         s_vitesse(fighter, S_VITESSE);
         // la pose de REX tourne en boucle tant qu'il fonce
-        if MotionModule::frame(boma) >= MotionModule::end_frame(boma) - 1.0 {
+        if MotionModule::frame(boma) >= S_L[e] - 1.0 {
             MotionModule::set_frame(boma, 0.0, false);
         }
         let tenu = ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_SPECIAL);
@@ -524,12 +558,12 @@ unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         if (!tenu && S_T[e] > 15) || S_T[e] >= S_COURSE_MAX {
             // coup de pied de fin, il glisse en ralentissant
             S_PHASE[e] = 1;
-            // image 0 de REX : encore la boule (tête en bas) ; il freine à partir de l'image 3
-            MotionModule::change_motion(boma, Hash40::new("special_s_end_start"), 3.0, 1.0, false, 0.0, false, false);
+            // fin de REX, rangée après la course dans le même fichier
+            MotionModule::set_frame_sync_anim_cmd(boma, S_L[e], true, true, false);
         }
         return 0.into();
     }
-    let f = MotionModule::frame(boma);
+    let f = MotionModule::frame(boma) - S_L[e];
     s_vitesse(fighter, (S_VITESSE * (1.0 - f / 20.0)).max(0.0));
     if MotionModule::is_end(boma) {
         KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
@@ -862,13 +896,13 @@ pub fn install(a: &mut Agent) {
     a.acmd("sound_specialnhit", s_combo, Priority::Low);
     a.acmd("effect_specialnhit", e_combo, Priority::Low);
     a.acmd("expression_specialnhit", rien, Priority::Low);
-    a.acmd("game_specialsdashhi", g_specialsdashlw, Priority::Low); // en l'air : même coup que REX (sous-action 0x1B)
+    a.acmd("game_specialsdashhi", g_specialsdashhi, Priority::Low); // en l'air : même coup que REX (sous-action 0x1B)
     a.acmd("game_specialsdashlw", g_specialsdashlw, Priority::Low);
     a.acmd("game_specialsspin", g_specialsspin, Priority::Low);
     a.acmd("game_specialsendstart", g_specialsendstart, Priority::Low);
     // effets de Sonic (boule jaune, traînée de la boule) retirés : le boost doré est posé par effets::boost_side_b
-    a.acmd("effect_specialsdashlw", rien, Priority::Low);
-    a.acmd("effect_specialsdashhi", rien, Priority::Low);
+    a.acmd("effect_specialsdashlw", e_specialsdashlw, Priority::Low);
+    a.acmd("effect_specialsdashhi", e_specialsdashhi, Priority::Low);
     a.acmd("effect_specialsendstart", e_specialsendstart, Priority::Low);
     a.status(Main, *FIGHTER_STATUS_KIND_SPECIAL_S, s_main);
     a.status(End, *FIGHTER_STATUS_KIND_SPECIAL_S, s_end);
@@ -885,6 +919,10 @@ pub fn install(a: &mut Agent) {
     a.acmd("effect_throwlw", e_throwlw, Priority::Low);
     a.acmd("sound_throwlw", s_throwlw, Priority::Low);
     a.acmd("game_catchattack", g_catchattack, Priority::Low);
+    // provocations de REX : les effets de Sonic (traînées de course, boule) ne vont pas avec
+    for n in ["effect_appealhil", "effect_appealhir", "effect_appealsl", "effect_appealsr", "effect_appeallwl", "effect_appeallwr"] {
+        a.acmd(n, rien, Priority::Low);
+    }
     a.acmd("effect_catchattack", e_catchattack, Priority::Low);
     a.acmd("game_specialhi", rien, Priority::Low);
     a.acmd("effect_specialhi", rien, Priority::Low);

@@ -150,7 +150,8 @@ pub unsafe fn boost_side_b(fighter: &mut L2CFighterCommon) {
     BOOST_T[id] = BOOST_T[id].wrapping_add(1);
     let h = BOOST[id][0];
     if h == 0 || !EffectModule::is_exist_effect(boma, h) {
-        let p = Vector3f { x: 0.0, y: 6.0, z: 6.0 };
+        // demandé : plus devant lui (elle touchait sa tête)
+        let p = Vector3f { x: 0.0, y: 6.0, z: 11.0 };
         let r = Vector3f { x: -90.0, y: 0.0, z: 0.0 };
         let n = EffectModule::req_follow(boma, Hash40::new("sys_score_aura"), Hash40::new("top"), &p, &r, 0.9, false,
             0, 0, 0, 0, 0, false, false) as u32;
@@ -162,7 +163,8 @@ pub unsafe fn boost_side_b(fighter: &mut L2CFighterCommon) {
     // pas de traînée en anneaux de Sonic (sonic_spintrace) ici : c'est l'effet de son spin dash, il le faisait
     // ressembler au side B de Sonic
     if BOOST_T[id] % 4 == 1 && StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
-        let p = Vector3f { x: 0.0, y: 0.0, z: -4.0 };
+        // demandé : la fumée au sol un peu plus derrière lui
+        let p = Vector3f { x: 0.0, y: 0.0, z: -11.0 };
         EffectModule::req_follow(boma, Hash40::new("sys_dash_smoke"), Hash40::new("top"), &p, &z, 0.8, false,
             0, 0, 0, 0, 0, false, false);
     }
