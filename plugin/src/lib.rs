@@ -102,8 +102,8 @@ mod retouches;
 /// perso de base (nom interne) : Sonic
 pub const BASE: &str = "sonic";
 
-/// étape 1 : costume c00 de Sonic (sa propre case viendra à l'étape 6)
-pub const SS_COSTUMES: [usize; 1] = [0];
+/// demandé : sa propre case à la sélection (après Super Sonic) : costume c140 de Sonic
+pub const SS_COSTUMES: [usize; 1] = [140];
 
 pub(crate) fn find(script: &str) -> Option<&'static Mv> {
     MOVES.iter().find(|m| m.script == script)
