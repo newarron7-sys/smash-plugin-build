@@ -13,7 +13,7 @@ jobs:
       - name: Place
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
-          sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
+          sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || sudo apt-get install -y 7zip 7zip-rar >/dev/null 2>&1 || true; 7z | head -2
       - name: Build REX (Google Drive du proprietaire)
         run: |
           mkdir -p /tmp/w && cd /tmp/w
@@ -27,9 +27,9 @@ jobs:
             echo "quota atteint (essai $essai), nouvel essai dans 10 min"; rm -f rex.rar; sleep 600
           done
           test -f rex.rar
-          sd=$(7z l -ba rex.rar | grep -oE '[^ ]*user/Wii/sd\.raw$' | head -1)
-          [ -n "$sd" ] || sd=$(7z l -ba -slt rex.rar | sed -n 's/^Path = \(.*sd\.raw\)$/\1/p' | head -1)
-          7z e -y rex.rar "$sd" -o/tmp/w >/dev/null && rm -f rex.rar
+          sd=$(7z l -ba -slt rex.rar | sed -n 's/^Path = \(.*sd\.raw\)$/\1/p' | head -1)
+          echo "carte SD trouvee : $([ -n "$sd" ] && echo oui || echo non)"
+          7z e -y rex.rar "$sd" -o/tmp/w >/dev/null; rm -f rex.rar; ls -la /tmp/w | grep -c "sd.raw"
       - name: Extraire (rien n'est affiche)
         env:
           CLE: ${{ secrets.CLE }}
@@ -38,7 +38,7 @@ jobs:
           7z l -ba -slt sd.raw | awk '/^Path = /{p=substr($0,8)} /^Size = /{print $3"\t"p}' > /tmp/x/liste_sd.txt
           7z x -y sd.raw "rex_/pf/sfx/*" "rex_/pf/info/portrite/*" "rex_/pf/info2/*" "rex_/pf/menu/common/*" "rex_/pf/menu2/sc_selcharacter*" "rex_/pf/*/*hadow*" "rex_/pf/*/*/*hadow*" "rex_/pf/*/*/*HADOW*" "rex_/pf/*/*HADOW*" -o/tmp/x >/dev/null || true
           rm -f sd.raw
-          echo "fichiers : $(find /tmp/x -type f | wc -l), taille : $(du -sh /tmp/x | cut -f1)"
+          echo "liste : $(wc -l < /tmp/x/liste_sd.txt) lignes"; echo "fichiers : $(find /tmp/x -type f | wc -l), taille : $(du -sh /tmp/x | cut -f1)"
           printf '%s' "$CLE" > /tmp/k
           tar cz -C /tmp/x . | openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k | split -b 90m - /tmp/pub/rex.tgz.enc.
           rm -f /tmp/k; ls /tmp/pub | wc -l
