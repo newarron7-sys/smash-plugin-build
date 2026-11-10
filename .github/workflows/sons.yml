@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/pub"
-          tar czf "$RUNNER_TEMP/sons.tgz" -C "$RUNNER_TEMP/out" .
+          cd "$RUNNER_TEMP/out" && tar czf ../sons.tgz . && cd -
           openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$RUNNER_TEMP/k" -in "$RUNNER_TEMP/sons.tgz" -out "$RUNNER_TEMP/pub/sons.tgz.enc"
           rm -f "$RUNNER_TEMP/k"
           cd "$RUNNER_TEMP/pub" && git init -q -b sons && git config user.name gha && git config user.email gha@users.noreply.github.com
