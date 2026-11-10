@@ -355,6 +355,113 @@ unsafe extern "C" fn s_specialhi(agent: &mut L2CAgentBase) {
     }
 }
 
+// ------------------------------------------------------------------ projection vers le haut (demandé, d'après REX ThrowHi)
+// L'animation de REX élève l'adversaire (os throw) dans les airs ; Super Shadow se téléporte autour de lui et lui
+// envoie une sphère aux images 29, 37, 45, 53, 61, 69 (1 % chacune, feu), charge une grosse sphère à partir de
+// l'image 82 et la lance à l'image 116 : explosion (7 %, électrique), puis l'adversaire est projeté (5 %, angle 90,
+// croissance 35, recul de base 125 : valeurs de la projection de REX). Total 18 % comme dans REX.
+const SPHERES: [f32; 6] = [29.0, 37.0, 45.0, 53.0, 61.0, 69.0];
+const EXPLOSION: f32 = 116.0;
+
+unsafe fn coup_tenu(agent: &mut L2CAgentBase, dmg: f32, ang: u64, kbg: i32, bkb: i32, size: f32, attr: &str, son: i32) {
+    ATTACK(agent, 0, 0, Hash40::new("throw"), dmg, ang, kbg, 0, bkb, size, 0.0, 0.0, 0.0, None, None, None, 1.0, 1.0,
+           *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, false, false, false, false, true,
+           *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
+           Hash40::new(attr), *ATTACK_SOUND_LEVEL_M, son, *ATTACK_REGION_THROW);
+    AttackModule::set_catch_only_all(agent.module_accessor, true, false);
+}
+
+unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    if is_excute(agent) {
+        ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, 0, 5.0, 90, 35, 0, 125, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+                   Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
+        ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, 3.0, 361, 100, 0, 60, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+                   Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
+    }
+    for f in SPHERES {
+        frame(lua, f);
+        if is_excute(agent) {
+            coup_tenu(agent, 1.0, 1, 120, 60, 4.7, "collision_attr_fire", *COLLISION_SOUND_ATTR_FIRE);
+        }
+        frame(lua, f + 1.0);
+        if is_excute(agent) {
+            AttackModule::clear_all(agent.module_accessor);
+        }
+    }
+    frame(lua, EXPLOSION);
+    if is_excute(agent) {
+        coup_tenu(agent, 7.0, 90, 120, 81, 8.0, "collision_attr_elec", *COLLISION_SOUND_ATTR_ELEC);
+        CHECK_FINISH_CAMERA(agent, 0, 20);
+    }
+    frame(lua, EXPLOSION + 1.0);
+    if is_excute(agent) {
+        let boma = agent.module_accessor;
+        let target = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_OBJECT);
+        let group = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_GROUP);
+        let no = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_NO);
+        ATK_HIT_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, Hash40::new("throw"), target, group, no);
+        AttackModule::clear_all(boma);
+    }
+}
+
+unsafe extern "C" fn e_throwhi(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    // téléportations : éclat sur lui à chaque apparition (REX : images 20 puis toutes les 8)
+    for f in [20.0, 28.0, 36.0, 44.0, 52.0, 60.0, 68.0, 76.0] {
+        frame(lua, f);
+        if is_excute(agent) {
+            EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash"), Hash40::new("top"), 0, 7, 0, 0, 0, 0, 1.0, true);
+            LAST_EFFECT_SET_COLOR(agent, 1.0, 0.85, 0.3);
+        }
+    }
+    // sphères sur l'adversaire
+    for f in SPHERES {
+        frame(lua, f);
+        if is_excute(agent) {
+            EFFECT_FOLLOW(agent, Hash40::new("sys_hit_elec"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.7, true);
+            LAST_EFFECT_SET_COLOR(agent, 1.0, 0.8, 0.25);
+            EFFECT(agent, Hash40::new("sys_bomb_a"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.35, 0, 0, 0, 0, 0, 0, true);
+        }
+    }
+    // grosse sphère chargée dans sa main
+    let mut f = 82.0;
+    while f < EXPLOSION {
+        frame(lua, f);
+        if is_excute(agent) {
+            EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash"), Hash40::new("handr"), 0, 0, 0, 0, 0, 0, 1.4 + (f - 82.0) * 0.03, true);
+            LAST_EFFECT_SET_COLOR(agent, 1.0, 0.8, 0.25);
+        }
+        f += 6.0;
+    }
+    // explosion
+    frame(lua, EXPLOSION);
+    if is_excute(agent) {
+        EFFECT(agent, Hash40::new("sys_bomb_b"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("sys_hit_elec"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, true);
+        QUAKE(agent, *CAMERA_QUAKE_KIND_L);
+    }
+}
+
+unsafe extern "C" fn s_throwhi(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    for f in SPHERES {
+        frame(lua, f);
+        if is_excute(agent) {
+            PLAY_SE(agent, Hash40::new("se_sonic_special_n02"));
+        }
+    }
+    frame(lua, 100.0);
+    if is_excute(agent) {
+        PLAY_SEQUENCE(agent, Hash40::new("seq_sonic_rnd_attack"));
+    }
+    frame(lua, EXPLOSION);
+    if is_excute(agent) {
+        PLAY_SE(agent, Hash40::new("se_common_bomb_l"));
+        PLAY_SE(agent, Hash40::new("se_sonic_smash_h01"));
+    }
+}
+
 pub fn install(a: &mut Agent) {
     a.acmd("game_specialnhoming", g_specialnhoming, Priority::Low);
     a.acmd("game_specialnhit", g_combo, Priority::Low);
@@ -364,6 +471,9 @@ pub fn install(a: &mut Agent) {
     a.acmd("game_specialsdashhi", g_specialsdashhi, Priority::Low);
     a.acmd("game_specialsdashlw", g_specialsdashlw, Priority::Low);
     a.acmd("game_specialsspin", g_specialsspin, Priority::Low);
+    a.acmd("game_throwhi", g_throwhi, Priority::Low);
+    a.acmd("effect_throwhi", e_throwhi, Priority::Low);
+    a.acmd("sound_throwhi", s_throwhi, Priority::Low);
     a.acmd("game_specialhi", rien, Priority::Low);
     a.acmd("effect_specialhi", rien, Priority::Low);
     a.acmd("sound_specialhi", s_specialhi, Priority::Low);
