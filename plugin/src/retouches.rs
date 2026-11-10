@@ -58,7 +58,9 @@ pub fn evs(script: &str, evs: &[Ev]) -> Vec<Ev> {
                     // sont posés à l'image 1 au plus tôt)
                     v.extend(m.evs.iter().map(|e| {
                         let f = if k == 0 && e.clear && e.f < 2.0 { 2.0 } else { e.f };
-                        Ev { f: f + off, ..*e }
+                        // REX : os WaistN ; os sûr chez Sonic : hip
+                        let bone = if e.bone == "waist" { "hip" } else { e.bone };
+                        Ev { f: f + off, bone, ..*e }
                     }));
                 }
             }
