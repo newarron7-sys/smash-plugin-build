@@ -487,9 +487,23 @@ unsafe extern "C" fn e_attackairf(agent: &mut L2CAgentBase) {
     salve(agent, 19.0, "handl", -1.5, 1.0);
 }
 unsafe extern "C" fn e_attackairb(agent: &mut L2CAgentBase) {
-    frame(agent.lua_state_agent, 5.0);
+    let lua = agent.lua_state_agent;
+    frame(lua, 5.0);
     fx(agent, "sys_attack_impact", "footr", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6);
     fx(agent, "sys_attack_arc_b", "footr", 0.0, 0.0, 0.0, 180.0, 90.0, 0.0, 0.6);
+    // demandé : le même effet que le nair (fumée et feu sur ses deux pieds) pendant ses coups (images 7 à 24)
+    if is_excute(agent) {
+        for pied in ["toel", "toer"] {
+            EFFECT_FOLLOW(agent, Hash40::new("sys_rocketbelt_smoke_loop"), Hash40::new(pied), 0, 0, 0, 0, 0, 0, 0.8, true);
+            EFFECT_FOLLOW(agent, Hash40::new("sys_flame"), Hash40::new(pied), 0, 1.5, 0, 0, 0, 0, 0.5, true);
+            LAST_EFFECT_SET_COLOR(agent, 3.5, 0.6, 0.1);
+        }
+    }
+    frame(lua, 30.0);
+    if is_excute(agent) {
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_rocketbelt_smoke_loop"), false, false);
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_flame"), false, false);
+    }
 }
 #[allow(dead_code)]
 unsafe extern "C" fn e_attackairhi(agent: &mut L2CAgentBase) {

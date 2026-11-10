@@ -448,7 +448,8 @@ unsafe extern "C" fn e_throwhi(agent: &mut L2CAgentBase) {
     for f in [20.0, 28.0, 36.0, 44.0, 52.0, 60.0, 68.0, 76.0] {
         frame(lua, f);
         if is_excute(agent) {
-            EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash"), Hash40::new("top"), 0, 7, 0, 0, 0, 0, 1.0, true);
+            // sur lui (hanches) : posé sur « top » il restait au sol pendant qu'il est en l'air (demandé)
+            EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash"), Hash40::new("hip"), 0, 0, 0, 0, 0, 0, 0.8, true);
             LAST_EFFECT_SET_COLOR(agent, 1.0, 0.85, 0.3);
         }
     }
@@ -655,23 +656,65 @@ unsafe fn spheres_visibles(boma: *mut BattleObjectModuleAccessor) {
         let h = os_monde(boma, "head");
         let (x, y) = (h.x, h.y + 7.0);
         TIR[e] = (x, y);
-        let sc = 1.0 + (f - CHARGE) / (LANCE - CHARGE) * 1.6;
+        // demandé : beaucoup moins gros (on ne voyait plus rien)
+        let sc = 0.45 + (f - CHARGE) / (LANCE - CHARGE) * 0.5;
         eclat_a(boma, "sys_smash_flash", x, y, sc);
-        if (f as i32) % 3 == 0 {
-            eclat_a(boma, "sys_hit_elec", x, y, sc * 0.6);
+        if (f as i32) % 4 == 0 {
+            eclat_a(boma, "sys_hit_elec", x, y, sc * 0.5);
         }
     } else if f >= LANCE && f < EXPLOSION {
         // lancée sur l'adversaire
         let (x0, y0) = TIR[e];
         let t = ((f - LANCE + 1.0) / (EXPLOSION - LANCE)).min(1.0);
         let (x, y) = (x0 + (cible.x - x0) * t, y0 + (cible.y - y0) * t);
-        sphere_a(boma, x, y, cible.x - x0, cible.y - y0, 2.6, f as i32);
+        sphere_a(boma, x, y, cible.x - x0, cible.y - y0, 1.0, f as i32);
     }
 }
 
 static mut THROW_BASE: [(f32, f32, bool); 8] = [(0.0, 0.0, false); 8];
 static mut THROW_FAIT: [bool; 8] = [false; 8];
+/// lancer avant : avancée de REX (TransN de ThrowF, unités d'Ultimate) image par image à partir de l'image 56
+const AVANCE_F: [f32; 28] = [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 3.5, 7.2, 11.4, 16.0, 21.0, 26.4, 32.1, 38.0, 44.3, 50.7,
+    57.2, 63.9, 70.7, 77.5, 84.3, 91.1, 97.8, 104.3, 110.7, 117.0, 122.9];
+static mut AVANCE_PREC: [f32; 8] = [0.0; 8];
+static mut AVANCE_ON: [bool; 8] = [false; 8];
+fn avance_f(f: f32) -> f32 {
+    let k = (f - 56.0).clamp(0.0, 27.0);
+    let i = (k as usize).min(26);
+    let t = k - i as f32;
+    AVANCE_F[i] + (AVANCE_F[i + 1] - AVANCE_F[i]) * t
+}
+/// demandé (vidéo) : dans Ultimate l'animation ne déplace pas le personnage pendant un lancer : il restait sur place
+/// pendant son Boost. Il avance vraiment, du même déplacement que dans REX (arrêté au bord du terrain).
+unsafe fn frame_throw_f(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    let lancer = StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_THROW
+        && MotionModule::motion_kind(boma) == smash::hash40("throw_f");
+    if !lancer {
+        AVANCE_ON[e] = false;
+        return;
+    }
+    let f = MotionModule::frame(boma);
+    if f < 60.0 {
+        AVANCE_ON[e] = false;
+        return;
+    }
+    if !AVANCE_ON[e] {
+        AVANCE_ON[e] = true;
+        AVANCE_PREC[e] = avance_f(f);
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_GROUND_STOP);
+        GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_GROUND_CLIFF_STOP));
+    }
+    // vitesse de l'image suivante : ce qu'il doit avancer d'ici là
+    let rate = MotionModule::rate(boma).max(0.01);
+    let d = (avance_f(f + rate) - avance_f(f)).max(0.0);
+    let lr = PostureModule::lr(boma);
+    sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, d * lr, 0.0_f32);
+}
+
 pub unsafe fn frame_throw(fighter: &mut L2CFighterCommon) {
+    frame_throw_f(fighter);
     let boma = fighter.module_accessor;
     let e = slot(boma);
     let lancer = StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_THROW
@@ -699,8 +742,14 @@ pub unsafe fn frame_throw(fighter: &mut L2CFighterCommon) {
         if dy >= 2.0 {
             let pos = smash::phx::Vector3f { x: px + dx, y: py + dy, z: PostureModule::pos_z(boma) };
             PostureModule::set_pos(boma, &pos);
-            StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
+            // demandé (vidéo) : il restait accroché au sol (en sautant, il se retrouvait d'un coup en bas) : la
+            // collision au sol est déplacée avec lui et la situation « en l'air » est écrite partout
+            GroundModule::set_shape_safe_pos(boma, &smash::phx::Vector2f { x: pos.x, y: pos.y });
+            StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), false);
+            fighter.global_table[0x17].assign(&L2CValue::I32(*SITUATION_KIND_AIR));
+            fighter.global_table[0x16].assign(&L2CValue::I32(*SITUATION_KIND_AIR));
             GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
+            KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_FALL);
             fighter.change_status(FIGHTER_STATUS_KIND_FALL.into(), false.into());
         }
     }
@@ -781,7 +830,8 @@ unsafe extern "C" fn s_throwf(agent: &mut L2CAgentBase) {
 unsafe extern "C" fn g_throwb(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
     if is_excute(agent) {
-        lancer_abs(agent, 7.0, 40, 104, 45, "collision_attr_normal", (3.0, 128, 100, 60));
+        // demandé : derrière lui (angle 40 de REX compté vers l'arrière : 180 - 40)
+        lancer_abs(agent, 7.0, 140, 104, 45, "collision_attr_normal", (3.0, 128, 100, 60));
     }
     smash_script::macros::FT_MOTION_RATE(agent, 1.0 / 1.4);
     frame(lua, 31.0);
