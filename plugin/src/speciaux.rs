@@ -18,11 +18,12 @@ use smashline::*;
 /// début de chaque partie du combo dans l'animation special_n_hit (REX : SpecialNHit2 26 images, SpecialNHit3 26,
 /// SpecialNHit4 30, SpecialNHit5 44), et sa fin
 pub const SEG: [f32; 5] = [0.0, 26.0, 52.0, 82.0, 126.0];
-/// image (dans la partie) à partir de laquelle on passe à la suivante si le coup a touché
-const ENCHAINE: [f32; 3] = [7.0, 7.0, 16.0];
+/// images d'animation après le coup avant de passer à la partie suivante (poing, pied, dernier pied -> pose)
+const ENCHAINE: [f32; 3] = [2.0, 2.0, 8.0];
 
 static mut ETAPE: [usize; 8] = [0; 8];
 static mut TOUCHE: [bool; 8] = [false; 8];
+static mut F_TOUCHE: [f32; 8] = [0.0; 8];
 
 unsafe fn slot(boma: *mut BattleObjectModuleAccessor) -> usize {
     (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7)
@@ -55,8 +56,9 @@ unsafe fn fin(fighter: &mut L2CFighterCommon) {
 unsafe extern "C" fn n_hit_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
     let e = slot(boma);
-    if AttackModule::is_infliction(boma, *COLLISION_KIND_MASK_HIT) {
+    if AttackModule::is_infliction(boma, *COLLISION_KIND_MASK_HIT) && !TOUCHE[e] {
         TOUCHE[e] = true;
+        F_TOUCHE[e] = MotionModule::frame(boma);
     }
     if StopModule::is_stop(boma) {
         return 0.into();
@@ -64,7 +66,7 @@ unsafe extern "C" fn n_hit_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     let n = ETAPE[e];
     let f = MotionModule::frame(boma);
     if n < 3 {
-        if TOUCHE[e] && f >= SEG[n] + ENCHAINE[n] {
+        if TOUCHE[e] && f >= F_TOUCHE[e] + ENCHAINE[n] {
             // touché : partie suivante tout de suite
             ETAPE[e] = n + 1;
             TOUCHE[e] = false;
@@ -110,7 +112,7 @@ unsafe extern "C" fn g_specialnhoming(agent: &mut L2CAgentBase) {
 unsafe extern "C" fn g_combo(agent: &mut L2CAgentBase) { crate::run(agent, "game_specialnhit"); }
 unsafe extern "C" fn s_combo(agent: &mut L2CAgentBase) {
     for (k, se) in ["se_sonic_swing_ll", "se_sonic_swing_s", "se_sonic_swing_m"].iter().enumerate() {
-        frame(agent.lua_state_agent, SEG[k] + 5.0);
+        frame(agent.lua_state_agent, SEG[k] + 3.0);
         if is_excute(agent) {
             PLAY_SE(agent, Hash40::new(se));
             PLAY_SEQUENCE(agent, Hash40::new("seq_sonic_rnd_attack"));
@@ -119,7 +121,7 @@ unsafe extern "C" fn s_combo(agent: &mut L2CAgentBase) {
 }
 unsafe extern "C" fn e_combo(agent: &mut L2CAgentBase) {
     for (k, (os, sc)) in [("handl", 1.0), ("footr", 1.0), ("footl", 1.4)].iter().enumerate() {
-        frame(agent.lua_state_agent, SEG[k] + 5.0);
+        frame(agent.lua_state_agent, SEG[k] + 3.0);
         if is_excute(agent) {
             EFFECT_FOLLOW(agent, Hash40::new("sys_attack_impact"), Hash40::new(os), 0, 0, 0, 0, 0, 0, *sc, true);
             LAST_EFFECT_SET_COLOR(agent, 1.0, 0.78, 0.22);
