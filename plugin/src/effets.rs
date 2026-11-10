@@ -159,15 +159,42 @@ unsafe extern "C" fn e_attack13(agent: &mut L2CAgentBase) {
 
 // attaque en courant (REX : traînée n° 12 devant lui de l'image 0 à 18)
 unsafe extern "C" fn e_attackdash(agent: &mut L2CAgentBase) {
+    // demandé : l'effet du Boost (side B du mod Sonic Re-Imagined, Modern) en doré
     let lua = agent.lua_state_agent;
     frame(lua, 1.0);
     poussiere(agent, "sys_dash_smoke", 0.7);
+    boost_debut(agent, 1.0);
     for f in [1.0, 6.0, 11.0] {
         frame(lua, f);
         fx(agent, "sys_attack_speedline", "top", 0.0, 10.0, 6.0, 0.0, 0.0, 0.0, 0.8);
+        if is_excute(agent) {
+            FOOT_EFFECT(agent, Hash40::new("sys_turn_smoke"), Hash40::new("top"), -4, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, false);
+        }
     }
     frame(lua, 18.0);
     fin(agent, "sys_attack_speedline");
+    boost_fin(agent);
+}
+
+/// Boost du mod Sonic Re-Imagined (Modern), en doré : éclat au départ, aura et traînée de Sonic qui le suivent
+/// (sys_score_aura, sonic_spintrace sur les hanches)
+unsafe fn boost_debut(agent: &mut L2CAgentBase, f0: f32) {
+    let lua = agent.lua_state_agent;
+    frame(lua, f0);
+    if is_excute(agent) {
+        EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash"), Hash40::new("top"), 0, 6, 4, 0, 0, 0, 1.0, true);
+        LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+        EFFECT_FOLLOW(agent, Hash40::new("sys_score_aura"), Hash40::new("hip"), 0, 0, 0, 0, 0, 0, 1.45, true);
+        LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+        EFFECT_FOLLOW(agent, Hash40::new("sonic_spintrace"), Hash40::new("hip"), 0, 0, 0, 0, 0, 0, 0.8, true);
+        LAST_EFFECT_SET_ALPHA(agent, 0.7);
+    }
+}
+unsafe fn boost_fin(agent: &mut L2CAgentBase) {
+    if is_excute(agent) {
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_score_aura"), false, false);
+        EFFECT_OFF_KIND(agent, Hash40::new("sonic_spintrace"), false, false);
+    }
 }
 // f tilt « Shadow Swipe » (REX : 3 cercles n° 15 sur la main droite, images 13 à 25)
 unsafe extern "C" fn e_attacks3(agent: &mut L2CAgentBase) {
@@ -189,33 +216,26 @@ unsafe extern "C" fn e_attacklw3(agent: &mut L2CAgentBase) {
 }
 // smash avant (REX : éclat de charge sur la jambe droite à l'image 6, puis il fonce)
 unsafe extern "C" fn e_attacks4(agent: &mut L2CAgentBase) {
-    // demandé : l'effet du down B aérien du Shadow d'Ultimate (corps rouge brûlant, traînée rouge), mais droit comme un
-    // dash, à partir de l'image 17, avec de la fumée blanche au sol qui le suit
+    // demandé : à partir de l'image 17, l'effet du Boost (side B du mod Sonic Re-Imagined, Modern) en doré, droit
+    // comme un dash, avec la fumée blanche au sol qui le suit (remplace la traînée rouge)
     let lua = agent.lua_state_agent;
     frame(lua, 6.0);
     fx(agent, "sys_smash_flash", "legr", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
-    frame(lua, 17.0);
-    if is_excute(agent) {
-        BURN_COLOR(agent, 2.0, 0.0, 0.1, 0.9);
-    }
+    boost_debut(agent, 17.0);
     let mut f = 17.0;
     while f < 39.0 {
         frame(lua, f);
         if is_excute(agent) {
-            EFFECT_FOLLOW(agent, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 8, -4, 0, 0, 0, 1.2, true);
-            LAST_EFFECT_SET_COLOR(agent, 2.0, 0.0, 0.1);
-            EFFECT_FOLLOW(agent, Hash40::new("sys_attack_line_b"), Hash40::new("top"), 0, 8, 2, 0, 0, 0, 1.0, true);
-            LAST_EFFECT_SET_COLOR(agent, 2.0, 0.0, 0.1);
-            LAST_EFFECT_SET_ALPHA(agent, 0.6);
+            if (f - 17.0) % 6.0 == 0.0 {
+                EFFECT_FOLLOW(agent, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 8, -4, 0, 0, 0, 1.2, true);
+                LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+            }
             FOOT_EFFECT(agent, Hash40::new("sys_dash_smoke"), Hash40::new("top"), -4, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
         }
         f += 3.0;
     }
     frame(lua, 39.0);
-    if is_excute(agent) {
-        BURN_COLOR_NORMAL(agent);
-        EFFECT_OFF_KIND(agent, Hash40::new("sys_attack_line_b"), false, false);
-    }
+    boost_fin(agent);
 }
 
 // charges des smashs (REX : éclats répétés)
