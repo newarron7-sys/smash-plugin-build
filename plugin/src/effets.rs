@@ -367,7 +367,7 @@ unsafe extern "C" fn e_attacklw4(agent: &mut L2CAgentBase) {
 // nair (demandé : feu et fumée du Shadow d'Ultimate) : une salve à chacun de ses 2 coups de REX (images 5 et 14)
 unsafe extern "C" fn e_attackairn(agent: &mut L2CAgentBase) {
     // demandé : le feu et la fumée du back air du Shadow d'Ultimate (fumée de la ceinture-fusée, flamme) qui suivent
-    // ses DEUX pieds pendant le coup, en plus des salves à ses 2 coups de REX (images 5 et 14)
+    // ses DEUX pieds pendant le coup
     let lua = agent.lua_state_agent;
     frame(lua, 5.0);
     if is_excute(agent) {
@@ -377,8 +377,7 @@ unsafe extern "C" fn e_attackairn(agent: &mut L2CAgentBase) {
             LAST_EFFECT_SET_COLOR(agent, 3.5, 0.6, 0.1);
         }
     }
-    salve(agent, 5.0, "top", 8.0, 1.0);
-    salve(agent, 14.0, "top", 8.0, 1.0);
+    // demandé : plus d'explosion, seulement la fumée et le feu sur ses pieds
     frame(lua, 40.0);
     if is_excute(agent) {
         EFFECT_OFF_KIND(agent, Hash40::new("sys_rocketbelt_smoke_loop"), false, false);
