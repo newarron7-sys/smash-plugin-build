@@ -363,6 +363,11 @@ unsafe extern "C" fn s_specialhi(agent: &mut L2CAgentBase) {
 // croissance 35, recul de base 125 : valeurs de la projection de REX). Total 18 % comme dans REX.
 const SPHERES: [f32; 6] = [29.0, 37.0, 45.0, 53.0, 61.0, 69.0];
 const EXPLOSION: f32 = 116.0;
+/// REX : la sphère part de sa main (os SphereN) à l'image du tir et arrive sur l'adversaire 4 images plus tard
+const VOL: f32 = 4.0;
+/// REX : grosse sphère au-dessus de sa tête (images 82 à 104), puis lancée sur l'adversaire (arrive à 116)
+const CHARGE: f32 = 82.0;
+const LANCE: f32 = 104.0;
 
 unsafe fn coup_tenu(agent: &mut L2CAgentBase, dmg: f32, ang: u64, kbg: i32, bkb: i32, size: f32, attr: &str, son: i32) {
     ATTACK(agent, 0, 0, Hash40::new("throw"), dmg, ang, kbg, 0, bkb, size, 0.0, 0.0, 0.0, None, None, None, 1.0, 1.0,
@@ -381,18 +386,18 @@ unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
                    Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
     }
     for f in SPHERES {
-        frame(lua, f);
+        frame(lua, f + VOL);
         if is_excute(agent) {
             coup_tenu(agent, 1.0, 1, 120, 60, 4.7, "collision_attr_fire", *COLLISION_SOUND_ATTR_FIRE);
         }
-        frame(lua, f + 1.0);
+        frame(lua, f + VOL + 1.0);
         if is_excute(agent) {
             AttackModule::clear_all(agent.module_accessor);
         }
     }
     frame(lua, EXPLOSION);
     if is_excute(agent) {
-        coup_tenu(agent, 7.0, 90, 120, 81, 8.0, "collision_attr_elec", *COLLISION_SOUND_ATTR_ELEC);
+        coup_tenu(agent, 7.0, 90, 120, 81, 10.0, "collision_attr_elec", *COLLISION_SOUND_ATTR_ELEC);
         smash_script::macros::CHECK_FINISH_CAMERA(agent, 0, 20);
     }
     frame(lua, EXPLOSION + 1.0);
@@ -416,30 +421,25 @@ unsafe extern "C" fn e_throwhi(agent: &mut L2CAgentBase) {
             LAST_EFFECT_SET_COLOR(agent, 1.0, 0.85, 0.3);
         }
     }
-    // sphères sur l'adversaire
+    // impact de chaque sphère sur l'adversaire (le projectile lui-même est dessiné par frame_throw)
     for f in SPHERES {
-        frame(lua, f);
+        frame(lua, f + VOL);
         if is_excute(agent) {
-            EFFECT_FOLLOW(agent, Hash40::new("sys_hit_elec"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.7, true);
+            EFFECT_FOLLOW(agent, Hash40::new("sys_hit_elec"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.8, true);
             LAST_EFFECT_SET_COLOR(agent, 1.0, 0.8, 0.25);
-            smash_script::macros::EFFECT(agent, Hash40::new("sys_bomb_a"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.35, 0, 0, 0, 0, 0, 0, true);
+            smash_script::macros::EFFECT(agent, Hash40::new("sys_bomb_a"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.45, 0, 0, 0, 0, 0, 0, true);
         }
-    }
-    // grosse sphère chargée dans sa main
-    let mut f = 82.0;
-    while f < EXPLOSION {
-        frame(lua, f);
-        if is_excute(agent) {
-            EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash"), Hash40::new("handr"), 0, 0, 0, 0, 0, 0, 1.4 + (f - 82.0) * 0.03, true);
-            LAST_EFFECT_SET_COLOR(agent, 1.0, 0.8, 0.25);
-        }
-        f += 6.0;
     }
     // explosion
     frame(lua, EXPLOSION);
     if is_excute(agent) {
-        smash_script::macros::EFFECT(agent, Hash40::new("sys_bomb_b"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, true);
-        smash_script::macros::EFFECT(agent, Hash40::new("sys_hit_elec"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, true);
+        // demandé : explosion un peu plus grande
+        smash_script::macros::EFFECT(agent, Hash40::new("sys_bomb_b"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.9, 0, 0, 0, 0, 0, 0, true);
+        smash_script::macros::EFFECT(agent, Hash40::new("sys_bomb_a"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.4, 0, 0, 0, 0, 0, 0, true);
+        smash_script::macros::EFFECT(agent, Hash40::new("sys_hit_elec"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 2.2, 0, 0, 0, 0, 0, 0, true);
+        LAST_EFFECT_SET_COLOR(agent, 1.0, 0.8, 0.25);
+        smash_script::macros::EFFECT(agent, Hash40::new("sys_smash_flash"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 3.0, 0, 0, 0, 0, 0, 0, true);
+        LAST_EFFECT_SET_COLOR(agent, 1.0, 0.8, 0.25);
         smash_script::macros::QUAKE(agent, *CAMERA_QUAKE_KIND_L);
     }
 }
@@ -563,6 +563,78 @@ unsafe extern "C" fn e_specialsendstart(agent: &mut L2CAgentBase) {
 /// projection vers le haut, même technique que Zero : le passer en l'air pendant la prise la cassait (l'adversaire
 /// restait au sol). La montée reste dans l'animation (pose qui monte, Trans à 0) tant qu'il tient l'adversaire ;
 /// une image après le lâcher, il est placé là où l'animation l'a emmené (os rot), vraiment en l'air, et retombe.
+// ------------------------------------------------------------------ projectiles du lancer haut
+// demandé : on doit voir la sphère partir à chaque téléportation (Chaos Spear du B neutre de Shadow). REX la colle à
+// son os SphereN, qui va de sa main à l'adversaire ; Sonic n'a pas cet os : la sphère est dessinée à la main, image par
+// image, sur le même trajet (comme les tirs du buster de Zero).
+static mut TIR: [(f32, f32); 8] = [(0.0, 0.0); 8];
+const DORE: (f32, f32, f32) = (1.0, 0.82, 0.25);
+
+unsafe fn os_monde(boma: *mut BattleObjectModuleAccessor, os: &str) -> smash::phx::Vector3f {
+    let mut p = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    ModelModule::joint_global_position(boma, Hash40::new(os), &mut p, true);
+    p
+}
+
+unsafe fn eclat_a(boma: *mut BattleObjectModuleAccessor, nom: &str, x: f32, y: f32, sc: f32) {
+    let pos = smash::phx::Vector3f { x, y, z: 0.0 };
+    let rot = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let h = EffectModule::req(boma, Hash40::new(nom), &pos, &rot, sc, 0, 0, false, 0) as u32;
+    if h != 0 {
+        EffectModule::set_rgb(boma, h, DORE.0, DORE.1, DORE.2);
+    }
+}
+
+/// une sphère dorée à (x, y) qui file dans la direction (dx, dy) : boule, crépitements et traînée derrière elle
+unsafe fn sphere_a(boma: *mut BattleObjectModuleAccessor, x: f32, y: f32, dx: f32, dy: f32, sc: f32, t: i32) {
+    eclat_a(boma, "sys_smash_flash", x, y, sc);
+    if t % 2 == 0 {
+        eclat_a(boma, "sys_hit_elec", x, y, sc * 0.55);
+    }
+    let n = (dx * dx + dy * dy).sqrt().max(0.001);
+    let (ux, uy) = (dx / n, dy / n);
+    eclat_a(boma, "sys_smash_flash_s", x - ux * 3.5 * sc, y - uy * 3.5 * sc, sc * 0.9);
+    eclat_a(boma, "sys_smash_flash_s", x - ux * 7.0 * sc, y - uy * 7.0 * sc, sc * 0.6);
+}
+
+unsafe fn spheres_visibles(boma: *mut BattleObjectModuleAccessor) {
+    let e = slot(boma);
+    let f = MotionModule::frame(boma);
+    let cible = os_monde(boma, "throw");
+    for fs in SPHERES {
+        if f >= fs && f < fs + VOL {
+            let k = f - fs;
+            if k < 1.0 {
+                // départ : dans sa main, là où il vient d'apparaître
+                let m = os_monde(boma, "handr");
+                TIR[e] = (m.x, m.y);
+                eclat_a(boma, "sys_smash_flash", m.x, m.y, 1.4);
+            }
+            let (x0, y0) = TIR[e];
+            let t = ((k + 1.0) / VOL).min(1.0);
+            let (x, y) = (x0 + (cible.x - x0) * t, y0 + (cible.y - y0) * t);
+            sphere_a(boma, x, y, cible.x - x0, cible.y - y0, 1.0, k as i32);
+        }
+    }
+    if f >= CHARGE && f < LANCE {
+        // grosse sphère qui grossit au-dessus de sa tête
+        let h = os_monde(boma, "head");
+        let (x, y) = (h.x, h.y + 7.0);
+        TIR[e] = (x, y);
+        let sc = 1.0 + (f - CHARGE) / (LANCE - CHARGE) * 1.6;
+        eclat_a(boma, "sys_smash_flash", x, y, sc);
+        if (f as i32) % 3 == 0 {
+            eclat_a(boma, "sys_hit_elec", x, y, sc * 0.6);
+        }
+    } else if f >= LANCE && f < EXPLOSION {
+        // lancée sur l'adversaire
+        let (x0, y0) = TIR[e];
+        let t = ((f - LANCE + 1.0) / (EXPLOSION - LANCE)).min(1.0);
+        let (x, y) = (x0 + (cible.x - x0) * t, y0 + (cible.y - y0) * t);
+        sphere_a(boma, x, y, cible.x - x0, cible.y - y0, 2.6, f as i32);
+    }
+}
+
 static mut THROW_BASE: [(f32, f32, bool); 8] = [(0.0, 0.0, false); 8];
 static mut THROW_FAIT: [bool; 8] = [false; 8];
 pub unsafe fn frame_throw(fighter: &mut L2CFighterCommon) {
@@ -575,6 +647,7 @@ pub unsafe fn frame_throw(fighter: &mut L2CFighterCommon) {
         THROW_FAIT[e] = false;
         return;
     }
+    spheres_visibles(boma);
     let mut p = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
     ModelModule::joint_global_position(boma, Hash40::new("rot"), &mut p, true);
     let (px, py) = (PostureModule::pos_x(boma), PostureModule::pos_y(boma));
@@ -599,6 +672,190 @@ pub unsafe fn frame_throw(fighter: &mut L2CFighterCommon) {
     }
 }
 
+// ------------------------------------------------------------------ autres lancers et coup pendant la prise (REX)
+/// lâcher : l'adversaire part avec le coup du lancer (ATTACK_ABS THROW)
+unsafe fn lacher(agent: &mut L2CAgentBase) {
+    let boma = agent.module_accessor;
+    let target = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_OBJECT);
+    let group = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_GROUP);
+    let no = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_NO);
+    smash_script::macros::ATK_HIT_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, Hash40::new("throw"), target, group, no);
+}
+
+unsafe fn lancer_abs(agent: &mut L2CAgentBase, dmg: f32, ang: u64, kbg: i32, bkb: i32, attr: &str, c: (f32, u64, i32, i32)) {
+    smash_script::macros::ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, 0, dmg, ang, kbg, 0, bkb, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+               Hash40::new(attr), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
+    smash_script::macros::ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, c.0, c.1, c.2, 0, c.3, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+               Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
+}
+
+/// lancer avant (REX ThrowF : vitesse 1,15 puis 1,6 ; 8 %, angle 3, il le lâche à l'image 60 et fonce en Boost avec un
+/// coup de 12 %)
+unsafe extern "C" fn g_throwf(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    if is_excute(agent) {
+        lancer_abs(agent, 8.0, 3, 70, 60, "collision_attr_fire", (3.0, 361, 100, 60));
+    }
+    smash_script::macros::FT_MOTION_RATE(agent, 1.0 / 1.15);
+    frame(lua, 10.0);
+    smash_script::macros::FT_MOTION_RATE(agent, 1.0 / 1.6);
+    frame(lua, 60.0);
+    if is_excute(agent) {
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, 12, 6);
+        lacher(agent);
+    }
+    frame(lua, 61.0);
+    if is_excute(agent) {
+        ATTACK(agent, 0, 0, Hash40::new("hip"), 12.0, 361, 144, 0, 50, 7.0, 0.0, 0.0, 0.0, None, None, None, 1.0, 1.0,
+               *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, false, false, false, false, true,
+               *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
+               Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_BODY);
+    }
+    frame(lua, 65.0);
+    if is_excute(agent) {
+        AttackModule::clear_all(agent.module_accessor);
+    }
+}
+unsafe extern "C" fn e_throwf(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    frame(lua, 60.0);
+    if is_excute(agent) {
+        smash_script::macros::EFFECT(agent, Hash40::new("sys_hit_elec"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, true);
+        LAST_EFFECT_SET_COLOR(agent, DORE.0, DORE.1, DORE.2);
+    }
+    crate::effets::poussiere(agent, "sys_dash_smoke", 0.9);
+    // Boost (comme le f-smash et la dash attack)
+    crate::effets::boost_debut(agent, 60.0);
+    for f in [60.0, 66.0, 72.0] {
+        frame(lua, f);
+        crate::effets::fx(agent, "sys_attack_speedline", "top", 0.0, 10.0, 6.0, 0.0, 0.0, 0.0, 0.8);
+    }
+    frame(lua, 80.0);
+    crate::effets::boost_fin(agent);
+    crate::effets::fin(agent, "sys_attack_speedline");
+}
+unsafe extern "C" fn s_throwf(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 60.0);
+    if is_excute(agent) {
+        PLAY_SEQUENCE(agent, Hash40::new("seq_sonic_rnd_attack"));
+        PLAY_SE(agent, Hash40::new("se_sonic_smash_s01"));
+        PLAY_SE(agent, Hash40::new("se_common_throw_02"));
+    }
+}
+
+/// lancer arrière (REX ThrowB : vitesse 1,4 ; 7 %, angle 40, lâché à l'image 31)
+unsafe extern "C" fn g_throwb(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    if is_excute(agent) {
+        lancer_abs(agent, 7.0, 40, 104, 45, "collision_attr_normal", (3.0, 128, 100, 60));
+    }
+    smash_script::macros::FT_MOTION_RATE(agent, 1.0 / 1.4);
+    frame(lua, 31.0);
+    if is_excute(agent) {
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, -10, 8);
+        lacher(agent);
+    }
+}
+unsafe extern "C" fn e_throwb(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    frame(lua, 30.0);
+    if is_excute(agent) {
+        smash_script::macros::EFFECT(agent, Hash40::new("sys_smash_flash"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.2, 0, 0, 0, 0, 0, 0, true);
+        LAST_EFFECT_SET_COLOR(agent, DORE.0, DORE.1, DORE.2);
+        smash_script::macros::EFFECT(agent, Hash40::new("sys_hit_elec"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, true);
+        LAST_EFFECT_SET_COLOR(agent, DORE.0, DORE.1, DORE.2);
+    }
+}
+unsafe extern "C" fn s_throwb(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 30.0);
+    if is_excute(agent) {
+        PLAY_SEQUENCE(agent, Hash40::new("seq_sonic_rnd_attack"));
+        PLAY_SE(agent, Hash40::new("se_common_throw_02"));
+    }
+}
+
+/// lancer bas (REX ThrowLw : vitesse 0,95 ; 8 coups de 1 % sur l'adversaire, toutes les 4 images à partir de la 9e,
+/// puis 4 %, angle 80, lâché à l'image 41). Demandé : les boules du smash haut à chaque coup.
+const LW_COUPS: [f32; 8] = [9.0, 13.0, 17.0, 21.0, 25.0, 29.0, 33.0, 37.0];
+unsafe extern "C" fn g_throwlw(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    if is_excute(agent) {
+        lancer_abs(agent, 4.0, 80, 70, 90, "collision_attr_normal", (3.0, 361, 70, 60));
+    }
+    smash_script::macros::FT_MOTION_RATE(agent, 1.0 / 0.95);
+    for f in LW_COUPS {
+        frame(lua, f);
+        if is_excute(agent) {
+            coup_tenu(agent, 1.0, 80, 100, 10, 4.3, "collision_attr_fire", *COLLISION_SOUND_ATTR_FIRE);
+        }
+        frame(lua, f + 1.0);
+        if is_excute(agent) {
+            AttackModule::clear_all(agent.module_accessor);
+        }
+    }
+    frame(lua, 41.0);
+    if is_excute(agent) {
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, 2, 0);
+        lacher(agent);
+    }
+}
+unsafe extern "C" fn e_throwlw(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    for f in LW_COUPS {
+        frame(lua, f - 1.0);
+        if is_excute(agent) {
+            EFFECT_OFF_KIND(agent, Hash40::new("sys_smartbomb_finish"), true, true);
+            EFFECT_OFF_KIND(agent, Hash40::new("sys_flame"), true, true);
+        }
+        crate::effets::salve_courte(agent, f, "throw", (0.0, 0.0, 0.0), 0.8);
+    }
+    frame(lua, 41.0);
+    if is_excute(agent) {
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_smartbomb_finish"), true, true);
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_flame"), true, true);
+    }
+    crate::effets::salve(agent, 41.0, "throw", 0.0, 1.0);
+    crate::effets::onde(agent, 0.8);
+}
+unsafe extern "C" fn s_throwlw(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    for f in LW_COUPS {
+        frame(lua, f);
+        if is_excute(agent) {
+            PLAY_SE(agent, Hash40::new("se_common_bomb_s"));
+        }
+    }
+    frame(lua, 41.0);
+    if is_excute(agent) {
+        PLAY_SEQUENCE(agent, Hash40::new("seq_sonic_rnd_attack"));
+        PLAY_SE(agent, Hash40::new("se_common_bomb_m"));
+    }
+}
+
+/// coup pendant la prise (REX CatchAttack : 3 % sur l'adversaire tenu, images 2 à 8)
+unsafe extern "C" fn g_catchattack(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    frame(lua, 2.0);
+    if is_excute(agent) {
+        ATTACK(agent, 0, 0, Hash40::new("throw"), 3.0, 361, 100, 30, 0, 5.0, 0.0, 0.0, 0.0, None, None, None, 2.1, 1.0,
+               *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, false, false, false, false, true,
+               *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
+               Hash40::new("collision_attr_elec"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_ELEC, *ATTACK_REGION_PUNCH);
+        AttackModule::set_catch_only_all(agent.module_accessor, true, false);
+    }
+    frame(lua, 8.0);
+    if is_excute(agent) {
+        AttackModule::clear_all(agent.module_accessor);
+    }
+}
+unsafe extern "C" fn e_catchattack(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 2.0);
+    if is_excute(agent) {
+        EFFECT_FOLLOW(agent, Hash40::new("sys_hit_elec"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.5, true);
+        LAST_EFFECT_SET_COLOR(agent, DORE.0, DORE.1, DORE.2);
+    }
+}
+
 pub fn install(a: &mut Agent) {
     a.acmd("game_specialnhoming", g_specialnhoming, Priority::Low);
     a.acmd("game_specialnhit", g_combo, Priority::Low);
@@ -618,6 +875,17 @@ pub fn install(a: &mut Agent) {
     a.acmd("game_throwhi", g_throwhi, Priority::Low);
     a.acmd("effect_throwhi", e_throwhi, Priority::Low);
     a.acmd("sound_throwhi", s_throwhi, Priority::Low);
+    a.acmd("game_throwf", g_throwf, Priority::Low);
+    a.acmd("effect_throwf", e_throwf, Priority::Low);
+    a.acmd("sound_throwf", s_throwf, Priority::Low);
+    a.acmd("game_throwb", g_throwb, Priority::Low);
+    a.acmd("effect_throwb", e_throwb, Priority::Low);
+    a.acmd("sound_throwb", s_throwb, Priority::Low);
+    a.acmd("game_throwlw", g_throwlw, Priority::Low);
+    a.acmd("effect_throwlw", e_throwlw, Priority::Low);
+    a.acmd("sound_throwlw", s_throwlw, Priority::Low);
+    a.acmd("game_catchattack", g_catchattack, Priority::Low);
+    a.acmd("effect_catchattack", e_catchattack, Priority::Low);
     a.acmd("game_specialhi", rien, Priority::Low);
     a.acmd("effect_specialhi", rien, Priority::Low);
     a.acmd("sound_specialhi", s_specialhi, Priority::Low);

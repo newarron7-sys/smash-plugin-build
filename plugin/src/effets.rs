@@ -172,20 +172,20 @@ pub unsafe fn boost_side_b(fighter: &mut L2CFighterCommon) {
 // Mêmes images et mêmes os que le script d'effets (GFX) de REX ; ses effets de Brawl (traces, cercles, flammes des
 // chaussures) sont refaits avec des effets du jeu teintés or. Remplacent ceux de Sonic.
 
-unsafe fn fx(agent: &mut L2CAgentBase, eff: &str, bone: &str, x: f32, y: f32, z: f32, rx: f32, ry: f32, rz: f32, sc: f32) {
+pub(crate) unsafe fn fx(agent: &mut L2CAgentBase, eff: &str, bone: &str, x: f32, y: f32, z: f32, rx: f32, ry: f32, rz: f32, sc: f32) {
     if is_excute(agent) {
         EFFECT_FOLLOW(agent, Hash40::new(eff), Hash40::new(bone), x, y, z, rx, ry, rz, sc, true);
         LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
     }
 }
 
-unsafe fn fin(agent: &mut L2CAgentBase, eff: &str) {
+pub(crate) unsafe fn fin(agent: &mut L2CAgentBase, eff: &str) {
     if is_excute(agent) {
         EFFECT_OFF_KIND(agent, Hash40::new(eff), false, false);
     }
 }
 
-unsafe fn poussiere(agent: &mut L2CAgentBase, eff: &str, sc: f32) {
+pub(crate) unsafe fn poussiere(agent: &mut L2CAgentBase, eff: &str, sc: f32) {
     if is_excute(agent) {
         LANDING_EFFECT(agent, Hash40::new(eff), Hash40::new("top"), 0, 0, 0, 0, 0, 0, sc, 0, 0, 0, 0, 0, 0, false);
     }
@@ -237,7 +237,7 @@ unsafe extern "C" fn e_attackdash(agent: &mut L2CAgentBase) {
 
 /// Boost du mod Sonic Re-Imagined (Modern), en doré : éclat au départ, aura et traînée de Sonic qui le suivent
 /// (sys_score_aura, sonic_spintrace sur les hanches)
-unsafe fn boost_debut(agent: &mut L2CAgentBase, f0: f32) {
+pub(crate) unsafe fn boost_debut(agent: &mut L2CAgentBase, f0: f32) {
     // demandé : l'effet va juste devant lui, comme sur Sonic : posé sur « top » (qui ne tourne pas avec son corps)
     // et pas sur les hanches (qui tournent vers la caméra pendant l'animation)
     let lua = agent.lua_state_agent;
@@ -254,7 +254,7 @@ unsafe fn boost_debut(agent: &mut L2CAgentBase, f0: f32) {
         LAST_EFFECT_SET_ALPHA(agent, 0.7);
     }
 }
-unsafe fn boost_fin(agent: &mut L2CAgentBase) {
+pub(crate) unsafe fn boost_fin(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         EFFECT_OFF_KIND(agent, Hash40::new("sys_score_aura"), false, false);
         EFFECT_OFF_KIND(agent, Hash40::new("sonic_spintrace"), false, false);
@@ -346,7 +346,7 @@ const ROUGE2: (f32, f32, f32) = (4.5, 0.0, 0.2);
 const CYAN: (f32, f32, f32) = (0.0, 1.0, 1.0);
 
 /// salve courte (2 images) à une position quelconque : pour les coups en rafale
-unsafe fn salve_courte(agent: &mut L2CAgentBase, f0: f32, bone: &str, p: (f32, f32, f32), k: f32) {
+pub(crate) unsafe fn salve_courte(agent: &mut L2CAgentBase, f0: f32, bone: &str, p: (f32, f32, f32), k: f32) {
     let lua = agent.lua_state_agent;
     frame(lua, f0);
     sbz(agent, "sys_smartbomb_finish", bone, p, 0.25 * k, ROUGE, 0.4, 0.3);
@@ -357,7 +357,7 @@ unsafe fn salve_courte(agent: &mut L2CAgentBase, f0: f32, bone: &str, p: (f32, f
 }
 
 /// onde de choc au sol (demandé)
-unsafe fn onde(agent: &mut L2CAgentBase, sc: f32) {
+pub(crate) unsafe fn onde(agent: &mut L2CAgentBase, sc: f32) {
     if is_excute(agent) {
         LANDING_EFFECT(agent, Hash40::new("sys_ground_shockwave"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, sc, 0, 0, 0, 0, 0, 0, false);
     }
@@ -365,7 +365,7 @@ unsafe fn onde(agent: &mut L2CAgentBase, sc: f32) {
 
 /// une salve d'explosions + flamme comme celles du Shadow d'Ultimate, à partir de l'image f0, sur l'os et la hauteur
 /// donnés, éteinte 4 images plus tard
-unsafe fn salve(agent: &mut L2CAgentBase, f0: f32, bone: &str, y: f32, k: f32) {
+pub(crate) unsafe fn salve(agent: &mut L2CAgentBase, f0: f32, bone: &str, y: f32, k: f32) {
     let lua = agent.lua_state_agent;
     frame(lua, f0);
     sb(agent, "sys_smartbomb_finish", bone, y, 0.25 * k, ROUGE, 0.4, 0.3);
