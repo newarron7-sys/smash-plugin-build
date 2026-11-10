@@ -179,14 +179,16 @@ unsafe extern "C" fn e_attackdash(agent: &mut L2CAgentBase) {
 /// Boost du mod Sonic Re-Imagined (Modern), en doré : éclat au départ, aura et traînée de Sonic qui le suivent
 /// (sys_score_aura, sonic_spintrace sur les hanches)
 unsafe fn boost_debut(agent: &mut L2CAgentBase, f0: f32) {
+    // demandé : l'effet va juste devant lui, comme sur Sonic : posé sur « top » (qui ne tourne pas avec son corps)
+    // et pas sur les hanches (qui tournent vers la caméra pendant l'animation)
     let lua = agent.lua_state_agent;
     frame(lua, f0);
     if is_excute(agent) {
-        EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash"), Hash40::new("top"), 0, 6, 4, 0, 0, 0, 1.0, true);
+        EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash"), Hash40::new("top"), 0, 7, 4, 0, 0, 0, 1.0, true);
         LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
-        EFFECT_FOLLOW(agent, Hash40::new("sys_score_aura"), Hash40::new("hip"), 0, 0, 0, 0, 0, 0, 1.45, true);
+        EFFECT_FOLLOW(agent, Hash40::new("sys_score_aura"), Hash40::new("top"), 0, 7, 0, 0, 0, 0, 1.45, true);
         LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
-        EFFECT_FOLLOW(agent, Hash40::new("sonic_spintrace"), Hash40::new("hip"), 0, 0, 0, 0, 0, 0, 0.8, true);
+        EFFECT_FOLLOW(agent, Hash40::new("sonic_spintrace"), Hash40::new("top"), 0, 7, 0, 0, 0, 0, 0.8, true);
         LAST_EFFECT_SET_ALPHA(agent, 0.7);
     }
 }
@@ -216,17 +218,16 @@ unsafe extern "C" fn e_attacklw3(agent: &mut L2CAgentBase) {
 }
 // smash avant (REX : éclat de charge sur la jambe droite à l'image 6, puis il fonce)
 unsafe extern "C" fn e_attacks4(agent: &mut L2CAgentBase) {
-    // demandé : à partir de l'image 17, l'effet du Boost (side B du mod Sonic Re-Imagined, Modern) en doré, droit
+    // demandé : à partir de l'image 17 de son smash avant de REX (25 ici : + 8 images de AttackS4Start), l'effet du Boost (side B du mod Sonic Re-Imagined, Modern) en doré, droit
     // comme un dash, avec la fumée blanche au sol qui le suit (remplace la traînée rouge)
     let lua = agent.lua_state_agent;
-    frame(lua, 6.0);
-    fx(agent, "sys_smash_flash", "legr", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
-    boost_debut(agent, 17.0);
-    let mut f = 17.0;
+    // demandé : rien avant l'image 17
+    boost_debut(agent, 25.0);
+    let mut f = 25.0;
     while f < 39.0 {
         frame(lua, f);
         if is_excute(agent) {
-            if (f - 17.0) % 6.0 == 0.0 {
+            if (f - 25.0) % 6.0 == 0.0 {
                 EFFECT_FOLLOW(agent, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 8, -4, 0, 0, 0, 1.2, true);
                 LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
             }
@@ -239,6 +240,8 @@ unsafe extern "C" fn e_attacks4(agent: &mut L2CAgentBase) {
 }
 
 // charges des smashs (REX : éclats répétés)
+unsafe extern "C" fn e_rien(_agent: &mut L2CAgentBase) {}
+#[allow(dead_code)]
 unsafe extern "C" fn e_charge_jambe(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
     for f in [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0] {
@@ -453,7 +456,7 @@ pub fn install_coups(a: &mut Agent) {
     a.acmd("effect_attacks4", e_attacks4, Priority::Low);
     a.acmd("effect_attacks4hi", e_attacks4, Priority::Low);
     a.acmd("effect_attacks4lw", e_attacks4, Priority::Low);
-    a.acmd("effect_attacks4charge", e_charge_jambe, Priority::Low);
+    a.acmd("effect_attacks4charge", e_rien, Priority::Low); // demandé : rien avant l'image 17
     a.acmd("effect_attackhi4", e_attackhi4, Priority::Low);
     a.acmd("effect_attackhi4charge", e_charge_corps, Priority::Low);
     a.acmd("effect_attacklw4", e_attacklw4, Priority::Low);
