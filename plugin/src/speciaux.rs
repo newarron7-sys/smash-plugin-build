@@ -524,7 +524,8 @@ unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         if (!tenu && S_T[e] > 15) || S_T[e] >= S_COURSE_MAX {
             // coup de pied de fin, il glisse en ralentissant
             S_PHASE[e] = 1;
-            MotionModule::change_motion(boma, Hash40::new("special_s_end_start"), 0.0, 1.0, false, 0.0, false, false);
+            // image 0 de REX : encore la boule (tête en bas) ; il freine à partir de l'image 3
+            MotionModule::change_motion(boma, Hash40::new("special_s_end_start"), 3.0, 1.0, false, 0.0, false, false);
         }
         return 0.into();
     }
