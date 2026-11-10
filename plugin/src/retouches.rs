@@ -53,6 +53,10 @@ pub fn evs(script: &str, evs: &[Ev]) -> Vec<Ev> {
             for (k, nom) in ["game_specialnhit1", "game_specialnhit2", "game_specialnhit3", "game_specialnhit4"].iter().enumerate() {
                 let off = crate::speciaux::SEG[k];
                 v.push(Ev { f: off, rate: 1.0, ..crate::E });
+                // le coup qui paralyse est porté par le trajet du homing (speciaux.rs) : pas de 2e paralysie ici
+                if k == 0 {
+                    continue;
+                }
                 if let Some(m) = crate::find(nom) {
                     // le coup qui paralyse (image 0, effacé à l'image 1 dans REX) : actif une image ici (les coups
                     // sont posés à l'image 1 au plus tôt)

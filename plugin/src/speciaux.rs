@@ -169,18 +169,18 @@ unsafe extern "C" fn n_hit_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     smashline::original_status(End, fighter, *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_HIT)(fighter)
 }
 
-/// trajet du homing : REX n'y a pas de coup, il arrive juste sur l'adversaire. Ici une hitbox sans effet (0 %, aucun
-/// recul) sert seulement à déclencher l'arrivée ; le vrai premier coup (paralysie) part à l'arrivée
+/// trajet du homing : demandé, c'est lui qui PARALYSE (comme dans REX, l'adversaire est figé à l'arrivée) :
+/// valeurs du coup d'arrivée de REX (1 %, angle 270, recul 80 fixe, élément paralysie), taille du homing de Sonic
 unsafe extern "C" fn g_specialnhoming(agent: &mut L2CAgentBase) {
     let boma = agent.module_accessor;
     if is_excute(agent) {
         JostleModule::set_status(boma, false);
         MotionModule::set_rate(boma, 80.0);
         let os = if WorkModule::is_flag(boma, *FIGHTER_SONIC_STATUS_SPECIAL_N_HOMING_FLAG_IS_KIRBY) { "rot" } else { "hip" };
-        ATTACK(agent, 0, 0, Hash40::new(os), 0.0, 361, 0, 0, 0, 5.0, 0.5, 1.5, 0.0, Some(0.5), Some(1.5), Some(0.0),
-               0.1, 0.0, *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_SPEED, false, 0, 0.0, 0, false, false, false, false,
+        ATTACK(agent, 0, 0, Hash40::new(os), 1.0, 270, 0, 0, 80, 5.0, 0.5, 1.5, 0.0, Some(0.5), Some(1.5), Some(0.0),
+               1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_SPEED, false, 0, 0.0, 0, false, false, false, false,
                true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
-               Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE,
+               Hash40::new("collision_attr_paralyze"), *ATTACK_SOUND_LEVEL_M, *COLLISION_SOUND_ATTR_ELEC,
                *ATTACK_REGION_BODY);
         AttackModule::set_captured_same_time_attack(boma, 0, true);
     }
