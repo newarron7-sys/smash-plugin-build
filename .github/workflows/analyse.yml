@@ -1,0 +1,33 @@
+name: Analyse (chiffree)
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'donnees/analyse.tgz.enc' ]
+permissions:
+  contents: write
+jobs:
+  analyser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Analyser (rien n'est affiche)
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          pip install -q capstone >/dev/null 2>&1
+          printf '%s' "$CLE" > /tmp/k
+          git fetch -q origin +mod:refs/remotes/origin/mod
+          git show origin/mod:mod.tgz.enc > /tmp/mod.enc
+          mkdir -p /tmp/mod /tmp/an /tmp/out
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/k -in /tmp/mod.enc | tar xz -C /tmp/mod
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/k -in donnees/analyse.tgz.enc | tar xz -C /tmp/an
+          cd /tmp/an && bash run.sh >/dev/null 2>&1 || true
+          tar czf /tmp/out.tgz -C /tmp/out .
+          mkdir -p /tmp/pub && openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -in /tmp/out.tgz -out /tmp/pub/out.tgz.enc
+          rm -f /tmp/k
+      - name: Publier (branche analyse, chiffre)
+        run: |
+          cd /tmp/pub && git init -q -b analyse && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m analyse
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" analyse
