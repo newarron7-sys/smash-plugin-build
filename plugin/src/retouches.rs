@@ -44,6 +44,21 @@ pub fn evs(script: &str, evs: &[Ev]) -> Vec<Ev> {
             v.sort_by(|x, y| x.f.partial_cmp(&y.f).unwrap());
             v
         }
+        // B neutre : combo de REX (poing, pied, pied qui éjecte, pose) bout à bout dans une seule animation
+        // (special_n_hit de Sonic) ; vitesse remise à 1 au début de chaque partie
+        "game_specialnhit" => {
+            let mut v = Vec::new();
+            for (k, nom) in ["game_specialnhit2", "game_specialnhit3", "game_specialnhit4"].iter().enumerate() {
+                let off = crate::speciaux::SEG[k];
+                v.push(Ev { f: off.max(0.0), rate: 1.0, ..crate::E });
+                if let Some(m) = crate::find(nom) {
+                    v.extend(m.evs.iter().map(|e| Ev { f: e.f + off, ..*e }));
+                }
+            }
+            v.push(Ev { f: crate::speciaux::SEG[3], rate: 1.0, ..crate::E });
+            v.sort_by(|x, y| x.f.partial_cmp(&y.f).unwrap());
+            v
+        }
         "game_attacklw4" => evs.iter().map(|e| if e.rate > 0.0 { *e } else { Ev { f: e.f + 4.0, ..*e } }).collect(),
         _ => evs.to_vec(),
     }

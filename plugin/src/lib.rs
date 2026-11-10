@@ -105,7 +105,7 @@ pub const BASE: &str = "sonic";
 /// étape 1 : costume c00 de Sonic (sa propre case viendra à l'étape 6)
 pub const SS_COSTUMES: [usize; 1] = [0];
 
-fn find(script: &str) -> Option<&'static Mv> {
+pub(crate) fn find(script: &str) -> Option<&'static Mv> {
     MOVES.iter().find(|m| m.script == script)
 }
 
@@ -136,8 +136,10 @@ fn son(attr: &str) -> i32 {
 }
 
 /// joue le coup de Super Shadow (REX) sur l'animation de Sonic
-unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
-    let Some(mv) = find(script) else { return };
+pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
+    // B neutre : le combo n'a pas d'entrée à lui (construit dans retouches.rs à partir de ses 3 coups de REX)
+    let combo = Mv { script: "game_specialnhit", total: speciaux::SEG[4], hold: 0.0, kind: 0, evs: &[] };
+    let mv: &Mv = if script == "game_specialnhit" { &combo } else { match find(script) { Some(m) => m, None => return } };
     // retouches demandées (jab 3 et up smash en plusieurs coups, down smash plus tard) : construites à partir des
     // coups de REX eux-mêmes
     let evs_v = retouches::evs(script, mv.evs);
@@ -256,15 +258,10 @@ scripts! {
     g_attackairb => "game_attackairb",
     g_attackairhi => "game_attackairhi",
     g_attackairlw => "game_attackairlw",
-    g_specialnhit2 => "game_specialnhit2",
-    g_specialnhit3 => "game_specialnhit3",
-    g_specialnhit4 => "game_specialnhit4",
 }
 
 
 #[skyline::main(name = "super_shadow")]
 pub fn main() {
-    // nouvelles animations du B neutre (fighter/sonic/motion/body/motion_patch.yaml du mod)
-    runtime_motion_patcher::install(true);
     install_scripts();
 }
