@@ -52,7 +52,19 @@ pub fn evs(script: &str, evs: &[Ev]) -> Vec<Ev> {
                 let off = crate::speciaux::SEG[k];
                 v.push(Ev { f: off.max(0.0), rate: 1.0, ..crate::E });
                 if let Some(m) = crate::find(nom) {
-                    v.extend(m.evs.iter().map(|e| Ev { f: e.f + off, ..*e }));
+                    // demandé (le combo s'arrêtait après le poing : l'adversaire partait trop loin) : poing et 1er
+                    // pied attirent l'adversaire vers le coup (angle 366) au lieu de l'éjecter ; dégâts de REX gardés,
+                    // le dernier pied éjecte comme dans REX
+                    v.extend(m.evs.iter().map(|e| {
+                        let mut e2 = Ev { f: e.f + off, ..*e };
+                        if k < 2 && !e.clear && e.body < 0 && e.rate <= 0.0 {
+                            e2.angle = 366;
+                            e2.kbg = 100;
+                            e2.fkb = 40;
+                            e2.bkb = 0;
+                        }
+                        e2
+                    }));
                 }
             }
             v.push(Ev { f: crate::speciaux::SEG[3], rate: 1.0, ..crate::E });

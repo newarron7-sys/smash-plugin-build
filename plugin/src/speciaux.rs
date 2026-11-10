@@ -19,7 +19,7 @@ use smashline::*;
 /// SpecialNHit4 30, SpecialNHit5 44), et sa fin
 pub const SEG: [f32; 5] = [0.0, 26.0, 52.0, 82.0, 126.0];
 /// image (dans la partie) à partir de laquelle on passe à la suivante si le coup a touché
-const ENCHAINE: [f32; 3] = [9.0, 9.0, 16.0];
+const ENCHAINE: [f32; 3] = [7.0, 7.0, 16.0];
 
 static mut ETAPE: [usize; 8] = [0; 8];
 static mut TOUCHE: [bool; 8] = [false; 8];
@@ -95,7 +95,7 @@ unsafe extern "C" fn g_specialnhoming(agent: &mut L2CAgentBase) {
         JostleModule::set_status(boma, false);
         MotionModule::set_rate(boma, 80.0);
         let os = if WorkModule::is_flag(boma, *FIGHTER_SONIC_STATUS_SPECIAL_N_HOMING_FLAG_IS_KIRBY) { "rot" } else { "hip" };
-        ATTACK(agent, 0, 0, Hash40::new(os), 1.0, 80, 100, 30, 0, 5.0, 0.5, 1.5, 0.0, Some(0.5), Some(1.5), Some(0.0),
+        ATTACK(agent, 0, 0, Hash40::new(os), 1.0, 366, 100, 40, 0, 5.0, 0.5, 1.5, 0.0, Some(0.5), Some(1.5), Some(0.0),
                1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_SPEED, false, 2, 0.0, 0, false, false, false, false,
                true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
                Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_M, *COLLISION_SOUND_ATTR_KICK,
