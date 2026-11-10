@@ -81,6 +81,13 @@ unsafe extern "C" fn n_hit_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     0.into()
 }
 
+unsafe extern "C" fn n_hit_end(fighter: &mut L2CFighterCommon) -> L2CValue {
+    let e = slot(fighter.module_accessor);
+    ETAPE[e] = 0;
+    TOUCHE[e] = false;
+    smashline::original_status(End, fighter, *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_HIT)(fighter)
+}
+
 /// homing de Sonic (même script) mais avec un petit recul fixe : l'adversaire reste près de lui pour le combo
 unsafe extern "C" fn g_specialnhoming(agent: &mut L2CAgentBase) {
     let boma = agent.module_accessor;
