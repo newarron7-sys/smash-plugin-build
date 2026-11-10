@@ -264,6 +264,97 @@ unsafe extern "C" fn g_specialsspin(agent: &mut L2CAgentBase) {
     }
 }
 
+// ------------------------------------------------------------------ haut B : Chaos Control (demandé : celui du mod
+// Shadow, qui est le même que REX) : il se concentre, puis se téléporte dans la direction du stick (invisible et
+// intangible pendant le trajet, éclats bleus au départ et à l'arrivée), puis chute sans pouvoir rien faire. Pas de
+// ressort de Sonic. Animations de REX (SpecialHiStart + SpecialHi bout à bout dans special_hi, vitesse x2 comme REX).
+const HI_TRAJET: f32 = 31.0; // image de l'animation où commence la téléportation
+const HI_FIN: f32 = 62.0;
+const HI_VITESSE: f32 = 4.0; // REX : élan = stick x 4
+static mut HI_PHASE: [u8; 8] = [0; 8];
+
+unsafe fn eclat_bleu(boma: *mut BattleObjectModuleAccessor) {
+    let z = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let p = smash::phx::Vector3f { x: 0.0, y: 6.0, z: 0.0 };
+    let h = EffectModule::req_follow(boma, Hash40::new("sys_smash_flash"), Hash40::new("top"), &p, &z, 1.6, true, 0, 0, 0, 0, 0, false, false);
+    EffectModule::set_rgb(boma, h as u32, 0.2, 0.6, 2.0);
+}
+
+unsafe extern "C" fn hi_main(fighter: &mut L2CFighterCommon) -> L2CValue {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    HI_PHASE[e] = 0;
+    if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_GROUND_STOP);
+    } else {
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
+        KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+    }
+    sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
+    MotionModule::change_motion(boma, Hash40::new("special_hi"), 0.0, 2.0, false, 0.0, false, false);
+    fighter.sub_shift_status_main(L2CValue::Ptr(hi_loop as *const () as _))
+}
+
+unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    let f = MotionModule::frame(boma);
+    if HI_PHASE[e] == 0 && f >= HI_TRAJET {
+        // départ : direction du stick (vers le haut si le stick est au repos)
+        HI_PHASE[e] = 1;
+        let mut sx = ControlModule::get_stick_x(boma);
+        let mut sy = ControlModule::get_stick_y(boma);
+        let n = (sx * sx + sy * sy).sqrt();
+        if n < 0.25 {
+            sx = 0.0;
+            sy = 1.0;
+        } else {
+            sx /= n;
+            sy /= n;
+        }
+        if sx * PostureModule::lr(boma) < -0.2 {
+            PostureModule::reverse_lr(boma);
+            PostureModule::update_rot_y_lr(boma);
+        }
+        eclat_bleu(boma);
+        VisibilityModule::set_whole(boma, false);
+        HitModule::set_whole(boma, HitStatus(*HIT_STATUS_XLU), 0);
+        StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
+        GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
+        KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, sx * HI_VITESSE, sy * HI_VITESSE);
+    }
+    if HI_PHASE[e] == 1 && (f >= HI_FIN - 1.0 || MotionModule::is_end(boma)) {
+        // arrivée : il réapparaît et chute sans pouvoir rien faire
+        HI_PHASE[e] = 2;
+        VisibilityModule::set_whole(boma, true);
+        HitModule::set_whole(boma, HitStatus(*HIT_STATUS_NORMAL), 0);
+        eclat_bleu(boma);
+        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
+        fighter.change_status(FIGHTER_STATUS_KIND_FALL_SPECIAL.into(), false.into());
+    }
+    0.into()
+}
+
+unsafe extern "C" fn hi_end(fighter: &mut L2CFighterCommon) -> L2CValue {
+    let boma = fighter.module_accessor;
+    HI_PHASE[slot(boma)] = 0;
+    VisibilityModule::set_whole(boma, true);
+    HitModule::set_whole(boma, HitStatus(*HIT_STATUS_NORMAL), 0);
+    KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+    0.into()
+}
+
+unsafe extern "C" fn s_specialhi(agent: &mut L2CAgentBase) {
+    for f in [4.0, HI_TRAJET] {
+        frame(agent.lua_state_agent, f);
+        if is_excute(agent) {
+            PLAY_SE(agent, Hash40::new("se_sonic_special_h01"));
+        }
+    }
+}
+
 pub fn install(a: &mut Agent) {
     a.acmd("game_specialnhoming", g_specialnhoming, Priority::Low);
     a.acmd("game_specialnhit", g_combo, Priority::Low);
@@ -273,6 +364,12 @@ pub fn install(a: &mut Agent) {
     a.acmd("game_specialsdashhi", g_specialsdashhi, Priority::Low);
     a.acmd("game_specialsdashlw", g_specialsdashlw, Priority::Low);
     a.acmd("game_specialsspin", g_specialsspin, Priority::Low);
+    a.acmd("game_specialhi", rien, Priority::Low);
+    a.acmd("effect_specialhi", rien, Priority::Low);
+    a.acmd("sound_specialhi", s_specialhi, Priority::Low);
+    a.acmd("expression_specialhi", rien, Priority::Low);
+    a.status(Main, *FIGHTER_STATUS_KIND_SPECIAL_HI, hi_main);
+    a.status(End, *FIGHTER_STATUS_KIND_SPECIAL_HI, hi_end);
     a.status(Main, *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_HIT, n_hit_main);
     a.status(End, *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_HIT, n_hit_end);
 }
