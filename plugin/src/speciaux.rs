@@ -582,9 +582,13 @@ unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         }
         return 0.into();
     }
-    let f = MotionModule::frame(boma) - S_L[e];
+    let fm = MotionModule::frame(boma);
+    let f = (fm - S_L[e]).max(0.0);
     s_vitesse(fighter, (S_VITESSE * (1.0 - f / 20.0)).max(0.0));
-    if MotionModule::is_end(boma) {
+    // vidéo : la motion de la course boucle (réglage de Sonic) : « is_end » n'arrivait jamais, la fin repartait sur
+    // la course et il continuait d'avancer. Fin : dernière image du fichier, ou retour au début (bouclé)
+    let fin = fm >= MotionModule::end_frame(boma) - 1.5 || fm < S_L[e] - 0.5;
+    if fin {
         KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
         if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
             fighter.change_status(FIGHTER_STATUS_KIND_WAIT.into(), false.into());
