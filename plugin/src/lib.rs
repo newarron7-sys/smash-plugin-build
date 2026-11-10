@@ -96,6 +96,7 @@ pub struct Mv {
 include!("generated.rs");
 
 mod effets;
+mod speciaux;
 mod retouches;
 
 /// perso de base (nom interne) : Sonic
@@ -228,6 +229,7 @@ macro_rules! scripts {
             a.set_costume(SS_COSTUMES.to_vec());
             $( if find($s).is_some() { a.acmd($s, $f, Priority::Low); } )*
             effets::install(&mut a);
+            speciaux::install(&mut a);
             a.on_line(Main, ss_frame);
             a.install();
         }
@@ -254,10 +256,15 @@ scripts! {
     g_attackairb => "game_attackairb",
     g_attackairhi => "game_attackairhi",
     g_attackairlw => "game_attackairlw",
+    g_specialnhit2 => "game_specialnhit2",
+    g_specialnhit3 => "game_specialnhit3",
+    g_specialnhit4 => "game_specialnhit4",
 }
 
 
 #[skyline::main(name = "super_shadow")]
 pub fn main() {
+    // nouvelles animations du B neutre (fighter/sonic/motion/body/motion_patch.yaml du mod)
+    runtime_motion_patcher::install(true);
     install_scripts();
 }

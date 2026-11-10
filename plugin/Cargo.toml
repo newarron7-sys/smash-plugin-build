@@ -17,6 +17,7 @@ nnsdk = { git = "https://github.com/ultimate-research/nnsdk-rs" }
 skyline = { git = "https://github.com/ultimate-research/skyline-rs" }
 skyline_smash = { git = "https://github.com/ultimate-research/skyline-smash.git", features = ["weak_l2cvalue"] }
 smash_script = { path = "../vendor/smash-script" }
+runtime-motion-patcher = { path = "../vendor/runtime-motion-patcher" }
 smashline = { git = "https://github.com/HDR-Development/smashline", rev = "df194a03b918116adb7bda1c2b4565dcd82a4756" }
 
 
