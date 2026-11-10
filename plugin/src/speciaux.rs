@@ -549,6 +549,31 @@ unsafe extern "C" fn s_end(fighter: &mut L2CFighterCommon) -> L2CValue {
 /// coup de pied de fin : REX SpecialSEnd (9 % à l'image 5, 6 % à l'image 10, fin à 25)
 unsafe extern "C" fn g_specialsendstart(agent: &mut L2CAgentBase) { crate::run(agent, "game_specialsendstart"); }
 
+/// projection vers le haut : l'animation de REX le fait monter très haut (99 unités) avec l'adversaire. Le statut de
+/// projection reste au sol : on le passe en l'air pour que la montée de l'animation s'applique, puis il retombe.
+static mut THROW_AIR: [bool; 8] = [false; 8];
+pub unsafe fn frame_throw(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    let lancer = StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_THROW
+        && MotionModule::motion_kind(boma) == smash::hash40("throw_hi");
+    if !lancer {
+        THROW_AIR[e] = false;
+        return;
+    }
+    let f = MotionModule::frame(boma);
+    if !THROW_AIR[e] && f >= 1.0 {
+        THROW_AIR[e] = true;
+        StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
+        GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_MOTION_AIR);
+    }
+    if THROW_AIR[e] && f >= MotionModule::end_frame(boma) - 2.0 {
+        THROW_AIR[e] = false;
+        fighter.change_status(FIGHTER_STATUS_KIND_FALL.into(), false.into());
+    }
+}
+
 pub fn install(a: &mut Agent) {
     a.acmd("game_specialnhoming", g_specialnhoming, Priority::Low);
     a.acmd("game_specialnhit", g_combo, Priority::Low);
