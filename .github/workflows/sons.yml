@@ -2,7 +2,7 @@ name: Sons REX (extraction, chiffre)
 on:
   push:
     branches: [ main ]
-    paths: [ 'outils/lancer_sons.txt' ]
+    paths: [ 'outils/lancer_sons.txt', 'donnees/1BB.sawnd.enc' ]
 permissions:
   contents: write
 jobs:
@@ -17,12 +17,8 @@ jobs:
           CLE: ${{ secrets.CLE }}
         run: |
           printf '%s' "$CLE" > "$RUNNER_TEMP/k"
-          git fetch -q origin +rex:refs/remotes/origin/rex
-          mkdir -p "$RUNNER_TEMP/rex" "$RUNNER_TEMP/x"
-          for f in $(git ls-tree --name-only origin/rex | sort); do git show "origin/rex:$f" >> "$RUNNER_TEMP/rex.enc"; done
-          openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"$RUNNER_TEMP/k" -in "$RUNNER_TEMP/rex.enc" -out "$RUNNER_TEMP/rex.tgz"
-          tar xzf "$RUNNER_TEMP/rex.tgz" -C "$RUNNER_TEMP/x" --wildcards '*sfx*' 2>/dev/null || tar xzf "$RUNNER_TEMP/rex.tgz" -C "$RUNNER_TEMP/x"
-          find "$RUNNER_TEMP/x" -ipath '*sfx/*1bb*' -name '*.sawnd' -exec cp {} "$RUNNER_TEMP/rex/" \;
+          mkdir -p "$RUNNER_TEMP/rex"
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"$RUNNER_TEMP/k" -in donnees/1BB.sawnd.enc -out "$RUNNER_TEMP/rex/1BB.sawnd"
           echo "banques : $(ls "$RUNNER_TEMP/rex" | wc -l)"
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Extraire (DSP -> WAV -> IDSP)
