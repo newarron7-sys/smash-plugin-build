@@ -11,15 +11,19 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Retarget (rien n'est affiche)
         env:
           CLE: ${{ secrets.CLE }}
         run: |
-          pip install -q ssbh_data_py numpy scipy pillow >/dev/null 2>&1 || pip install -q --break-system-packages ssbh_data_py numpy scipy pillow >/dev/null 2>&1
+          pip install -q ssbh_data_py numpy scipy pillow >/dev/null 2>&1; python -c "import ssbh_data_py as S; print('ssbh', getattr(S,'__version__','?'), hasattr(S,'anim_data'))"
           printf '%s' "$CLE" > /tmp/k
           mkdir -p /tmp/a /tmp/out /tmp/pub
           openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/k -in donnees/anim.tgz.enc | tar xz -C /tmp/a
           bash /tmp/a/run.sh || true
+          tail -3 /tmp/out/anim.txt | grep -oE '^[A-Za-z]+Error' || true
           echo "animations : $(ls /tmp/out/motion | wc -l)"
           tar cz -C /tmp/out . | openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -out /tmp/pub/anim.tgz.enc
           rm -f /tmp/k
