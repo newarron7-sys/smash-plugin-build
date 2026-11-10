@@ -829,27 +829,25 @@ unsafe fn lancer_abs(agent: &mut L2CAgentBase, dmg: f32, ang: u64, kbg: i32, bkb
 /// coup de 12 %)
 unsafe extern "C" fn g_throwf(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
+    // REX : le lancer (8 %, angle 3) et, à la même image, la charge du Boost (12 %, angle 361, 144 / 50) qui percute
+    // l'adversaire lâché. Demandé (vidéo) : avec l'angle 3 seul, l'adversaire retombait tout de suite à ses pieds (la
+    // charge le ratait quand il avait déjà des dégâts) : le lancer emporte les 20 % et part comme la charge de REX.
     if is_excute(agent) {
-        lancer_abs(agent, 8.0, 3, 70, 60, "collision_attr_fire", (3.0, 361, 100, 60));
+        lancer_abs(agent, 8.0, 40, 144, 50, "collision_attr_fire", (3.0, 361, 100, 60));
     }
     smash_script::macros::FT_MOTION_RATE(agent, 1.0 / 1.15);
     frame(lua, 10.0);
     smash_script::macros::FT_MOTION_RATE(agent, 1.0 / 1.6);
+    frame(lua, 59.0);
+    if is_excute(agent) {
+        // les 12 % de la charge, sur l'adversaire encore tenu
+        coup_tenu(agent, 12.0, 40, 0, 0, 6.0, "collision_attr_fire", *COLLISION_SOUND_ATTR_FIRE);
+    }
     frame(lua, 60.0);
     if is_excute(agent) {
+        AttackModule::clear_all(agent.module_accessor);
         smash_script::macros::CHECK_FINISH_CAMERA(agent, 12, 6);
         lacher(agent);
-    }
-    frame(lua, 61.0);
-    if is_excute(agent) {
-        ATTACK(agent, 0, 0, Hash40::new("hip"), 12.0, 361, 144, 0, 50, 7.0, 0.0, 0.0, 0.0, None, None, None, 1.0, 1.0,
-               *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, false, false, false, false, true,
-               *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
-               Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_BODY);
-    }
-    frame(lua, 65.0);
-    if is_excute(agent) {
-        AttackModule::clear_all(agent.module_accessor);
     }
 }
 unsafe extern "C" fn e_throwf(agent: &mut L2CAgentBase) {
