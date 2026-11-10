@@ -187,8 +187,9 @@ unsafe fn boost_debut(agent: &mut L2CAgentBase, f0: f32) {
         EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash"), Hash40::new("top"), 0, 7, 4, 0, 0, 0, 1.0, true);
         LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
         // demandé (photo du Boost de Sonic) : l'aura couchée devant lui, à hauteur du corps, ses flammes partant vers
-        // l'arrière (rotation X -90 : le haut de l'effet pointe derrière lui), plus petite
-        EFFECT_FOLLOW(agent, Hash40::new("sys_score_aura"), Hash40::new("top"), 0, 6, 5, -90, 0, 0, 0.6, true);
+        // l'arrière (rotation X -90 : le haut de l'effet pointe derrière lui) ; demandé : son devant en arc vertical
+        // juste devant lui, de la tête aux pieds (plus grande)
+        EFFECT_FOLLOW(agent, Hash40::new("sys_score_aura"), Hash40::new("top"), 0, 6, 4, -90, 0, 0, 1.2, true);
         LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
         EFFECT_FOLLOW(agent, Hash40::new("sonic_spintrace"), Hash40::new("top"), 0, 7, 0, 0, 0, 0, 0.8, true);
         LAST_EFFECT_SET_ALPHA(agent, 0.7);
