@@ -209,9 +209,10 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_AIR_FLAG_ENABLE_LANDING);
             landing_on = true;
         }
-        // demandé : hitbox du nair, du jab et du back air agrandies
+        // demandé : hitbox du nair, du jab, du back air et du up air agrandies
         let size = match script {
-            "game_attackairn" | "game_attack11" | "game_attack12" | "game_attack13" | "game_attackairb" => e.size * 1.4,
+            "game_attackairn" | "game_attack11" | "game_attack12" | "game_attack13" | "game_attackairb"
+            | "game_attackairhi" => e.size * 1.4,
             _ => e.size,
         };
         // demandé : le back air éjecte vraiment derrière lui. REX finit sur des coups à l'angle 363 (lien
