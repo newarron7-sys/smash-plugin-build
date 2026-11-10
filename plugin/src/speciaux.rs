@@ -495,6 +495,8 @@ unsafe extern "C" fn s_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     let e = slot(boma);
     S_PHASE[e] = 0;
     S_T[e] = 0;
+    // le statut de Sonic le met en boule (corps caché) : il reste visible, en courant
+    VisibilityModule::set_whole(boma, true);
     if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
         KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_GROUND_STOP);
         GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_GROUND_CLIFF_STOP));
@@ -549,28 +551,42 @@ unsafe extern "C" fn s_end(fighter: &mut L2CFighterCommon) -> L2CValue {
 /// coup de pied de fin : REX SpecialSEnd (9 % à l'image 5, 6 % à l'image 10, fin à 25)
 unsafe extern "C" fn g_specialsendstart(agent: &mut L2CAgentBase) { crate::run(agent, "game_specialsendstart"); }
 
-/// projection vers le haut : l'animation de REX le fait monter très haut (99 unités) avec l'adversaire. Le statut de
-/// projection reste au sol : on le passe en l'air pour que la montée de l'animation s'applique, puis il retombe.
-static mut THROW_AIR: [bool; 8] = [false; 8];
+/// projection vers le haut, même technique que Zero : le passer en l'air pendant la prise la cassait (l'adversaire
+/// restait au sol). La montée reste dans l'animation (pose qui monte, Trans à 0) tant qu'il tient l'adversaire ;
+/// une image après le lâcher, il est placé là où l'animation l'a emmené (os rot), vraiment en l'air, et retombe.
+static mut THROW_BASE: [(f32, f32, bool); 8] = [(0.0, 0.0, false); 8];
+static mut THROW_FAIT: [bool; 8] = [false; 8];
 pub unsafe fn frame_throw(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let e = slot(boma);
     let lancer = StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_THROW
         && MotionModule::motion_kind(boma) == smash::hash40("throw_hi");
     if !lancer {
-        THROW_AIR[e] = false;
+        THROW_BASE[e].2 = false;
+        THROW_FAIT[e] = false;
         return;
     }
-    let f = MotionModule::frame(boma);
-    if !THROW_AIR[e] && f >= 1.0 {
-        THROW_AIR[e] = true;
-        StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
-        GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
-        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_MOTION_AIR);
+    let mut p = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    ModelModule::joint_global_position(boma, Hash40::new("rot"), &mut p, true);
+    let (px, py) = (PostureModule::pos_x(boma), PostureModule::pos_y(boma));
+    if !THROW_BASE[e].2 {
+        if !THROW_FAIT[e] {
+            THROW_BASE[e] = (p.x - px, p.y - py, true);
+        }
+        return;
     }
-    if THROW_AIR[e] && f >= MotionModule::end_frame(boma) - 2.0 {
-        THROW_AIR[e] = false;
-        fighter.change_status(FIGHTER_STATUS_KIND_FALL.into(), false.into());
+    if MotionModule::frame(boma) >= EXPLOSION + 2.0 {
+        let dx = (p.x - px) - THROW_BASE[e].0;
+        let dy = (p.y - py) - THROW_BASE[e].1;
+        THROW_BASE[e].2 = false;
+        THROW_FAIT[e] = true;
+        if dy >= 2.0 {
+            let pos = smash::phx::Vector3f { x: px + dx, y: py + dy, z: PostureModule::pos_z(boma) };
+            PostureModule::set_pos(boma, &pos);
+            StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
+            GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
+            fighter.change_status(FIGHTER_STATUS_KIND_FALL.into(), false.into());
+        }
     }
 }
 
