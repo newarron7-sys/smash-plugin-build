@@ -1056,6 +1056,41 @@ pub unsafe fn frame_esquive(fighter: &mut L2CFighterCommon) {
 }
 
 
+// ------------------------------------------------------------------ down air (demandé : comme dans REX)
+// REX AttackAirLw : à l'image 4 il s'arrête net en l'air (élan 0, 0), coup de 6 % à l'image 6, puis à l'image 18
+// il plonge (élan 1,5 vers l'avant, -4 vers le bas : x 1,33 en unités d'Ultimate) avec le coup météore jusqu'au sol.
+static mut DAIR: [bool; 8] = [false; 8];
+pub unsafe fn frame_dair(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    let dair = StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_ATTACK_AIR
+        && MotionModule::motion_kind(boma) == smash::hash40("attack_air_lw")
+        && StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR;
+    let f = MotionModule::frame(boma);
+    if !dair || f < 4.0 {
+        if DAIR[e] {
+            DAIR[e] = false;
+            KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+            if StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_ATTACK_AIR {
+                KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_FALL);
+            }
+        }
+        return;
+    }
+    if !DAIR[e] {
+        DAIR[e] = true;
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
+        KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+    }
+    let lr = PostureModule::lr(boma);
+    if f < 18.0 {
+        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
+    } else {
+        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 2.0 * lr, -5.3_f32);
+    }
+}
+
+
 pub fn install(a: &mut Agent) {
     a.acmd("game_specialnhoming", g_specialnhoming, Priority::Low);
     a.acmd("game_specialnhit", g_combo, Priority::Low);

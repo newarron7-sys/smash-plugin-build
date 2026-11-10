@@ -118,6 +118,7 @@ unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
     speciaux::frame_b(fighter);
     speciaux::frame_throw(fighter);
     speciaux::frame_esquive(fighter);
+    speciaux::frame_dair(fighter);
     effets::boost_side_b(fighter);
     let boma = fighter.module_accessor;
     let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
