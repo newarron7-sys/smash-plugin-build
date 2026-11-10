@@ -44,7 +44,7 @@ pub fn evs(script: &str, evs: &[Ev]) -> Vec<Ev> {
             v.sort_by(|x, y| x.f.partial_cmp(&y.f).unwrap());
             v
         }
-        "game_attacklw4" => evs.iter().map(|e| if e.rate > 0.0 { *e } else { Ev { f: e.f + 8.0, ..*e } }).collect(),
+        "game_attacklw4" => evs.iter().map(|e| if e.rate > 0.0 { *e } else { Ev { f: e.f + 4.0, ..*e } }).collect(),
         _ => evs.to_vec(),
     }
 }
