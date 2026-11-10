@@ -209,7 +209,20 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_AIR_FLAG_ENABLE_LANDING);
             landing_on = true;
         }
-        ATTACK(agent, e.id, 0, Hash40::new(e.bone), e.dmg, e.angle, e.kbg, e.fkb, e.bkb, e.size, e.x, e.y, e.z,
+        // demandé : hitbox du nair, du jab et du back air agrandies
+        let size = match script {
+            "game_attackairn" | "game_attack11" | "game_attack12" | "game_attack13" | "game_attackairb" => e.size * 1.4,
+            _ => e.size,
+        };
+        // demandé : le back air éjecte vraiment derrière lui. REX finit sur des coups à l'angle 363 (lien
+        // automatique : l'adversaire suivait Shadow au lieu de partir), dont deux avec seulement 25 de croissance
+        // prioritaires : le coup final part à 45° vers l'arrière (ATTACK_LR_CHECK_B) avec la croissance forte.
+        let (angle, kbg) = if script == "game_attackairb" && e.f >= 9.0 && e.angle >= 360 {
+            (45u64, e.kbg.max(120))
+        } else {
+            (e.angle, e.kbg)
+        };
+        ATTACK(agent, e.id, 0, Hash40::new(e.bone), e.dmg, angle, kbg, e.fkb, e.bkb, size, e.x, e.y, e.z,
                None, None, None, e.hitlag, e.sdi, *ATTACK_SETOFF_KIND_ON, lr_check, false, 0, e.trip, 0,
                false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL,
                *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), *ATTACK_SOUND_LEVEL_M, son(e.attr),

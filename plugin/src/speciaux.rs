@@ -922,10 +922,21 @@ unsafe extern "C" fn e_throwb(agent: &mut L2CAgentBase) {
     }
 }
 unsafe extern "C" fn s_throwb(agent: &mut L2CAgentBase) {
-    frame(agent.lua_state_agent, 30.0);
+    let lua = agent.lua_state_agent;
+    frame(lua, 27.0);
+    if is_excute(agent) {
+        PLAY_SE(agent, Hash40::new("se_common_punch_kick_swing_l"));
+    }
+    frame(lua, 30.0);
     if is_excute(agent) {
         PLAY_SEQUENCE(agent, Hash40::new("seq_sonic_rnd_attack"));
         PLAY_SE(agent, Hash40::new("se_common_throw_02"));
+    }
+    // demandé : un bruit d'impact quand il l'éjecte
+    frame(lua, 31.0);
+    if is_excute(agent) {
+        PLAY_SE(agent, Hash40::new("se_common_punch_hit_l"));
+        PLAY_SE(agent, Hash40::new("se_common_bomb_s"));
     }
 }
 
