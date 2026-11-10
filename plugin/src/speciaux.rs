@@ -374,9 +374,9 @@ unsafe fn coup_tenu(agent: &mut L2CAgentBase, dmg: f32, ang: u64, kbg: i32, bkb:
 unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
     if is_excute(agent) {
-        ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, 0, 5.0, 90, 35, 0, 125, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+        smash_script::macros::ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, 0, 5.0, 90, 35, 0, 125, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
                    Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
-        ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, 3.0, 361, 100, 0, 60, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+        smash_script::macros::ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, 3.0, 361, 100, 0, 60, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
                    Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
     }
     for f in SPHERES {
@@ -392,7 +392,7 @@ unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
     frame(lua, EXPLOSION);
     if is_excute(agent) {
         coup_tenu(agent, 7.0, 90, 120, 81, 8.0, "collision_attr_elec", *COLLISION_SOUND_ATTR_ELEC);
-        CHECK_FINISH_CAMERA(agent, 0, 20);
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, 0, 20);
     }
     frame(lua, EXPLOSION + 1.0);
     if is_excute(agent) {
@@ -400,7 +400,7 @@ unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
         let target = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_OBJECT);
         let group = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_GROUP);
         let no = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_NO);
-        ATK_HIT_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, Hash40::new("throw"), target, group, no);
+        smash_script::macros::ATK_HIT_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, Hash40::new("throw"), target, group, no);
         AttackModule::clear_all(boma);
     }
 }
@@ -421,7 +421,7 @@ unsafe extern "C" fn e_throwhi(agent: &mut L2CAgentBase) {
         if is_excute(agent) {
             EFFECT_FOLLOW(agent, Hash40::new("sys_hit_elec"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.7, true);
             LAST_EFFECT_SET_COLOR(agent, 1.0, 0.8, 0.25);
-            EFFECT(agent, Hash40::new("sys_bomb_a"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.35, 0, 0, 0, 0, 0, 0, true);
+            smash_script::macros::EFFECT(agent, Hash40::new("sys_bomb_a"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.35, 0, 0, 0, 0, 0, 0, true);
         }
     }
     // grosse sphère chargée dans sa main
@@ -437,9 +437,9 @@ unsafe extern "C" fn e_throwhi(agent: &mut L2CAgentBase) {
     // explosion
     frame(lua, EXPLOSION);
     if is_excute(agent) {
-        EFFECT(agent, Hash40::new("sys_bomb_b"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, true);
-        EFFECT(agent, Hash40::new("sys_hit_elec"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, true);
-        QUAKE(agent, *CAMERA_QUAKE_KIND_L);
+        smash_script::macros::EFFECT(agent, Hash40::new("sys_bomb_b"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, true);
+        smash_script::macros::EFFECT(agent, Hash40::new("sys_hit_elec"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, true);
+        smash_script::macros::QUAKE(agent, *CAMERA_QUAKE_KIND_L);
     }
 }
 
