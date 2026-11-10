@@ -408,6 +408,14 @@ unsafe fn coup_tenu(agent: &mut L2CAgentBase, dmg: f32, ang: u64, kbg: i32, bkb:
     AttackModule::set_catch_only_all(agent.module_accessor, true, false);
 }
 
+/// demandé (vidéo) : la caméra le suit pendant qu'il monte (sa montée est dans l'animation : sans ça la caméra
+/// restait au sol et on ne le voyait plus quand il charge la grosse sphère). Hauteur de REX (TransN) en unités d'Ultimate.
+unsafe fn camera_haut(agent: &mut L2CAgentBase, y: i32) {
+    if is_excute(agent) {
+        camera!(agent, *MA_MSC_CMD_CAMERA_CAM_OFFSET, 0, y);
+    }
+}
+
 unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
     if is_excute(agent) {
@@ -415,6 +423,10 @@ unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
                    Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
         smash_script::macros::ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, 3.0, 361, 100, 0, 60, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
                    Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
+    }
+    for (f, y) in [(20.0, 30), (24.0, 60), (27.0, 72)] {
+        frame(lua, f);
+        camera_haut(agent, y);
     }
     for f in SPHERES {
         frame(lua, f + VOL);
@@ -425,6 +437,10 @@ unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
         if is_excute(agent) {
             AttackModule::clear_all(agent.module_accessor);
         }
+    }
+    for (f, y) in [(78.0, 100), (80.0, 130)] {
+        frame(lua, f);
+        camera_haut(agent, y);
     }
     frame(lua, EXPLOSION);
     if is_excute(agent) {
@@ -440,6 +456,8 @@ unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
         smash_script::macros::ATK_HIT_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, Hash40::new("throw"), target, group, no);
         AttackModule::clear_all(boma);
     }
+    // il est placé là-haut à l'image suivante (frame_throw) : la caméra le suit alors normalement
+    camera_haut(agent, 0);
 }
 
 unsafe extern "C" fn e_throwhi(agent: &mut L2CAgentBase) {
@@ -759,8 +777,9 @@ pub unsafe fn frame_throw(fighter: &mut L2CFighterCommon) {
         return;
     }
     spheres_visibles(boma);
+    // vidéo : l'os « rot » ne bouge pas dans ses animations (la montée est sur les hanches) : il restait au sol
     let mut p = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-    ModelModule::joint_global_position(boma, Hash40::new("rot"), &mut p, true);
+    ModelModule::joint_global_position(boma, Hash40::new("hip"), &mut p, true);
     let (px, py) = (PostureModule::pos_x(boma), PostureModule::pos_y(boma));
     if !THROW_BASE[e].2 {
         if !THROW_FAIT[e] {
