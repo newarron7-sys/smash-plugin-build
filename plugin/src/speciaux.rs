@@ -67,7 +67,10 @@ unsafe fn etape(boma: *mut BattleObjectModuleAccessor, e: usize, n: usize) {
     ETAPE[e] = n;
     APPUI[e] = false;
     ELAN[e] = false;
-    MotionModule::set_frame(boma, SEG[n], true);
+    // REX : chaque coup repart de zéro (06040000) -> l'adversaire peut être retouché ; le script de coups suit le saut
+    // d'image (sinon il restait en retard et les coups ne sortaient pas : 0 dégât)
+    AttackModule::clear_all(boma);
+    MotionModule::set_frame_sync_anim_cmd(boma, SEG[n], true, true, false);
 }
 
 /// arrivée : le coup qui paralyse, puis le combo au rythme des appuis du joueur
@@ -78,6 +81,8 @@ unsafe extern "C" fn n_hit_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
     KineticModule::clear_speed_all(boma);
     KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_MOTION_AIR);
+    // l'adversaire vient d'être touché par le trajet du homing : sans ça, le coup qui paralyse ne pouvait plus le toucher
+    AttackModule::clear_all(boma);
     ETAPE[e] = 0;
     APPUI[e] = false;
     ELAN[e] = false;
