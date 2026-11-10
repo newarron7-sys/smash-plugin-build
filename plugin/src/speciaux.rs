@@ -229,13 +229,6 @@ unsafe fn coup_course(agent: &mut L2CAgentBase, dmg: f32, ang: u64, kbg: i32, bk
            Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_KICK, *ATTACK_REGION_BODY);
     AttackModule::set_captured_same_time_attack(boma, id, true);
 }
-unsafe extern "C" fn g_specialsdashhi(agent: &mut L2CAgentBase) {
-    if is_excute(agent) {
-        JostleModule::set_status(agent.module_accessor, false);
-        AttackModule::clear_all(agent.module_accessor);
-        coup_course(agent, 8.0, 55, 72, 67, 3.1);
-    }
-}
 unsafe extern "C" fn g_specialsdashlw(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         JostleModule::set_status(agent.module_accessor, false);
@@ -504,7 +497,9 @@ unsafe extern "C" fn s_main(fighter: &mut L2CFighterCommon) -> L2CValue {
         KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
         KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
     }
-    MotionModule::change_motion(boma, Hash40::new("special_s_dash_lw"), 0.0, 1.0, false, 0.0, false, false);
+    // REX (Dash Boost) : au sol sa course en lévitation (Run), en l'air son vol plané (AirBoost)
+    let mot = if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND { "special_s_dash_lw" } else { "special_s_dash_hi" };
+    MotionModule::change_motion(boma, Hash40::new(mot), 0.0, 1.0, false, 0.0, false, false);
     s_vitesse(fighter, S_VITESSE);
     fighter.sub_shift_status_main(L2CValue::Ptr(s_loop as *const () as _))
 }
@@ -520,7 +515,7 @@ unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
             PostureModule::update_rot_y_lr(boma);
         }
         s_vitesse(fighter, S_VITESSE);
-        // vol plané de REX (AirBoost) : la pose tourne en boucle tant qu'il fonce
+        // la pose de REX tourne en boucle tant qu'il fonce
         if MotionModule::frame(boma) >= MotionModule::end_frame(boma) - 1.0 {
             MotionModule::set_frame(boma, 0.0, false);
         }
@@ -609,7 +604,7 @@ pub fn install(a: &mut Agent) {
     a.acmd("sound_specialnhit", s_combo, Priority::Low);
     a.acmd("effect_specialnhit", e_combo, Priority::Low);
     a.acmd("expression_specialnhit", rien, Priority::Low);
-    a.acmd("game_specialsdashhi", g_specialsdashhi, Priority::Low);
+    a.acmd("game_specialsdashhi", g_specialsdashlw, Priority::Low); // en l'air : même coup que REX (sous-action 0x1B)
     a.acmd("game_specialsdashlw", g_specialsdashlw, Priority::Low);
     a.acmd("game_specialsspin", g_specialsspin, Priority::Low);
     a.acmd("game_specialsendstart", g_specialsendstart, Priority::Low);
