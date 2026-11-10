@@ -676,41 +676,75 @@ static mut THROW_FAIT: [bool; 8] = [false; 8];
 /// lancer avant : avancée de REX (TransN de ThrowF, unités d'Ultimate) image par image à partir de l'image 56
 const AVANCE_F: [f32; 28] = [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 3.5, 7.2, 11.4, 16.0, 21.0, 26.4, 32.1, 38.0, 44.3, 50.7,
     57.2, 63.9, 70.7, 77.5, 84.3, 91.1, 97.8, 104.3, 110.7, 117.0, 122.9];
-static mut AVANCE_PREC: [f32; 8] = [0.0; 8];
-static mut AVANCE_ON: [bool; 8] = [false; 8];
+static mut BOOST_ACTIF: [bool; 8] = [false; 8];
+static mut BOOST_FRAME: [f32; 8] = [0.0; 8];
+static mut BOOST_AIR: [bool; 8] = [false; 8];
 fn avance_f(f: f32) -> f32 {
     let k = (f - 56.0).clamp(0.0, 27.0);
     let i = (k as usize).min(26);
     let t = k - i as f32;
     AVANCE_F[i] + (AVANCE_F[i + 1] - AVANCE_F[i]) * t
 }
-/// demandé (vidéo) : dans Ultimate l'animation ne déplace pas le personnage pendant un lancer : il restait sur place
-/// pendant son Boost. Il avance vraiment, du même déplacement que dans REX (arrêté au bord du terrain).
-unsafe fn frame_throw_f(fighter: &mut L2CFighterCommon) {
+unsafe fn boost_vitesse(fighter: &mut L2CFighterCommon, f: f32) {
     let boma = fighter.module_accessor;
-    let e = slot(boma);
-    let lancer = StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_THROW
-        && MotionModule::motion_kind(boma) == smash::hash40("throw_f");
-    if !lancer {
-        AVANCE_ON[e] = false;
-        return;
-    }
-    let f = MotionModule::frame(boma);
-    if f < 60.0 {
-        AVANCE_ON[e] = false;
-        return;
-    }
-    if !AVANCE_ON[e] {
-        AVANCE_ON[e] = true;
-        AVANCE_PREC[e] = avance_f(f);
-        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_GROUND_STOP);
-        GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_GROUND_CLIFF_STOP));
-    }
-    // vitesse de l'image suivante : ce qu'il doit avancer d'ici là
     let rate = MotionModule::rate(boma).max(0.01);
     let d = (avance_f(f + rate) - avance_f(f)).max(0.0);
     let lr = PostureModule::lr(boma);
     sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, d * lr, 0.0_f32);
+}
+/// demandé (vidéos) : dans Ultimate l'animation ne déplace pas le personnage pendant un lancer : il restait sur place
+/// pendant son Boost. Il avance vraiment, du même déplacement que dans REX ; comme dans REX, au bord il continue tout
+/// droit en dehors du terrain (dans sa pose de Boost) puis tombe.
+unsafe fn frame_throw_f(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    let st = StatusModule::status_kind(boma);
+    let lancer = st == *FIGHTER_STATUS_KIND_THROW && MotionModule::motion_kind(boma) == smash::hash40("throw_f");
+    if lancer {
+        let f = MotionModule::frame(boma);
+        if f < 60.0 {
+            BOOST_ACTIF[e] = false;
+            BOOST_AIR[e] = false;
+            return;
+        }
+        if !BOOST_ACTIF[e] {
+            BOOST_ACTIF[e] = true;
+            BOOST_AIR[e] = false;
+            KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_GROUND_STOP);
+            // pas d'arrêt au bord : il le dépasse
+            GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_GROUND));
+        }
+        BOOST_FRAME[e] = f;
+        boost_vitesse(fighter, f);
+        return;
+    }
+    if !BOOST_ACTIF[e] {
+        return;
+    }
+    // le lancer s'est arrêté parce qu'il a quitté le sol pendant le Boost : il finit son Boost en l'air
+    let air = StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR;
+    let chute = st == *FIGHTER_STATUS_KIND_FALL || st == *FIGHTER_STATUS_KIND_FALL_AERIAL;
+    if !(air && chute) || BOOST_FRAME[e] >= 82.0 {
+        if BOOST_AIR[e] {
+            KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+            KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_FALL);
+            if chute {
+                MotionModule::change_motion(boma, Hash40::new("fall"), 0.0, 1.0, false, 0.0, false, false);
+            }
+        }
+        BOOST_ACTIF[e] = false;
+        BOOST_AIR[e] = false;
+        return;
+    }
+    if !BOOST_AIR[e] {
+        BOOST_AIR[e] = true;
+        MotionModule::change_motion(boma, Hash40::new("throw_f"), BOOST_FRAME[e], 1.6, false, 0.0, false, false);
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
+        KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+    }
+    let f = MotionModule::frame(boma);
+    BOOST_FRAME[e] = f;
+    boost_vitesse(fighter, f);
 }
 
 pub unsafe fn frame_throw(fighter: &mut L2CFighterCommon) {
