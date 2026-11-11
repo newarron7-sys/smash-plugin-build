@@ -1,16 +1,19 @@
 #![feature(proc_macro_hygiene)]
 #![allow(unused, non_snake_case, non_upper_case_globals, static_mut_refs, unused_unsafe, unused_must_use)]
 
-//! Super Sonic (Super Smash Bros REX) sur Sonic, costume c141 (sa propre case) : usage perso.
-//! Même procédure que Super Shadow (rex/PROCEDURE.md) : ses coups de REX (generated.rs, créé à la compilation par
-//! rex/tools/gen_rex.py, jamais dans le dépôt) sur ses animations de REX ; modèle = skin GameBanana (Super Sonic V8).
+//! Master Chief (Super Smash Bros REX) sur Snake, sa propre case : usage perso.
+//! Même procédure que Super Shadow / Super Sonic (rex/PROCEDURE.md) : ses coups de REX (generated.rs, créé à la
+//! compilation par rex/tools/gen_rex.py, jamais dans le dépôt) sur ses animations de REX ; modèle = skin GameBanana
+//! (Demonslayerx8) + ses armes de REX (maillages chief_*, affichés selon le coup).
+//! Étape 1 : coups normaux, smashs, aériens (tirs instantanés comme dans REX : capsule du canon jusqu'à la portée).
 
 use smash::app::sv_animcmd::{frame, wait};
 use smash::app::lua_bind::*;
 use smash::app::*;
 use smash::lib::lua_const::*;
 use smash::lua2cpp::*;
-use smash::phx::Hash40;
+use smash::phx::{Hash40, Vector3f};
+use smash::hash40;
 use smash_script::macros::*;
 use smash_script::*;
 use smashline::*;
@@ -34,15 +37,16 @@ pub struct Ev {
     pub sdi: f32,
     pub trip: f32,
     pub attr: &'static str,
-    /// v0.18 : hitbox spéciale du PSA : pendant un lancer, elle touche l'adversaire tenu
     pub special: bool,
-    /// corps : -1 rien, 0 normal, 1 invincible, 2 intangible (PSA 06050100)
     pub body: i32,
-    /// vitesse de REX à partir de cette image (Frame Speed Modifier), 0 = rien
     pub rate: f32,
+    /// tir instantané de REX (décalage variable le long du canon) : capsule de (x, y, z) à (x2, y2, z2) sur « top »
+    pub cap: bool,
+    pub x2: f32,
+    pub y2: f32,
+    pub z2: f32,
 }
 
-/// v0.18 : zone de chope de REX (images de son animation)
 pub struct Catch {
     pub f: f32,
     pub id: i32,
@@ -50,11 +54,9 @@ pub struct Catch {
     pub x: f32,
     pub y: f32,
     pub z: f32,
-    /// true = n'attrape que les adversaires au sol
     pub ground_only: bool,
 }
 
-/// réglages de projection (id 0 = la projection, id 1 = si la prise est lâchée)
 pub struct Throw {
     pub id: u64,
     pub dmg: f32,
@@ -65,84 +67,49 @@ pub struct Throw {
     pub attr: &'static str,
 }
 
-/// sous-action de prise : coups, chopes, projections (images de l'animation de REX)
 pub struct Sub {
     pub name: &'static str,
     pub evs: &'static [Ev],
     pub catches: &'static [Catch],
     pub throws: &'static [Throw],
-    /// image où l'adversaire est lâché (lancers), -1 si aucune
     pub release: f32,
-    /// durée de l'animation de REX (images)
     pub total: f32,
 }
 
-pub const E: Ev = Ev { f: 0.0, clear: false, id: 0, bone: "top", dmg: 0.0, angle: 361, kbg: 100, fkb: 0, bkb: 0, size: 3.0, x: 0.0, y: 0.0, z: 0.0, hitlag: 1.0, sdi: 1.0, trip: 0.0, attr: "collision_attr_normal", special: false, body: -1, rate: 0.0 };
+pub const E: Ev = Ev { f: 0.0, clear: false, id: 0, bone: "top", dmg: 0.0, angle: 361, kbg: 100, fkb: 0, bkb: 0, size: 3.0, x: 0.0, y: 0.0, z: 0.0, hitlag: 1.0, sdi: 1.0, trip: 0.0, attr: "collision_attr_normal", special: false, body: -1, rate: 0.0, cap: false, x2: 0.0, y2: 0.0, z2: 0.0 };
 
 pub struct Mv {
     pub script: &'static str,
-    /// durée de son animation dans REX (images)
     pub total: f32,
-    /// smash : image où la charge commence (fin de l'animation de début), 0 = automatique
     pub hold: f32,
-    /// 0 = normal, 1 = smash, 2 = aérien
     pub kind: u8,
     pub evs: &'static [Ev],
 }
 
 include!("generated.rs");
 
-mod effets;
-mod speciaux;
-mod lancers;
+/// perso de base : Snake
+pub const BASE: &str = "snake";
+/// sa propre case : costume c120 de Snake
+pub const MC_COSTUMES: [usize; 1] = [120];
 
-/// perso de base (nom interne) : Sonic
-pub const BASE: &str = "sonic";
-
-/// sa propre case à la sélection (la case Super Sonic) : costume c141 de Sonic
-pub const SS_COSTUMES: [usize; 1] = [141];
+/// le 2e coup du tilt avant de Snake rejoue la rafale du fusil de combat
+fn alias(script: &str) -> &str {
+    match script {
+        "game_attacks3s2" => "game_attacks3",
+        _ => script,
+    }
+}
 
 pub(crate) fn find(script: &str) -> Option<&'static Mv> {
-    MOVES.iter().find(|m| m.script == script)
+    let s = alias(script);
+    MOVES.iter().find(|m| m.script == s)
 }
 
-/// corps rendu invincible / intangible par un coup (smash avant) : remis normal s'il quitte le coup avant la fin
-/// (bord du terrain, annulation), sinon il le resterait
-static mut CORPS_CHANGE: [bool; 8] = [false; 8];
-/// smash haut en boule : remis en corps normal s'il est interrompu (coup reçu, bord) avant la fin
-static mut BOULE: [bool; 8] = [false; 8];
-
-pub(crate) unsafe fn boule(boma: *mut BattleObjectModuleAccessor, on: bool) {
-    let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
-    if id < 8 {
-        BOULE[id] = on;
-    }
-}
-
-unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
-    effets::aura(fighter);
-    effets::boost_side_b(fighter);
-    speciaux::frame_n(fighter);
-    speciaux::frame_hi(fighter);
-    lancers::frame_throw(fighter);
-    let boma = fighter.module_accessor;
-    let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
-    let st_ = StatusModule::status_kind(boma);
-    if id < 8 && BOULE[id] && st_ != *FIGHTER_STATUS_KIND_ATTACK_HI4 && st_ != *FIGHTER_STATUS_KIND_ATTACK_S4 {
-        VisibilityModule::set_int64(boma, smash::hash40("body"), smash::hash40("body_normal"));
-        BOULE[id] = false;
-    }
-    if id < 8 && CORPS_CHANGE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_S4 {
-        HitModule::set_whole(boma, HitStatus(*HIT_STATUS_NORMAL), 0);
-        CORPS_CHANGE[id] = false;
-    }
-}
-
-/// son du coup selon son élément (sinon un coup électrique sonnait comme un coup de poing)
 fn son(attr: &str) -> i32 {
     unsafe {
         match attr {
-            "collision_attr_elec" => *COLLISION_SOUND_ATTR_ELEC,
+            "collision_attr_elec" | "collision_attr_paralyze" => *COLLISION_SOUND_ATTR_ELEC,
             "collision_attr_fire" => *COLLISION_SOUND_ATTR_FIRE,
             "collision_attr_cutup" => *COLLISION_SOUND_ATTR_CUTUP,
             _ => *COLLISION_SOUND_ATTR_PUNCH,
@@ -150,24 +117,34 @@ fn son(attr: &str) -> i32 {
     }
 }
 
-/// joue le coup de Super Sonic (REX) sur son animation de REX
+/// coups du script (REX) avec les réglages propres à Chief
+fn coups(script: &str, mv: &Mv) -> Vec<Ev> {
+    mv.evs.iter().map(|e| {
+        let mut e = *e;
+        if e.cap {
+            // capsules très fines dans REX (0,6) : un peu épaissies pour toucher comme son tir (rayon du jeu)
+            e.size = e.size.max(2.0);
+            if script == "game_attacklw4" && e.id == 0 {
+                // sniper : le gros coup (15 %) seulement à bout portant ; plus loin la balle fait ~8 % (vidéo REX)
+                let (dx, dy, dz) = (e.x2 - e.x, e.y2 - e.y, e.z2 - e.z);
+                let l = (dx * dx + dy * dy + dz * dz).sqrt().max(0.001);
+                let k = 25.0 / l;
+                e.x2 = e.x + dx * k;
+                e.y2 = e.y + dy * k;
+                e.z2 = e.z + dz * k;
+            }
+        }
+        e
+    }).collect()
+}
+
+/// joue le coup de Master Chief (REX) sur son animation de REX
 pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     let mv: &Mv = match find(script) { Some(m) => m, None => return };
-    // smash haut : ses coups sont sur YRotN dans REX, qui monte avec la boule (os « top » d'Ultimate : resté au sol)
-    // -> sur l'os « sphere », qui suit maintenant la boule (sauf le premier coup, au sol, sur TopN)
-    let evs_v: Vec<Ev> = if script == "game_attackhi4" {
-        mv.evs.iter().map(|e| if !e.clear && e.f >= 19.5 && e.bone == "top" { Ev { bone: "sphere", ..*e } } else { *e }).collect()
-    } else if script == "game_attack11" || script == "game_attack12" || script == "game_attack13" {
-        // demandé : hitbox des jabs agrandies (x1,5)
-        mv.evs.iter().map(|e| if e.clear || e.rate > 0.0 || e.body >= 0 { *e } else { Ev { size: e.size * 1.5, ..*e } }).collect()
-    } else {
-        mv.evs.to_vec()
-    };
+    let evs_v = coups(alias(script), mv);
     let evs: &[Ev] = &evs_v;
-    let mut dernier_eclat = -1.0f32;
     let lua = agent.lua_state_agent;
     let boma = agent.module_accessor;
-    // FT_MOTION_RATE = images de jeu par image d'animation : l'animation de Sonic dure alors autant que la sienne
     let end = MotionModule::end_frame(boma);
     let r = if end > 1.0 && mv.total > 1.0 { (mv.total / end).clamp(0.25, 4.0) } else { 1.0 };
     FT_MOTION_RATE(agent, r);
@@ -175,15 +152,11 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     let mut cur = 0.0f32;
     let mut smash_hold_done = false;
     let mut landing_on = false;
-    let delay = 0.0;
-    // l'arrière aérien envoie derrière lui
     let lr_check = if script == "game_attackairb" { *ATTACK_LR_CHECK_B } else { *ATTACK_LR_CHECK_F };
-    // smash : image où la charge commence (juste avant le coup si REX n'a pas de sous-action « Start »)
     let hold_f = if mv.hold > 0.0 { mv.hold / r } else { ((first_hit - 2.0) / r).max(1.0) };
     for e in evs {
-        let af = if e.rate > 0.0 { (e.f + delay) / r } else { ((e.f + delay) / r).max(1.0) };
+        let af = if e.rate > 0.0 { e.f / r } else { (e.f / r).max(1.0) };
         if mv.kind == 1 && !smash_hold_done && af >= hold_f {
-            // le smash se charge à son image (avant les événements qui viennent après)
             if hold_f > cur {
                 frame(lua, hold_f);
                 cur = hold_f;
@@ -193,18 +166,13 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             }
             smash_hold_done = true;
         }
-        if e.rate > 0.0 {
-            // vitesse de REX (Frame Speed Modifier) : à l'image 0, tout de suite ; sinon à son image
-            if af > cur {
-                frame(lua, af);
-                cur = af;
-            }
-            FT_MOTION_RATE(agent, r / e.rate);
-            continue;
-        }
         if af > cur {
             frame(lua, af);
             cur = af;
+        }
+        if e.rate > 0.0 {
+            FT_MOTION_RATE(agent, r / e.rate);
+            continue;
         }
         if !is_excute(agent) {
             continue;
@@ -216,30 +184,20 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
         if e.body >= 0 {
             let st = match e.body { 1 => *HIT_STATUS_INVINCIBLE, 2 => *HIT_STATUS_XLU, _ => *HIT_STATUS_NORMAL };
             WHOLE_HIT(agent, st);
-            let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
-            if id < 8 {
-                CORPS_CHANGE[id] = e.body != 0;
-            }
             continue;
         }
         if mv.kind == 2 && !landing_on {
             WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_AIR_FLAG_ENABLE_LANDING);
             landing_on = true;
         }
-        // effet d'impact doré au moment du coup (les effets de Sonic ne vont pas avec ses animations de REX)
-        if e.f != dernier_eclat {
-            dernier_eclat = e.f;
-            EFFECT_FOLLOW(agent, Hash40::new("sys_attack_impact"), Hash40::new(e.bone), e.x, e.y, e.z, 0, 0, 0, 0.7, true);
-            LAST_EFFECT_SET_COLOR(agent, 1.0, 0.85, 0.3);
-        }
+        let (x2, y2, z2) = if e.cap { (Some(e.x2), Some(e.y2), Some(e.z2)) } else { (None, None, None) };
         ATTACK(agent, e.id, 0, Hash40::new(e.bone), e.dmg, e.angle, e.kbg, e.fkb, e.bkb, e.size, e.x, e.y, e.z,
-               None, None, None, e.hitlag, e.sdi, *ATTACK_SETOFF_KIND_ON, lr_check, false, 0, e.trip, 0,
+               x2, y2, z2, e.hitlag, e.sdi, *ATTACK_SETOFF_KIND_ON, lr_check, false, 0, e.trip, 0,
                false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL,
                *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), *ATTACK_SOUND_LEVEL_M, son(e.attr),
                *ATTACK_REGION_PUNCH);
     }
-    if mv.kind == 2 {
-        // fin du coup en l'air : l'atterrissage redevient normal un peu après
+    if mv.kind == 2 && script != "game_attackairlw" {
         let after = (evs.last().map(|e| e.f).unwrap_or(1.0) + 5.0) / r;
         if after > cur {
             frame(lua, after);
@@ -250,17 +208,24 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     }
 }
 
+mod effets;
+mod armes;
+
+unsafe extern "C" fn mc_frame(fighter: &mut L2CFighterCommon) {
+    armes::visibilite(fighter);
+    armes::attaque_course(fighter);
+    armes::ground_pound(fighter);
+}
+
 macro_rules! scripts {
     ($($f:ident => $s:literal),* $(,)?) => {
         $( unsafe extern "C" fn $f(agent: &mut L2CAgentBase) { run(agent, $s); } )*
         fn install_scripts() {
             let mut a = Agent::new(BASE);
-            a.set_costume(SS_COSTUMES.to_vec());
+            a.set_costume(MC_COSTUMES.to_vec());
             $( if find($s).is_some() { a.acmd($s, $f, Priority::Low); } )*
             effets::install(&mut a);
-            speciaux::install(&mut a);
-            lancers::install(&mut a);
-            a.on_line(Main, ss_frame);
+            a.on_line(Main, mc_frame);
             a.install();
         }
     };
@@ -271,25 +236,23 @@ scripts! {
     g_attack12 => "game_attack12",
     g_attack13 => "game_attack13",
     g_attackdash => "game_attackdash",
-    g_attacks3hi => "game_attacks3hi",
+    g_swingdash => "game_swingdash",
     g_attacks3 => "game_attacks3",
-    g_attacks3lw => "game_attacks3lw",
+    g_attacks3s2 => "game_attacks3s2",
     g_attackhi3 => "game_attackhi3",
     g_attacklw3 => "game_attacklw3",
-    g_attacks4hi => "game_attacks4hi",
     g_attacks4 => "game_attacks4",
-    g_attacks4lw => "game_attacks4lw",
     g_attackhi4 => "game_attackhi4",
     g_attacklw4 => "game_attacklw4",
     g_attackairn => "game_attackairn",
     g_attackairf => "game_attackairf",
     g_attackairb => "game_attackairb",
     g_attackairhi => "game_attackairhi",
-    // demandé : le bas aérien de Sonic (son script et son animation), avec les effets dorés (effets.rs)
+    g_attackairlw => "game_attackairlw",
+    g_landingairlw => "game_landingairlw",
 }
 
-
-#[skyline::main(name = "super_sonic")]
+#[skyline::main(name = "master_chief")]
 pub fn main() {
     install_scripts();
 }
