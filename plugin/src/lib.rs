@@ -90,8 +90,8 @@ include!("generated.rs");
 
 /// perso de base : Snake
 pub const BASE: &str = "snake";
-/// sa propre case : costume c120 de Snake
-pub const MC_COSTUMES: [usize; 1] = [120];
+/// sa propre case : costume c140 de Snake (c120-127 : Jonesy)
+pub const MC_COSTUMES: [usize; 1] = [140];
 
 /// le 2e coup du tilt avant de Snake rejoue la rafale du fusil de combat
 fn alias(script: &str) -> &str {

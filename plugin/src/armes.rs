@@ -108,7 +108,7 @@ pub unsafe fn ground_pound(fighter: &mut L2CFighterCommon) {
         // il plonge jusqu'au sol : l'animation (longue) ne doit pas se finir en l'air
         // (avant l'image 197 où REX retire ses coups : ils restent jusqu'au sol)
         if f > 185.0 {
-            MotionModule::set_frame(boma, GP_PIQUE + 20.0, false);
+            MotionModule::set_frame(boma, GP_PIQUE + 33.0, false);
         }
     }
 }
