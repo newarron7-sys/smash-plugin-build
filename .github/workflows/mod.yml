@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "643829"
+      MOD: "cherche:gooey bomb|blast box|item retexture|items pack|item reskin"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
@@ -27,7 +27,7 @@ jobs:
               r = urllib.request.Request(u, headers={'User-Agent': 'Mozilla/5.0'})
               return json.load(urllib.request.urlopen(r, timeout=60))
           vus = set()
-          for terme in [q + ' sound', q + ' sfx', q + ' voice', q]:
+          for terme in (q.split('|') if '|' in q else [q + ' sound', q + ' sfx', q + ' voice', q]):
               for page in (1, 2, 3):
                   u = 'https://gamebanana.com/apiv11/Util/Search/Results?_sModelName=Mod&_sOrder=best_match&_idGameRow=6498&_sSearchString=%s&_nPage=%d&_nPerpage=50' % (urllib.parse.quote(terme), page)
                   try:
