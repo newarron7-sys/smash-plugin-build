@@ -210,12 +210,14 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
 
 mod effets;
 mod armes;
+mod speciaux;
 
 unsafe extern "C" fn mc_frame(fighter: &mut L2CFighterCommon) {
     armes::visibilite(fighter);
     armes::attaque_course(fighter);
     armes::ground_pound(fighter);
     armes::suivre_animation(fighter);
+    speciaux::chaque_image(fighter);
 }
 
 macro_rules! scripts {
@@ -226,6 +228,7 @@ macro_rules! scripts {
             a.set_costume(MC_COSTUMES.to_vec());
             $( if find($s).is_some() { a.acmd($s, $f, Priority::Low); } )*
             effets::install(&mut a);
+            speciaux::install(&mut a);
             a.on_line(Main, mc_frame);
             a.install();
         }
