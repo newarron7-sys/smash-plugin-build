@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "cherche:gooey bomb|blast box|item retexture|items pack|item reskin"
+      MOD: "338954"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
