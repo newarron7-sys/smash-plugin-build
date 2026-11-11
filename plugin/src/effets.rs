@@ -112,19 +112,43 @@ fn trainee(out: &mut Vec<(f32, Fx)>, os: &'static [&'static str], f0: f32, f1: f
     }
 }
 
+/// sons de Chief (banque de REX 155, mis dans la banque de sons de Snake du costume c140 : rex/tools/sons_chief.py)
+/// aux images de REX
+fn sons(script: &str, out: &mut Vec<(f32, Fx)>) {
+    let l: &[(f32, &'static str)] = match script {
+        "game_attack11" => &[(1.0, "se_snake_swing_m")],
+        "game_attack12" => &[(1.0, "se_snake_swing_s")],
+        "game_attack13" => &[(1.0, "se_snake_swing_l")],
+        "game_attackdash" => &[(7.0, "se_snake_attackdash_01")],
+        "game_swingdash" => &[(7.0, "se_snake_attackdash_02"), (9.0, "se_snake_attackair_N01")],
+        "game_attacks3" => &[(1.0, "se_snake_attackhard_S02"), (12.0, "se_snake_attackhard_S01")],
+        "game_attackhi3" => &[(25.0, "se_snake_attackhard_H01"), (32.0, "se_snake_attackhard_H01")],
+        "game_attacklw3" => &[(4.0, "se_snake_attackhard_L01"), (30.0, "se_snake_attackhard_L01"), (78.0, "se_snake_attackair_N03")],
+        "game_attacks4" => &[(1.0, "se_snake_smash_S01"), (29.0, "se_snake_smash_S02")],
+        "game_attackhi4" => &[(1.0, "se_snake_smash_H01"), (31.0, "se_snake_smash_H02")],
+        "game_attacklw4" => &[(1.0, "se_snake_smash_L01"), (32.0, "se_snake_smash_L02")],
+        "game_attackairn" => &[(3.0, "se_snake_attackair_N01")],
+        "game_attackairf" => &[(1.0, "se_snake_attackair_F01"), (5.0, "se_snake_attackair_N02")],
+        "game_attackairb" => &[(16.0, "se_snake_attackair_B01")],
+        "game_attackairhi" => &[(19.0, "se_snake_attackair_H01")],
+        "game_attackairlw" => &[(1.0, "se_snake_attackair_L01"), (67.0, "se_snake_attackair_L01"), (87.0, "se_snake_attackair_L02")],
+        _ => &[],
+    };
+    for (f, se) in l {
+        out.push((*f, Fx::Son(se)));
+    }
+}
+
 /// effets propres à chaque coup (REX : arcs n° 0xC, impacts n° 0xD, laser n° 3, jets du Ground Pound…)
 fn extras(script: &str, out: &mut Vec<(f32, Fx)>) {
     match script {
         "game_attack11" => {
-            out.push((2.0, Fx::Son("se_common_punch_kick_swing_m")));
             trainee(out, &["handr"], 2.0, 4.0, 0.45, BLANC);
         }
         "game_attack12" => {
-            out.push((2.0, Fx::Son("se_common_punch_kick_swing_m")));
             trainee(out, &["handl"], 2.0, 4.0, 0.45, BLANC);
         }
         "game_attack13" => {
-            out.push((3.0, Fx::Son("se_common_punch_kick_swing_l")));
             out.push((3.0, Fx::Suit("sys_attack_arc_b", "top", (0.0, 12.0, 5.0), (-80.0, 0.0, 90.0), 0.8, BLANC)));
             trainee(out, &["handr"], 3.0, 6.0, 0.5, BLANC);
         }
@@ -132,14 +156,12 @@ fn extras(script: &str, out: &mut Vec<(f32, Fx)>) {
             // « Spartan Charge » : traînée de vitesse blanche
             out.push((7.0, Fx::Suit("sys_attack_speedline", "top", (0.0, 9.0, -3.0), (0.0, 0.0, 0.0), 1.2, BLANC)));
             out.push((7.0, Fx::Sol("sys_dash_smoke", 0.9)));
-            out.push((7.0, Fx::Son("se_common_punch_kick_swing_l")));
         }
         "game_swingdash" => {
             // « Slide Kick » : glissade au sol
             for f in [9.0, 13.0, 17.0, 21.0] {
                 out.push((f, Fx::Sol("sys_sliding_smoke", 0.9)));
             }
-            out.push((9.0, Fx::Son("se_common_slip_01")));
         }
         "game_attackhi3" => {
             // mitraillettes : éclairs aux deux mains à chaque rafale
@@ -171,16 +193,13 @@ fn extras(script: &str, out: &mut Vec<(f32, Fx)>) {
             out.push((32.0, Fx::Quake));
         }
         "game_attackairn" => {
-            out.push((4.0, Fx::Son("se_common_punch_kick_swing_m")));
             trainee(out, &["footl"], 4.0, 8.0, 0.5, BLANC);
         }
         "game_attackairb" => {
-            out.push((16.0, Fx::Son("se_common_punch_kick_swing_l")));
             trainee(out, &["footr"], 15.0, 19.0, 0.55, BLANC);
         }
         "game_attackairf" => {
             // épée à énergie : grand arc cyan devant lui
-            out.push((3.0, Fx::Son("se_common_sword_swing_l")));
             out.push((3.0, Fx::Suit("sys_attack_arc_b", "top", (0.0, 11.0, 6.0), (0.0, -30.0, 70.0), 1.2, CYAN)));
             trainee(out, &["haver"], 3.0, 10.0, 0.6, CYAN);
         }
@@ -217,6 +236,7 @@ unsafe fn jouer(agent: &mut L2CAgentBase, script: &str) {
     let mut l: Vec<(f32, Fx)> = Vec::new();
     effets_coups(s, &evs, &mut l);
     extras(s, &mut l);
+    sons(s, &mut l);
     l.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
     let boma = agent.module_accessor;
     let end = MotionModule::end_frame(boma);
