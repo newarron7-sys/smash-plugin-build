@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      DL: "1588030"
+      MOD: "320370"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
@@ -18,8 +18,21 @@ jobs:
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
           mkdir -p /tmp/m /tmp/out && cd /tmp/m
-          curl -sSL -A "Mozilla/5.0" -o f.bin "https://gamebanana.com/dl/$DL"
-          7z x -y -ox f.bin >/dev/null 2>&1 || true
+          # fiche du mod (nom, mises à jour, fichiers) puis tous ses fichiers ; rien n'est affiché
+          curl -sSL -A "Mozilla/5.0" -o info.json "https://gamebanana.com/apiv11/Mod/$MOD/ProfilePage" || true
+          curl -sSL -A "Mozilla/5.0" -o maj.json "https://gamebanana.com/apiv11/Mod/$MOD/Updates?_nPage=1&_nPerpage=20" || true
+          mkdir -p x
+          cp info.json maj.json x/ 2>/dev/null || true
+          python3 - <<'PY' > liens.txt
+          import json
+          d=json.load(open('info.json'))
+          for f in d.get('_aFiles',[]):
+              print(f['_idRow'], f['_sDownloadUrl'])
+          PY
+          while read id url; do
+            curl -sSL -A "Mozilla/5.0" -o "f_$id.bin" "$url"
+            7z x -y -o"x/f_$id" "f_$id.bin" >/dev/null 2>&1 || true
+          done < liens.txt
           echo "fichiers extraits : $(find x -type f | wc -l)"
           tar czf /tmp/mod.tgz -C /tmp/m x
           printf '%s' "$CLE" > /tmp/k
@@ -28,5 +41,5 @@ jobs:
       - name: Publier (branche mod, chiffre)
         run: |
           cd /tmp/out && git init -q -b mod && git config user.name gha && git config user.email gha@users.noreply.github.com
-          git add -A && git commit -q -m "mod $DL chiffre"
+          git add -A && git commit -q -m "mod $MOD chiffre"
           git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" mod
