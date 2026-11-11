@@ -107,11 +107,24 @@ pub(crate) fn find(script: &str) -> Option<&'static Mv> {
 /// corps rendu invincible / intangible par un coup (smash avant) : remis normal s'il quitte le coup avant la fin
 /// (bord du terrain, annulation), sinon il le resterait
 static mut CORPS_CHANGE: [bool; 8] = [false; 8];
+/// smash haut en boule : remis en corps normal s'il est interrompu (coup reçu, bord) avant la fin
+static mut BOULE: [bool; 8] = [false; 8];
+
+pub(crate) unsafe fn boule(boma: *mut BattleObjectModuleAccessor, on: bool) {
+    let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
+    if id < 8 {
+        BOULE[id] = on;
+    }
+}
 
 unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
     effets::aura(fighter);
     let boma = fighter.module_accessor;
     let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
+    if id < 8 && BOULE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_HI4 {
+        VisibilityModule::set_int64(boma, smash::hash40("body") as i64, smash::hash40("body_normal") as i64);
+        BOULE[id] = false;
+    }
     if id < 8 && CORPS_CHANGE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_S4 {
         HitModule::set_whole(boma, HitStatus(*HIT_STATUS_NORMAL), 0);
         CORPS_CHANGE[id] = false;
@@ -133,7 +146,14 @@ fn son(attr: &str) -> i32 {
 /// joue le coup de Super Sonic (REX) sur son animation de REX
 pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     let mv: &Mv = match find(script) { Some(m) => m, None => return };
-    let evs: &[Ev] = mv.evs;
+    // smash haut : ses coups sont sur YRotN dans REX, qui monte avec la boule (os « top » d'Ultimate : resté au sol)
+    // -> sur l'os « sphere », qui suit maintenant la boule (sauf le premier coup, au sol, sur TopN)
+    let evs_v: Vec<Ev> = if script == "game_attackhi4" {
+        mv.evs.iter().map(|e| if !e.clear && e.f >= 19.5 && e.bone == "top" { Ev { bone: "sphere", ..*e } } else { *e }).collect()
+    } else {
+        mv.evs.to_vec()
+    };
+    let evs: &[Ev] = &evs_v;
     let mut dernier_eclat = -1.0f32;
     let lua = agent.lua_state_agent;
     let boma = agent.module_accessor;

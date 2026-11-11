@@ -4,6 +4,7 @@
 use smash::app::sv_animcmd::frame;
 use smash::lua2cpp::*;
 use smash::phx::Hash40;
+use smash::hash40;
 use smash_script::macros::*;
 use smash_script::*;
 use smashline::*;
@@ -38,11 +39,6 @@ unsafe extern "C" fn saut(agent: &mut L2CAgentBase) {
     }
 }
 
-const COUPS: [&str; 19] = ["effect_attack11", "effect_attack12", "effect_attack13", "effect_attackdash",
-    "effect_attacks3", "effect_attacks3hi", "effect_attacks3lw", "effect_attackhi3", "effect_attacklw3",
-    "effect_attacks4", "effect_attacks4hi", "effect_attacks4lw", "effect_attackhi4", "effect_attacklw4",
-    "effect_attackairn", "effect_attackairf", "effect_attackairb", "effect_attackairhi", "effect_attackairlw"];
-
 pub fn install(a: &mut Agent) {
     a.acmd("effect_dash", dash, Priority::Low);
     a.acmd("effect_turndash", dash, Priority::Low);
@@ -57,11 +53,7 @@ pub fn install(a: &mut Agent) {
     a.acmd("effect_jumpbackmini", saut, Priority::Low);
     a.acmd("effect_jumpaerialfront", vide, Priority::Low);
     a.acmd("effect_jumpaerialback", vide, Priority::Low);
-    // ses coups : les effets de Sonic (traînées bleues, boule) ne vont pas avec ses animations de REX -> vides ;
-    // l'éclat doré de chaque coup est posé par run()
-    for s in COUPS {
-        a.acmd(s, vide, Priority::Low);
-    }
+    install_coups(a);
 }
 
 // ------------------------------------------------------------------ aura dorée permanente (étape effets 1, demandé)
@@ -118,3 +110,220 @@ pub unsafe fn aura(fighter: &mut L2CFighterCommon) {
     }
 }
 
+
+// ------------------------------------------------------------------ effets de ses coups (demandé, v2)
+// Méthode des scripts du jeu (Sonic, Mario, Captain Falcon, HewDraw-Remix) : traits et arcs du jeu (sys_attack_line,
+// sys_attack_arc*) teintés, plus une vraie traînée : un petit éclat posé à chaque image sur le poing / le pied qui
+// frappe (EFFECT, pas FOLLOW : il reste là où le membre est passé, ce qui dessine sa trajectoire).
+// Images = images de ses animations de REX (début des smashs compris).
+
+const ROUGE: (f32, f32, f32) = (1.0, 0.12, 0.05);
+type C = (f32, f32, f32);
+
+unsafe fn fx(agent: &mut L2CAgentBase, eff: &str, bone: &str, p: (f32, f32, f32), r: (f32, f32, f32), sc: f32, c: C) {
+    if is_excute(agent) {
+        EFFECT_FOLLOW(agent, Hash40::new(eff), Hash40::new(bone), p.0, p.1, p.2, r.0, r.1, r.2, sc, true);
+        LAST_EFFECT_SET_COLOR(agent, c.0, c.1, c.2);
+    }
+}
+unsafe fn fx_sol(agent: &mut L2CAgentBase, eff: &str, sc: f32) {
+    if is_excute(agent) {
+        LANDING_EFFECT(agent, Hash40::new(eff), Hash40::new("top"), 0, 0, 0, 0, 0, 0, sc, 0, 0, 0, 0, 0, 0, false);
+    }
+}
+unsafe fn off(agent: &mut L2CAgentBase, eff: &str) {
+    if is_excute(agent) {
+        EFFECT_OFF_KIND(agent, Hash40::new(eff), false, false);
+    }
+}
+/// traînée : un éclat par image sur chaque os, de f0 à f1 (l'effet n'est pas accroché : il marque le passage du membre)
+unsafe fn trainee(agent: &mut L2CAgentBase, os: &[&str], f0: f32, f1: f32, sc: f32, c: C) {
+    let lua = agent.lua_state_agent;
+    let mut f = f0;
+    while f <= f1 {
+        frame(lua, f);
+        if is_excute(agent) {
+            for b in os {
+                EFFECT(agent, Hash40::new("sys_smash_flash_s"), Hash40::new(b), 0, 0, 0, 0, 0, 0, sc, 0, 0, 0, 0, 0, 0, true);
+                LAST_EFFECT_SET_COLOR(agent, c.0, c.1, c.2);
+            }
+        }
+        f += 1.0;
+    }
+}
+
+// jabs (demandé : traînée rouge ; REX : trait rouge n° 1C devant lui, hauteur 7,45)
+unsafe extern "C" fn e_attack11(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 1.0);
+    fx(agent, "sys_attack_line", "top", (0.0, 7.5, 1.0), (0.0, 0.0, 0.0), 0.9, ROUGE);
+    trainee(agent, &["handl"], 1.0, 4.0, 0.6, ROUGE);
+}
+unsafe extern "C" fn e_attack12(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 0.0);
+    fx(agent, "sys_attack_line", "top", (0.0, 7.5, 1.0), (0.0, 0.0, 0.0), 0.9, ROUGE);
+    trainee(agent, &["handr"], 0.0, 3.0, 0.6, ROUGE);
+}
+unsafe extern "C" fn e_attack13(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 2.0);
+    fx(agent, "sys_attack_arc_b", "footl", (-6.0, -5.0, 0.0), (90.0, 180.0, 60.0), 0.8, ROUGE);
+    trainee(agent, &["footl"], 2.0, 7.0, 0.7, ROUGE);
+}
+// attaque en courant (poing gauche tendu tout du long)
+unsafe extern "C" fn e_attackdash(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 1.0);
+    fx(agent, "sys_attack_speedline", "top", (0.0, 8.0, -4.0), (0.0, 0.0, 0.0), 1.1, OR);
+    fx_sol(agent, "sys_dash_smoke", 0.9);
+    trainee(agent, &["handl"], 1.0, 28.0, 0.5, OR);
+}
+// tilt avant (demandé : électricité ; ses coups sont électriques dans REX) : la main gauche se charge, décharge devant
+unsafe extern "C" fn e_attacks3(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    frame(lua, 2.0);
+    fx(agent, "sys_thunder", "handl", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.6, (1.0, 1.0, 1.0));
+    frame(lua, 7.0);
+    if is_excute(agent) {
+        EFFECT(agent, Hash40::new("sys_hit_elec"), Hash40::new("top"), 0, 5, 16, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, true);
+        EFFECT_FOLLOW(agent, Hash40::new("sys_damage_elec"), Hash40::new("handl"), 0, 0, 0, 0, 0, 0, 1.4, true);
+        EFFECT_FOLLOW(agent, Hash40::new("sys_thunder"), Hash40::new("top"), 0, 5, 12, 0, 0, 90, 1.2, true);
+    }
+    trainee(agent, &["handl"], 7.0, 12.0, 0.6, (1.0, 0.95, 0.4));
+    frame(lua, 31.0);
+    off(agent, "sys_damage_elec");
+    off(agent, "sys_thunder");
+}
+unsafe extern "C" fn e_attackhi3(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 4.0);
+    fx(agent, "sys_attack_arc_d", "top", (0.0, 11.0, 2.0), (0.0, 10.0, 50.0), 1.0, OR);
+    trainee(agent, &["footl"], 4.0, 10.0, 0.6, OR);
+}
+unsafe extern "C" fn e_attacklw3(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 4.0);
+    fx_sol(agent, "sys_atk_smoke", 0.6);
+    trainee(agent, &["footr"], 4.0, 10.0, 0.6, OR);
+}
+
+// smash avant (demandé : les mêmes effets que le smash avant de Super Shadow) : éclat de charge, puis le Boost doré
+// pendant qu'il fonce (images 32 à 46 : REX AttackS4S 24 à 38, + 8 images de AttackS4Start)
+unsafe extern "C" fn e_attacks4(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    frame(lua, 14.0);
+    fx(agent, "sys_smash_flash", "footr", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.0, OR);
+    frame(lua, 32.0);
+    if is_excute(agent) {
+        EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash"), Hash40::new("top"), 0, 7, 4, 0, 0, 0, 1.0, true);
+        LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+        EFFECT_FOLLOW(agent, Hash40::new("sys_score_aura"), Hash40::new("top"), 0, 6, 4, -90, 0, 0, 1.2, true);
+        LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+        EFFECT_FOLLOW(agent, Hash40::new("sonic_spintrace"), Hash40::new("top"), 0, 7, 0, 0, 0, 0, 0.8, true);
+        LAST_EFFECT_SET_ALPHA(agent, 0.7);
+    }
+    let mut f = 32.0;
+    while f < 46.0 {
+        frame(lua, f);
+        if is_excute(agent) {
+            if (f - 32.0) % 6.0 == 0.0 {
+                EFFECT_FOLLOW(agent, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 8, -4, 0, 0, 0, 1.2, true);
+                LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+            }
+            FOOT_EFFECT(agent, Hash40::new("sys_dash_smoke"), Hash40::new("top"), -4, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
+        }
+        f += 3.0;
+    }
+    frame(lua, 46.0);
+    off(agent, "sys_score_aura");
+    off(agent, "sonic_spintrace");
+}
+// smash haut : la boule monte (os « sphere ») : éclat, tourbillon et traînée dorés comme le smash haut de Sonic
+unsafe extern "C" fn e_attackhi4(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    frame(lua, 14.0);
+    fx(agent, "sys_smash_flash", "top", (0.0, 10.0, 2.0), (0.0, 0.0, 0.0), 1.0, OR);
+    frame(lua, 19.0);
+    fx_sol(agent, "sys_v_smoke_a", 1.0);
+    fx(agent, "sys_spin_wind", "sphere", (0.0, 0.0, 0.0), (0.0, -160.0, 270.0), 0.75, OR);
+    fx(agent, "sonic_spintrace", "sphere", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.0, OR);
+    frame(lua, 22.0);
+    fx(agent, "sonic_spinwind", "sphere", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.0, OR);
+    frame(lua, 32.0);
+    fx(agent, "sys_attack_impact", "sphere", (0.0, 3.0, 0.0), (0.0, 0.0, 0.0), 1.6, OR);
+    frame(lua, 42.0);
+    fx(agent, "sys_attack_impact", "sphere", (0.0, -3.0, 0.0), (0.0, 0.0, 0.0), 1.6, OR);
+    frame(lua, 46.0);
+    off(agent, "sonic_spinwind");
+    off(agent, "sys_spin_wind");
+    off(agent, "sonic_spintrace");
+    frame(lua, 50.0);
+    fx_sol(agent, "sys_down_smoke", 1.0);
+}
+// smash bas : deux coups de pied tournants (images 10 et 24 : REX + 6 images de AttackLw4Start)
+unsafe extern "C" fn e_attacklw4(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    frame(lua, 4.0);
+    fx(agent, "sys_smash_flash", "footl", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.8, OR);
+    frame(lua, 9.0);
+    fx_sol(agent, "sys_atk_smoke", 0.8);
+    fx(agent, "sys_attack_arc_b", "footl", (-6.0, -5.0, 0.0), (90.0, 180.0, 60.0), 1.1, OR);
+    trainee(agent, &["footl", "kneel"], 9.0, 20.0, 0.7, OR);
+    frame(lua, 23.0);
+    fx_sol(agent, "sys_atk_smoke", 0.8);
+    fx(agent, "sys_attack_arc_b", "footl", (-6.0, -5.0, 0.0), (90.0, 180.0, 60.0), 1.1, OR);
+    trainee(agent, &["footl", "kneel"], 23.0, 31.0, 0.7, OR);
+}
+// aériens : traînée dorée sur les membres qui frappent pendant leurs coups
+unsafe extern "C" fn e_attackairn(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 5.0);
+    fx(agent, "sonic_spintrace", "hip", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.8, OR);
+    trainee(agent, &["footl", "footr"], 5.0, 37.0, 0.5, OR);
+    off(agent, "sonic_spintrace");
+}
+unsafe extern "C" fn e_attackairf(agent: &mut L2CAgentBase) {
+    trainee(agent, &["footr"], 6.0, 13.0, 0.7, OR);
+}
+unsafe extern "C" fn e_attackairb(agent: &mut L2CAgentBase) {
+    trainee(agent, &["footl"], 11.0, 21.0, 0.7, OR);
+}
+unsafe extern "C" fn e_attackairhi(agent: &mut L2CAgentBase) {
+    trainee(agent, &["footl", "footr"], 3.0, 14.0, 0.6, OR);
+}
+unsafe extern "C" fn e_attackairlw(agent: &mut L2CAgentBase) {
+    trainee(agent, &["footl", "footr"], 7.0, 24.0, 0.6, OR);
+}
+
+fn install_coups(a: &mut Agent) {
+    a.acmd("effect_attack11", e_attack11, Priority::Low);
+    a.acmd("effect_attack12", e_attack12, Priority::Low);
+    a.acmd("effect_attack13", e_attack13, Priority::Low);
+    a.acmd("effect_attackdash", e_attackdash, Priority::Low);
+    a.acmd("effect_attacks3", e_attacks3, Priority::Low);
+    a.acmd("effect_attacks3hi", e_attacks3, Priority::Low);
+    a.acmd("effect_attacks3lw", e_attacks3, Priority::Low);
+    a.acmd("effect_attackhi3", e_attackhi3, Priority::Low);
+    a.acmd("effect_attacklw3", e_attacklw3, Priority::Low);
+    a.acmd("effect_attacks4", e_attacks4, Priority::Low);
+    a.acmd("effect_attacks4hi", e_attacks4, Priority::Low);
+    a.acmd("effect_attacks4lw", e_attacks4, Priority::Low);
+    a.acmd("effect_attackhi4", e_attackhi4, Priority::Low);
+    a.acmd("effect_attacklw4", e_attacklw4, Priority::Low);
+    a.acmd("effect_attackairn", e_attackairn, Priority::Low);
+    a.acmd("effect_attackairf", e_attackairf, Priority::Low);
+    a.acmd("effect_attackairb", e_attackairb, Priority::Low);
+    a.acmd("effect_attackairhi", e_attackairhi, Priority::Low);
+    a.acmd("effect_attackairlw", e_attackairlw, Priority::Low);
+    a.acmd("expression_attackhi4", x_attackhi4, Priority::Low);
+}
+
+// smash haut : en boule comme dans REX (son corps est remplacé par la boule de l'image 21 à 46 : REX 7 à 32 + 14),
+// au lieu des images de Sonic (sa boule apparaissait au sol)
+unsafe extern "C" fn x_attackhi4(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    frame(lua, 21.0);
+    if is_excute(agent) {
+        VisibilityModule::set_int64(agent.module_accessor, hash40("body") as i64, hash40("body_sphere") as i64);
+        crate::boule(agent.module_accessor, true);
+    }
+    frame(lua, 46.0);
+    if is_excute(agent) {
+        VisibilityModule::set_int64(agent.module_accessor, hash40("body") as i64, hash40("body_normal") as i64);
+        crate::boule(agent.module_accessor, false);
+    }
+}
