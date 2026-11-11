@@ -36,7 +36,7 @@ jobs:
           echo "fichiers extraits : $(find x -type f | wc -l)"
           tar czf /tmp/mod.tgz -C /tmp/m x
           printf '%s' "$CLE" > /tmp/k
-          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -in /tmp/mod.tgz -out /tmp/out/mod.tgz.enc
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -in /tmp/mod.tgz | split -b 90m - /tmp/out/mod.tgz.enc.
           rm -f /tmp/k
       - name: Publier (branche mod, chiffre)
         run: |
