@@ -122,7 +122,7 @@ unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
     if id < 8 && BOULE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_HI4 {
-        VisibilityModule::set_int64(boma, smash::hash40("body") as i64, smash::hash40("body_normal") as i64);
+        VisibilityModule::set_int64(boma, smash::hash40("body"), smash::hash40("body_normal"));
         BOULE[id] = false;
     }
     if id < 8 && CORPS_CHANGE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_S4 {

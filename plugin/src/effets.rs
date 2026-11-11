@@ -318,12 +318,12 @@ unsafe extern "C" fn x_attackhi4(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
     frame(lua, 21.0);
     if is_excute(agent) {
-        VisibilityModule::set_int64(agent.module_accessor, hash40("body") as i64, hash40("body_sphere") as i64);
+        VisibilityModule::set_int64(agent.module_accessor, hash40("body"), hash40("body_sphere"));
         crate::boule(agent.module_accessor, true);
     }
     frame(lua, 46.0);
     if is_excute(agent) {
-        VisibilityModule::set_int64(agent.module_accessor, hash40("body") as i64, hash40("body_normal") as i64);
+        VisibilityModule::set_int64(agent.module_accessor, hash40("body"), hash40("body_normal"));
         crate::boule(agent.module_accessor, false);
     }
 }
