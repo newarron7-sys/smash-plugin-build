@@ -270,6 +270,7 @@ effets! {
     e_swingdash => "game_swingdash" : "effect_swingdash", "sound_swingdash",
     e_attacks3 => "game_attacks3" : "effect_attacks3", "sound_attacks3",
     e_attacks3s2 => "game_attacks3s2" : "effect_attacks3s2", "sound_attacks3s2",
+    e_attacks3s => "game_attacks3s" : "effect_attacks3s", "sound_attacks3s",
     e_attackhi3 => "game_attackhi3" : "effect_attackhi3", "sound_attackhi3",
     e_attacklw3 => "game_attacklw3" : "effect_attacklw3", "sound_attacklw3",
     e_attacks4 => "game_attacks4" : "effect_attacks4", "sound_attacks4",

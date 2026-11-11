@@ -96,7 +96,7 @@ pub const MC_COSTUMES: [usize; 1] = [140];
 /// le 2e coup du tilt avant de Snake rejoue la rafale du fusil de combat
 fn alias(script: &str) -> &str {
     match script {
-        "game_attacks3s2" => "game_attacks3",
+        "game_attacks3s2" | "game_attacks3s" => "game_attacks3",
         _ => script,
     }
 }
@@ -239,6 +239,7 @@ scripts! {
     g_swingdash => "game_swingdash",
     g_attacks3 => "game_attacks3",
     g_attacks3s2 => "game_attacks3s2",
+    g_attacks3s => "game_attacks3s",
     g_attackhi3 => "game_attackhi3",
     g_attacklw3 => "game_attacklw3",
     g_attacks4 => "game_attacks4",
