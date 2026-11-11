@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "cherche:snake"
+      MOD: "cherche:snake" # 2
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
@@ -34,6 +34,7 @@ jobs:
                       res = get(u).get('_aRecords', [])
                   except Exception as e:
                       print('ERR', e); break
+                  print('RECH', terme, page, len(res))
                   for m in res:
                       i = m['_idRow']
                       if i in vus: continue
@@ -47,6 +48,8 @@ jobs:
                               tree = json.dumps(get('https://gamebanana.com/apiv11/File/%d' % f['_idRow']).get('_aMetadata', {}))
                           except Exception:
                               tree = ''
+                          if len(vus) < 3:
+                              print('EX', i, tree[:300])
                           if 'se_%s' % q in tree:
                               print('MOD', i, f['_idRow'], f.get('_nFilesize'), m.get('_sName'))
           PY
