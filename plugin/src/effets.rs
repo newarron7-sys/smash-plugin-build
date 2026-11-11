@@ -111,6 +111,67 @@ pub unsafe fn aura(fighter: &mut L2CFighterCommon) {
 }
 
 
+// ------------------------------------------------------------------ side B (demandé) : l'effet du Boost du f-smash
+// pendant toute la course du spin dash (Super Sonic : même effet que le side B de Super Shadow). Aura couchée devant lui, traînée,
+// éclat au départ, fumée au sol toutes les 4 images ; tout est retiré quand la course s'arrête.
+static mut BOOST: [[u32; 2]; 8] = [[0; 2]; 8];
+static mut BOOST_T: [u32; 8] = [0; 8];
+static mut BOOST_SIDE: [bool; 8] = [false; 8];
+
+pub unsafe fn boost_side_b(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let id = (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7);
+    let st = StatusModule::status_kind(boma);
+    // side B : B côté -> charge (SPECIAL_S_HOLD) -> course ; le bas B passe par sa propre charge
+    if st == *FIGHTER_STATUS_KIND_SPECIAL_S || st == *FIGHTER_SONIC_STATUS_KIND_SPECIAL_S_HOLD {
+        BOOST_SIDE[id] = true;
+    } else if st == *FIGHTER_STATUS_KIND_SPECIAL_LW {
+        BOOST_SIDE[id] = false;
+    }
+    let course = crate::speciaux::side_b_course(boma);
+    let _ = (st, BOOST_SIDE[id]);
+    if !course {
+        for h in BOOST[id].iter_mut() {
+            if *h != 0 && EffectModule::is_exist_effect(boma, *h) {
+                EffectModule::kill(boma, *h, false, false);
+            }
+            *h = 0;
+        }
+        BOOST_T[id] = 0;
+        return;
+    }
+    let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    if BOOST_T[id] == 0 {
+        let p = Vector3f { x: 0.0, y: 7.0, z: 4.0 };
+        let n = EffectModule::req_follow(boma, Hash40::new("sys_smash_flash"), Hash40::new("top"), &p, &z, 1.0, false,
+            0, 0, 0, 0, 0, false, false) as u32;
+        if n != 0 {
+            EffectModule::set_rgb(boma, n, OR.0, OR.1, OR.2);
+        }
+    }
+    BOOST_T[id] = BOOST_T[id].wrapping_add(1);
+    let h = BOOST[id][0];
+    if h == 0 || !EffectModule::is_exist_effect(boma, h) {
+        // demandé : plus devant lui (elle touchait sa tête)
+        let p = Vector3f { x: 0.0, y: 6.0, z: 11.0 };
+        let r = Vector3f { x: -90.0, y: 0.0, z: 0.0 };
+        let n = EffectModule::req_follow(boma, Hash40::new("sys_score_aura"), Hash40::new("top"), &p, &r, 0.9, false,
+            0, 0, 0, 0, 0, false, false) as u32;
+        if n != 0 {
+            EffectModule::set_rgb(boma, n, OR.0, OR.1, OR.2);
+        }
+        BOOST[id][0] = n;
+    }
+    // pas de traînée en anneaux de Sonic (sonic_spintrace) ici : c'est l'effet de son spin dash, il le faisait
+    // ressembler au side B de Sonic
+    if BOOST_T[id] % 4 == 1 && StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
+        // demandé : la fumée au sol un peu plus derrière lui
+        let p = Vector3f { x: 0.0, y: 0.0, z: -11.0 };
+        EffectModule::req_follow(boma, Hash40::new("sys_dash_smoke"), Hash40::new("top"), &p, &z, 0.8, false,
+            0, 0, 0, 0, 0, false, false);
+    }
+}
+
 // ------------------------------------------------------------------ effets de ses coups (demandé, v2)
 // Méthode des scripts du jeu (Sonic, Mario, Captain Falcon, HewDraw-Remix) : traits et arcs du jeu (sys_attack_line,
 // sys_attack_arc*) teintés, plus une vraie traînée : un petit éclat posé à chaque image sur le poing / le pied qui

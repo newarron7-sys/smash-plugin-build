@@ -93,6 +93,7 @@ pub struct Mv {
 include!("generated.rs");
 
 mod effets;
+mod speciaux;
 
 /// perso de base (nom interne) : Sonic
 pub const BASE: &str = "sonic";
@@ -119,6 +120,9 @@ pub(crate) unsafe fn boule(boma: *mut BattleObjectModuleAccessor, on: bool) {
 
 unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
     effets::aura(fighter);
+    effets::boost_side_b(fighter);
+    speciaux::frame_n(fighter);
+    speciaux::frame_hi(fighter);
     let boma = fighter.module_accessor;
     let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
     if id < 8 && BOULE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_HI4 {
@@ -248,6 +252,7 @@ macro_rules! scripts {
             a.set_costume(SS_COSTUMES.to_vec());
             $( if find($s).is_some() { a.acmd($s, $f, Priority::Low); } )*
             effets::install(&mut a);
+            speciaux::install(&mut a);
             a.on_line(Main, ss_frame);
             a.install();
         }
