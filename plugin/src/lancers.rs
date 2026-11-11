@@ -237,10 +237,12 @@ unsafe fn aura_haut(boma: *mut BattleObjectModuleAccessor, actif: bool) {
     let e = slot(boma);
     let h = AURA_HI[e];
     if !actif {
-        if h != 0 && EffectModule::is_exist_effect(boma, h) {
-            EffectModule::kill(boma, h, false, false);
+        if h != 0 {
+            // vidéo : l'aura restait toute seule là-haut après le lancer : retirée par sa sorte (le numéro seul ne
+            // suffisait pas), dès la fin du lancer
+            EffectModule::kill_kind(boma, Hash40::new("sys_score_aura"), false, true);
+            AURA_HI[e] = 0;
         }
-        AURA_HI[e] = 0;
         return;
     }
     let lr = PostureModule::lr(boma);
@@ -269,7 +271,7 @@ pub unsafe fn frame_throw(fighter: &mut L2CFighterCommon) {
     frame_throw_f(fighter, lancer && mk == smash::hash40("throw_f"));
     frame_throw_hi(fighter, lancer && mk == smash::hash40("throw_hi"));
     let fh = MotionModule::frame(boma);
-    aura_haut(boma, lancer && mk == smash::hash40("throw_hi") && fh >= 18.0 && fh < 60.0);
+    aura_haut(boma, lancer && mk == smash::hash40("throw_hi") && fh >= 18.0 && fh < 54.0);
     if lancer && mk == smash::hash40("throw_b") {
         frame_recul(fighter, &AV_B, AV_B0);
     } else if lancer && mk == smash::hash40("throw_lw") {
