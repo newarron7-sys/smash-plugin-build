@@ -535,7 +535,8 @@ unsafe extern "C" fn e_throwlw(agent: &mut L2CAgentBase) {
     frame(lua, 7.0);
     fx(agent, "sys_smash_flash", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.9, OR);
     frame(lua, 14.0);
-    // explosion de lumière (vidéo REX : blanche et dorée, sans feu ni fumée)
+    // explosion de lumière blanche et dorée, et demandé : une explosion de feu
+    fx_pose(agent, "sys_bomb_b", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.1, BLANC);
     fx_pose(agent, "sys_smash_flash", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 2.4, BLANC);
     fx_pose(agent, "sys_attack_impact", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 2.0, BLANC);
     fx_pose(agent, "sys_hit_elec", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.6, OR);
