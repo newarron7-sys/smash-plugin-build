@@ -204,6 +204,16 @@ unsafe extern "C" fn n_hit_end(fighter: &mut L2CFighterCommon) -> L2CValue {
 pub unsafe fn frame_n(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let st = StatusModule::status_kind(boma);
+    // demandé : le B neutre utilisable plusieurs fois de suite en l'air (Sonic : une seule fois, marqueur
+    // SPECIAL_N_FALL posé par le homing) : marqueur retiré dès qu'il n'est plus dans son B neutre
+    let b_neutre = st == *FIGHTER_STATUS_KIND_SPECIAL_N
+        || st == *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_HOMING_START
+        || st == *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_HOMING
+        || st == *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_REBOUND
+        || st == *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_FAIL;
+    if !b_neutre {
+        WorkModule::off_flag(boma, *FIGHTER_SONIC_INSTANCE_WORK_FLAG_SPECIAL_N_FALL);
+    }
     let homing = st == *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_HOMING || st == *FIGHTER_SONIC_STATUS_KIND_SPECIAL_N_HOMING_START;
     if homing
         && StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR
