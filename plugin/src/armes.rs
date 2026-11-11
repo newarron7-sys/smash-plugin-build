@@ -113,23 +113,46 @@ pub unsafe fn ground_pound(fighter: &mut L2CFighterCommon) {
     }
 }
 
-/// demandé (vidéo : « il se téléporte ») : ses animations de REX avancent (TransN : uppercut du jab +18, smash avant,
-/// attaques en course) ; dans les statuts d'attaque au sol de Snake le jeu ne suivait pas ce déplacement : le modèle
-/// partait devant puis revenait d'un coup à sa place. Physique « MOTION » : le perso suit le déplacement de
-/// l'animation (comme les attaques en course du jeu)
+/// demandé (vidéos : « il se téléporte », 2 fois) : ses animations de REX avancent (jab 3 : +18, smash avant :
+/// +15,8) mais le mouvement de Snake ne déplace pas le perso pour ces coups (« move » faux dans son motion_list : le
+/// passage en physique MOTION n'y changeait rien). Leurs animations sont donc sur place (retarget_exo.py) et le
+/// plugin le fait avancer de la même distance que dans REX, image par image (table AVANCE de generated.rs,
+/// rex/tools/avance_rex.py) ; au bord il s'arrête (correction de sol du statut)
+static mut AV_PREC: [(u64, f32); 8] = [(0, 0.0); 8];
+
+fn avance_a(t: &[f32], f: f32) -> f32 {
+    if t.is_empty() {
+        return 0.0;
+    }
+    let f = f.max(0.0);
+    let i = f.floor() as usize;
+    if i + 1 >= t.len() {
+        return t[t.len() - 1];
+    }
+    let k = f - i as f32;
+    t[i] * (1.0 - k) + t[i + 1] * k
+}
+
 pub unsafe fn suivre_animation(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
-    if StatusModule::situation_kind(boma) != *SITUATION_KIND_GROUND {
+    let id = id_of(boma);
+    let m = MotionModule::motion_kind(boma);
+    let tab = crate::AVANCE.iter().find(|(n, _)| hash40(n) == m).map(|(_, t)| *t);
+    let t = match tab {
+        Some(t) if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND => t,
+        _ => {
+            AV_PREC[id] = (0, 0.0);
+            return;
+        }
+    };
+    let f = MotionModule::frame(boma);
+    let (pm, pf) = AV_PREC[id];
+    AV_PREC[id] = (m, f);
+    if pm != m || f < pf {
         return;
     }
-    let st = StatusModule::status_kind(boma);
-    let sol = [*FIGHTER_STATUS_KIND_ATTACK, *FIGHTER_STATUS_KIND_ATTACK_S3, *FIGHTER_STATUS_KIND_ATTACK_HI3,
-               *FIGHTER_STATUS_KIND_ATTACK_LW3, *FIGHTER_STATUS_KIND_ATTACK_S4, *FIGHTER_STATUS_KIND_ATTACK_HI4,
-               *FIGHTER_STATUS_KIND_ATTACK_LW4, *FIGHTER_STATUS_KIND_ATTACK_DASH];
-    if !sol.contains(&st) {
-        return;
-    }
-    if KineticModule::get_kinetic_type(boma) != *FIGHTER_KINETIC_TYPE_MOTION {
-        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_MOTION);
-    }
+    let d = avance_a(t, f) - avance_a(t, pf);
+    let lr = PostureModule::lr(boma);
+    KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_STOP);
+    sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, d * lr, 0.0);
 }

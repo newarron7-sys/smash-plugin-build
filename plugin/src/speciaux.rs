@@ -317,7 +317,7 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
                         StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_FALL, true);
                     }
                     eff_monde(boma, "sys_smash_flash", bx, by + 3.0, 0.0, 0.9, (0.75, 0.9, 1.0));
-                    PLAY_SE(fighter, Hash40::new("se_snake_special_H01"));
+                    PLAY_SE(fighter, Hash40::new("se_snake_special_h01"));
                 }
             }
         }
@@ -344,11 +344,11 @@ unsafe extern "C" fn rien(_agent: &mut L2CAgentBase) {}
 unsafe extern "C" fn son_grenade(agent: &mut L2CAgentBase) {
     frame(agent.lua_state_agent, 3.0);
     if is_excute(agent) {
-        PLAY_SE(agent, Hash40::new("se_snake_special_S01"));
+        PLAY_SE(agent, Hash40::new("se_snake_special_s01"));
     }
     frame(agent.lua_state_agent, 19.0);
     if is_excute(agent) {
-        PLAY_SE(agent, Hash40::new("se_snake_special_S02"));
+        PLAY_SE(agent, Hash40::new("se_snake_special_s02"));
     }
 }
 
@@ -369,18 +369,18 @@ unsafe extern "C" fn eff_grenade(agent: &mut L2CAgentBase) {
 unsafe extern "C" fn son_coil(agent: &mut L2CAgentBase) {
     frame(agent.lua_state_agent, 9.0);
     if is_excute(agent) {
-        PLAY_SE(agent, Hash40::new("se_snake_special_L01"));
+        PLAY_SE(agent, Hash40::new("se_snake_special_l01"));
     }
     frame(agent.lua_state_agent, 20.0);
     if is_excute(agent) {
-        PLAY_SE(agent, Hash40::new("se_snake_special_L02"));
+        PLAY_SE(agent, Hash40::new("se_snake_special_l02"));
     }
 }
 
 unsafe extern "C" fn son_lift(agent: &mut L2CAgentBase) {
     frame(agent.lua_state_agent, 1.0);
     if is_excute(agent) {
-        PLAY_SE(agent, Hash40::new("se_snake_special_H01"));
+        PLAY_SE(agent, Hash40::new("se_snake_special_h01"));
     }
 }
 
