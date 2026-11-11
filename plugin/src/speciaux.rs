@@ -261,6 +261,42 @@ unsafe fn eff_monde(boma: *mut BattleObjectModuleAccessor, eff: &str, x: f32, y:
     }
 }
 
+/// le modèle de REX de l'ascenseur est mis sur la C4 de Snake (dossier du costume c140 seulement) : objet posé, que
+/// le plugin garde à la place de l'ascenseur ; ses effets / sons de C4 coupés ; jamais déclenché (bas B remplacé),
+/// retiré à la fin (sa minuterie d'explosion de 1600 images ne peut pas arriver : 600 images)
+unsafe fn c4_boma(boma: *mut BattleObjectModuleAccessor) -> Option<*mut BattleObjectModuleAccessor> {
+    if !ArticleModule::is_exist(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4) {
+        return None;
+    }
+    let a = ArticleModule::get_article(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4);
+    if a.is_null() {
+        return None;
+    }
+    let id = smash::app::lua_bind::Article::get_battle_object_id(a) as u32;
+    if !sv_battle_object::is_active(id) {
+        return None;
+    }
+    let b = sv_battle_object::module_accessor(id);
+    if b.is_null() { None } else { Some(b) }
+}
+
+unsafe fn c4_poser(boma: *mut BattleObjectModuleAccessor, x: f32, y: f32) {
+    if !ArticleModule::is_exist(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4) {
+        ArticleModule::generate_article(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, false, -1);
+    }
+    ArticleModule::set_pos(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, Vector3f { x, y, z: 0.0 });
+    if let Some(cb) = c4_boma(boma) {
+        EffectModule::kill_all(cb, 0, true, false);
+        SoundModule::stop_all_sound(cb);
+    }
+}
+
+unsafe fn c4_retirer(boma: *mut BattleObjectModuleAccessor) {
+    if ArticleModule::is_exist(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4) {
+        ArticleModule::remove_exist(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
+    }
+}
+
 /// l'ascenseur : vol (lancé en l'air), colonne de lumière, propulsion de Chief quand il est dedans
 unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
@@ -275,6 +311,7 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
             let x = L_DE[e].0 + (L_POS[e].0 - L_DE[e].0) * t;
             let y = L_DE[e].1 + (L_POS[e].1 - L_DE[e].1) * t;
             eff_monde(boma, "sys_smash_flash_s", x, y, 0.0, 0.5, VIOLET);
+            c4_poser(boma, x, y);
             if L_T[e] <= 0 {
                 L_ETAT[e] = 2;
                 L_T[e] = L_DUREE;
@@ -285,9 +322,11 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
             L_T[e] -= 1;
             if L_T[e] <= 0 {
                 L_ETAT[e] = 0;
+                c4_retirer(boma);
                 return;
             }
             let (bx, by) = L_POS[e];
+            c4_poser(boma, bx, by);
             // l'objet violet au sol et la colonne de lumière blanche / bleue (rafraîchis)
             if L_T[e] % 8 == 0 {
                 eff_monde(boma, "sys_smash_flash_s", bx, by + 1.0, 0.0, 0.7, VIOLET);
@@ -334,6 +373,18 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
 }
 
 pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    // début de match : rien ne reste du match précédent (états gardés par n° de joueur)
+    if StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_ENTRY {
+        let e = slot(boma);
+        G_ID[e] = 0;
+        G_ETAT[e] = 0;
+        C_ID[e] = 0;
+        L_ETAT[e] = 0;
+        L_ELAN_ATT[e] = false;
+        c4_retirer(boma);
+        return;
+    }
     lueur_grenade(fighter.module_accessor);
     ascenseur(fighter);
 }
@@ -418,5 +469,11 @@ pub fn install(a: &mut Agent) {
     a.status(Main, *FIGHTER_STATUS_KIND_SPECIAL_HI, hi_main);
     a.status(End, *FIGHTER_STATUS_KIND_SPECIAL_HI, rien_status);
     a.status(Main, *FIGHTER_STATUS_KIND_SPECIAL_LW, lw_main);
+    // sécurité : si le jeu passait au bas B « déclencher la C4 » de Snake (C4 = l'ascenseur posé), c'est la Fusion
+    // Coil qui se fait, rien n'explose
+    a.status(Init, *FIGHTER_SNAKE_STATUS_KIND_SPECIAL_LW_EXPLODING, rien_status);
+    a.status(Exec, *FIGHTER_SNAKE_STATUS_KIND_SPECIAL_LW_EXPLODING, rien_status);
+    a.status(End, *FIGHTER_SNAKE_STATUS_KIND_SPECIAL_LW_EXPLODING, rien_status);
+    a.status(Main, *FIGHTER_SNAKE_STATUS_KIND_SPECIAL_LW_EXPLODING, lw_main);
     a.status(End, *FIGHTER_STATUS_KIND_SPECIAL_LW, rien_status);
 }
