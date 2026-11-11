@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "cherche:snake" # 3
+      MOD: "643829"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
