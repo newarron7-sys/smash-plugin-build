@@ -285,7 +285,7 @@ scripts! {
     g_attackairf => "game_attackairf",
     g_attackairb => "game_attackairb",
     g_attackairhi => "game_attackairhi",
-    g_attackairlw => "game_attackairlw",
+    // demandé : le bas aérien de Sonic (son script et son animation), avec les effets dorés (effets.rs)
 }
 
 

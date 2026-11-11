@@ -367,7 +367,27 @@ unsafe extern "C" fn e_attackairhi(agent: &mut L2CAgentBase) {
     trainee(agent, &["footl", "footr"], 3.0, 14.0, 0.6, OR);
 }
 unsafe extern "C" fn e_attackairlw(agent: &mut L2CAgentBase) {
-    trainee(agent, &["footl", "footr"], 7.0, 24.0, 0.6, OR);
+    // demandé : le bas aérien de Sonic, avec les effets dorés (mêmes images que son script d'effets)
+    let lua = agent.lua_state_agent;
+    frame(lua, 4.0);
+    if is_excute(agent) {
+        EFFECT(agent, Hash40::new("sys_smash_flash"), Hash40::new("toel"), 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, true);
+        LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+    }
+    frame(lua, 16.0);
+    if is_excute(agent) {
+        EFFECT_FOLLOW_FLIP(agent, Hash40::new("sonic_atk_lw"), Hash40::new("sonic_atk_lw"), Hash40::new("top"), 0, -1, 2, 74.8, 0, 0, 1, true, *EF_FLIP_YZ);
+        LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+        EFFECT_FOLLOW(agent, Hash40::new("sonic_atk_lw_kick"), Hash40::new("top"), 0, -0.5, 4, -25, 0, 0, 1, true);
+        LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+        EFFECT_FOLLOW(agent, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 6, -2, -60, 0, 0, 1.1, true);
+        LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+    }
+    trainee(agent, &["toel", "toer"], 16.0, 33.0, 0.6, OR);
+    frame(lua, 35.0);
+    if is_excute(agent) {
+        EFFECT_OFF_KIND(agent, Hash40::new("sonic_atk_lw_kick"), true, true);
+    }
 }
 
 fn install_coups(a: &mut Agent) {
@@ -391,6 +411,9 @@ fn install_coups(a: &mut Agent) {
     a.acmd("effect_attackairhi", e_attackairhi, Priority::Low);
     a.acmd("effect_attackairlw", e_attackairlw, Priority::Low);
     a.acmd("expression_attackhi4", x_attackhi4, Priority::Low);
+    for n in ["effect_appealhil", "effect_appealhir", "effect_appealsl", "effect_appealsr", "effect_appeallwl", "effect_appeallwr"] {
+        a.acmd(n, e_provoc, Priority::Low);
+    }
     a.acmd("expression_attacks4", x_attacks4, Priority::Low);
     a.acmd("expression_attacks4hi", x_attacks4, Priority::Low);
     a.acmd("expression_attacks4lw", x_attacks4, Priority::Low);
@@ -426,4 +449,10 @@ unsafe extern "C" fn x_attacks4(agent: &mut L2CAgentBase) {
         VisibilityModule::set_int64(agent.module_accessor, hash40("body"), hash40("body_normal"));
         crate::boule(agent.module_accessor, false);
     }
+}
+
+/// provocations de REX : les effets de Sonic n'allaient pas avec ; éclat doré au début
+unsafe extern "C" fn e_provoc(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 4.0);
+    fx(agent, "sys_smash_flash", "hip", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.1, OR);
 }
