@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "609208"
+      MOD: "cherche:gum|goo|slime|sticky|plasma grenade|halo grenade|grenade item|item replacement"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
