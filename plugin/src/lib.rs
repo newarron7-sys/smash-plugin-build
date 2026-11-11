@@ -1,12 +1,9 @@
 #![feature(proc_macro_hygiene)]
 #![allow(unused, non_snake_case, non_upper_case_globals, static_mut_refs, unused_unsafe, unused_must_use)]
 
-//! Super Shadow (Super Smash Bros REX) sur Sonic, costume c00 : usage perso.
-//! Étape 1 : ses coups normaux, smashs et aériens de REX (image de sortie, dégâts, angle, recul, taille et position des
-//!           hitbox) sur les animations de Sonic, accélérées ou ralenties pour durer autant que les siennes ;
-//!           son modèle (dossier fighter/sonic/model/body/c00 du mod, construit à part, rattaché aux os de Sonic).
-//! Étapes suivantes : animations, spéciaux, prises, Final Smash, sons, interface, sa propre case.
-//! Les données ne sont PAS dans le dépôt : src/generated.rs est créé pendant la compilation (rex/tools/gen_rex.py).
+//! Super Sonic (Super Smash Bros REX) sur Sonic, costume c141 (sa propre case) : usage perso.
+//! Même procédure que Super Shadow (rex/PROCEDURE.md) : ses coups de REX (generated.rs, créé à la compilation par
+//! rex/tools/gen_rex.py, jamais dans le dépôt) sur ses animations de REX ; modèle = skin GameBanana (Super Sonic V8).
 
 use smash::app::sv_animcmd::{frame, wait};
 use smash::app::lua_bind::*;
@@ -96,14 +93,12 @@ pub struct Mv {
 include!("generated.rs");
 
 mod effets;
-mod speciaux;
-mod retouches;
 
 /// perso de base (nom interne) : Sonic
 pub const BASE: &str = "sonic";
 
-/// demandé : sa propre case à la sélection (après Super Sonic) : costume c140 de Sonic
-pub const SS_COSTUMES: [usize; 1] = [140];
+/// sa propre case à la sélection (la case Super Sonic) : costume c141 de Sonic
+pub const SS_COSTUMES: [usize; 1] = [141];
 
 pub(crate) fn find(script: &str) -> Option<&'static Mv> {
     MOVES.iter().find(|m| m.script == script)
@@ -115,11 +110,6 @@ static mut CORPS_CHANGE: [bool; 8] = [false; 8];
 
 unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
     effets::aura(fighter);
-    speciaux::frame_b(fighter);
-    speciaux::frame_throw(fighter);
-    speciaux::frame_esquive(fighter);
-    speciaux::frame_dair(fighter);
-    effets::boost_side_b(fighter);
     let boma = fighter.module_accessor;
     let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
     if id < 8 && CORPS_CHANGE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_S4 {
@@ -140,15 +130,11 @@ fn son(attr: &str) -> i32 {
     }
 }
 
-/// joue le coup de Super Shadow (REX) sur l'animation de Sonic
+/// joue le coup de Super Sonic (REX) sur son animation de REX
 pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
-    // B neutre : le combo n'a pas d'entrée à lui (construit dans retouches.rs à partir de ses 3 coups de REX)
-    let combo = Mv { script: "game_specialnhit", total: speciaux::SEG[5], hold: 0.0, kind: 0, evs: &[] };
-    let mv: &Mv = if script == "game_specialnhit" { &combo } else { match find(script) { Some(m) => m, None => return } };
-    // retouches demandées (jab 3 et up smash en plusieurs coups, down smash plus tard) : construites à partir des
-    // coups de REX eux-mêmes
-    let evs_v = retouches::evs(script, mv.evs);
-    let evs: &[Ev] = &evs_v;
+    let mv: &Mv = match find(script) { Some(m) => m, None => return };
+    let evs: &[Ev] = mv.evs;
+    let mut dernier_eclat = -1.0f32;
     let lua = agent.lua_state_agent;
     let boma = agent.module_accessor;
     // FT_MOTION_RATE = images de jeu par image d'animation : l'animation de Sonic dure alors autant que la sienne
@@ -210,21 +196,13 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_AIR_FLAG_ENABLE_LANDING);
             landing_on = true;
         }
-        // demandé : hitbox du nair, du jab, du back air et du up air agrandies
-        let size = match script {
-            "game_attackairn" | "game_attack11" | "game_attack12" | "game_attack13" | "game_attackairb"
-            | "game_attackairhi" => e.size * 1.4,
-            _ => e.size,
-        };
-        // demandé : le back air éjecte vraiment derrière lui. REX finit sur des coups à l'angle 363 (lien
-        // automatique : l'adversaire suivait Shadow au lieu de partir), dont deux avec seulement 25 de croissance
-        // prioritaires : le coup final part à 45° vers l'arrière (ATTACK_LR_CHECK_B) avec la croissance forte.
-        let (angle, kbg) = if script == "game_attackairb" && e.f >= 9.0 && e.angle >= 360 {
-            (45u64, e.kbg.max(120))
-        } else {
-            (e.angle, e.kbg)
-        };
-        ATTACK(agent, e.id, 0, Hash40::new(e.bone), e.dmg, angle, kbg, e.fkb, e.bkb, size, e.x, e.y, e.z,
+        // effet d'impact doré au moment du coup (les effets de Sonic ne vont pas avec ses animations de REX)
+        if e.f != dernier_eclat {
+            dernier_eclat = e.f;
+            EFFECT_FOLLOW(agent, Hash40::new("sys_attack_impact"), Hash40::new(e.bone), e.x, e.y, e.z, 0, 0, 0, 0.7, true);
+            LAST_EFFECT_SET_COLOR(agent, 1.0, 0.85, 0.3);
+        }
+        ATTACK(agent, e.id, 0, Hash40::new(e.bone), e.dmg, e.angle, e.kbg, e.fkb, e.bkb, e.size, e.x, e.y, e.z,
                None, None, None, e.hitlag, e.sdi, *ATTACK_SETOFF_KIND_ON, lr_check, false, 0, e.trip, 0,
                false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL,
                *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), *ATTACK_SOUND_LEVEL_M, son(e.attr),
@@ -250,7 +228,6 @@ macro_rules! scripts {
             a.set_costume(SS_COSTUMES.to_vec());
             $( if find($s).is_some() { a.acmd($s, $f, Priority::Low); } )*
             effets::install(&mut a);
-            speciaux::install(&mut a);
             a.on_line(Main, ss_frame);
             a.install();
         }
@@ -280,7 +257,7 @@ scripts! {
 }
 
 
-#[skyline::main(name = "super_shadow")]
+#[skyline::main(name = "super_sonic")]
 pub fn main() {
     install_scripts();
 }
