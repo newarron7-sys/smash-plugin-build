@@ -62,13 +62,13 @@ unsafe fn lacher(agent: &mut L2CAgentBase) {
     let target = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_OBJECT);
     let group = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_GROUP);
     let no = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_NO);
-    ATK_HIT_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, Hash40::new("throw"), target, group, no);
+    smash_script::macros::ATK_HIT_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, Hash40::new("throw"), target, group, no);
 }
 
 unsafe fn lancer_abs(agent: &mut L2CAgentBase, dmg: f32, ang: u64, kbg: i32, fkb: i32, bkb: i32, attr: &str, c: (f32, u64, i32, i32)) {
-    ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, 0, dmg, ang, kbg, fkb, bkb, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+    smash_script::macros::ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, 0, dmg, ang, kbg, fkb, bkb, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
                Hash40::new(attr), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
-    ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, c.0, c.1, c.2, 0, c.3, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+    smash_script::macros::ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, c.0, c.1, c.2, 0, c.3, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
                Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
 }
 
@@ -272,7 +272,7 @@ unsafe extern "C" fn g_throwf(agent: &mut L2CAgentBase) {
         AttackModule::clear_all(agent.module_accessor);
         // la charge du Boost (REX : 12 %, angle 361, 144 / 50)
         coup(agent, 0, "hip", 11.0, 361, 144, 50, 7.5, (0.0, 0.0, 0.0), "collision_attr_normal", *COLLISION_SOUND_ATTR_KICK);
-        CHECK_FINISH_CAMERA(agent, 12, 6);
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, 12, 6);
     }
     frame(lua, 74.0);
     if is_excute(agent) {
@@ -345,7 +345,7 @@ unsafe extern "C" fn g_throwb(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         // le coup (14 %, angle 140, 112 / 42) : il l'envoie derrière lui
         coup(agent, 0, "top", 14.0, 140, 112, 42, 8.0, (0.0, 8.0, 0.0), "collision_attr_normal", *COLLISION_SOUND_ATTR_KICK);
-        CHECK_FINISH_CAMERA(agent, -10, 8);
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, -10, 8);
     }
     frame(lua, 45.0);
     if is_excute(agent) {
@@ -425,7 +425,7 @@ unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
     camera_haut(agent, 60);
     frame(lua, HI_LACHER);
     if is_excute(agent) {
-        CHECK_FINISH_CAMERA(agent, 0, 20);
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, 0, 20);
         lacher(agent);
     }
     // il est placé là-haut à l'image 59 (frame_throw) : la caméra le suit alors normalement
@@ -486,7 +486,7 @@ unsafe extern "C" fn g_throwlw(agent: &mut L2CAgentBase) {
     }
     frame(lua, 21.0);
     if is_excute(agent) {
-        CHECK_FINISH_CAMERA(agent, 8, 4);
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, 8, 4);
         lacher(agent);
     }
 }
@@ -500,7 +500,7 @@ unsafe extern "C" fn e_throwlw(agent: &mut L2CAgentBase) {
     fx_pose(agent, "sys_smash_flash", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 2.6, BLANC);
     fx_pose(agent, "sys_hit_elec", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.6, OR);
     if is_excute(agent) {
-        QUAKE(agent, *CAMERA_QUAKE_KIND_M);
+        smash_script::macros::QUAKE(agent, *CAMERA_QUAKE_KIND_M);
     }
     // il recule d'un bond : petit éclat
     frame(lua, 28.0);
