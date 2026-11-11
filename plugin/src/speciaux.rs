@@ -49,6 +49,13 @@ unsafe fn en_l_air(fighter: &mut L2CFighterCommon) {
     GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
     KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
     KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+    // vidéo : la vitesse verticale de l'énergie STOP était bridée à 0 (il ne montait / descendait pas, restait en
+    // l'air) : énergie libre, sans limite (même réglage que le haut B de Palutena dans HewDraw-Remix)
+    sv_kinetic_energy!(reset_energy, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, *ENERGY_STOP_RESET_TYPE_FREE, 0.0, 0.0, 0.0, 0.0, 0.0);
+    sv_kinetic_energy!(set_accel, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0, 0.0);
+    sv_kinetic_energy!(set_stable_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0, 0.0);
+    sv_kinetic_energy!(set_limit_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, -1.0, -1.0);
+    KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_STOP);
 }
 
 /// reprend la physique normale (chute) avec la vitesse verticale donnée
@@ -113,8 +120,9 @@ unsafe extern "C" fn n_hit_main(fighter: &mut L2CFighterCommon) -> L2CValue {
         let k = hasard(4) as usize;
         NH_K[e] = k;
         MotionModule::change_motion(boma, Hash40::new("special_n_hit"), SEG[k], 1.0, false, 0.0, false, false);
-        NH_V[e] = (-0.5, 2.4);
-        vitesse(fighter, NH_V[e].0, NH_V[e].1);
+        // demandé (vidéo) : il retombe pendant sa pose (avant : il restait en l'air jusqu'à la fin de l'animation) :
+        // petit rebond puis la vraie gravité ; au sol, la pose s'arrête (atterrissage)
+        chute_normale(fighter, 2.0);
     }
     fighter.sub_shift_status_main(L2CValue::Ptr(n_hit_loop as *const () as _))
 }
@@ -144,10 +152,11 @@ unsafe extern "C" fn n_hit_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         if sol {
             BOUND_PHASE[e] = 1;
             NH_T[e] = 0;
-            en_l_air(fighter);
+            StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
+            GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
             MotionModule::set_rate(boma, 1.0);
-            NH_V[e] = (0.32, 2.8);
-            vitesse(fighter, 0.32, 2.8);
+            // rebond (REX : 2,8 vers le haut), puis la vraie gravité
+            chute_normale(fighter, 2.8);
             eclat(boma, 1.2);
             let z = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
             EffectModule::req_follow(boma, Hash40::new("sys_down_smoke"), Hash40::new("top"), &z, &z, 1.0, true, 0, 0, 0, 0, 0, false, false);
@@ -160,13 +169,8 @@ unsafe extern "C" fn n_hit_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     // actions permises : image 14 des poses, image 13 du rebond (REX 64000000)
     let libre = if k == 4 { 13 } else { 14 };
     if !NH_LIBRE[e] {
-        // rebond : la gravité ralentit l'élan (pas encore de contrôle)
-        NH_V[e].1 = (NH_V[e].1 - 0.11).max(-2.0);
-        NH_V[e].0 *= 0.95;
-        vitesse(fighter, NH_V[e].0, NH_V[e].1);
         if NH_T[e] >= libre {
             NH_LIBRE[e] = true;
-            chute_normale(fighter, NH_V[e].1);
         }
     } else {
         if fighter.sub_transition_group_check_air_cliff().get_bool() {
@@ -393,6 +397,8 @@ unsafe extern "C" fn g_roule(agent: &mut L2CAgentBase) {
 
 // ------------------------------------------------------------------ haut B (Flight)
 const VOL_DUREE: i32 = 45;
+/// special_hi : Fall de REX (debout, 21 images) puis UpBMove (couché, 17 images)
+const VOL_SEG: [f32; 2] = [21.0, 38.0];
 static mut VOL_T: [i32; 8] = [0; 8];
 static mut VOL_V: [(f32, f32); 8] = [(0.0, 0.0); 8];
 /// déjà volé depuis le dernier passage au sol
@@ -408,6 +414,9 @@ unsafe extern "C" fn hi_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     }
     VOL_FAIT[e] = true;
     VOL_T[e] = 0;
+    // vidéo : il partait en boule (statut de Sonic) : corps normal
+    VisibilityModule::set_whole(boma, true);
+    VisibilityModule::set_int64(boma, smash::hash40("body"), smash::hash40("body_normal"));
     // REX : il part avec un petit élan vers le haut
     VOL_V[e] = (0.0, 0.6);
     en_l_air(fighter);
@@ -449,8 +458,13 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     }
     VOL_V[e] = (vx, vy);
     vitesse(fighter, vx, vy);
-    if MotionModule::frame(boma) >= MotionModule::end_frame(boma) - 1.0 {
-        MotionModule::set_frame(boma, 0.0, false);
+    // demandé (vidéo) : la pose couchée (UpBMove) ressemblait au side B : debout en lévitation (Fall de REX, vidéo
+    // REX du Flight) quand il monte, descend ou plane ; couché seulement quand il file vraiment sur le côté
+    let fm = MotionModule::frame(boma);
+    let couche = vx.abs() > 0.9 && sx.abs() > 0.3;
+    let (a, b) = if couche { (VOL_SEG[0], VOL_SEG[1]) } else { (0.0, VOL_SEG[0]) };
+    if fm < a || fm >= b - 1.0 {
+        MotionModule::set_frame(boma, a, false);
     }
     if fighter.sub_transition_group_check_air_cliff().get_bool() {
         return 1.into();
