@@ -2,7 +2,7 @@ name: Sons REX (extraction, chiffre)
 on:
   push:
     branches: [ main ]
-    paths: [ 'outils/lancer_sons.txt', 'donnees/1BB.sawnd.enc' ]
+    paths: [ 'outils/lancer_sons.txt', 'donnees/*.sawnd.enc' ]
 permissions:
   contents: write
 jobs:
@@ -18,7 +18,8 @@ jobs:
         run: |
           printf '%s' "$CLE" > "$RUNNER_TEMP/k"
           mkdir -p "$RUNNER_TEMP/rex"
-          openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"$RUNNER_TEMP/k" -in donnees/1BB.sawnd.enc -out "$RUNNER_TEMP/rex/1BB.sawnd"
+          B=$(cat outils/banque_sons.txt 2>/dev/null || echo 1BB)
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"$RUNNER_TEMP/k" -in donnees/$B.sawnd.enc -out "$RUNNER_TEMP/rex/$B.sawnd"
           echo "banques : $(ls "$RUNNER_TEMP/rex" | wc -l)"
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Extraire (DSP -> WAV -> IDSP)
