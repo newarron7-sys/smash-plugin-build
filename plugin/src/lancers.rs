@@ -284,8 +284,9 @@ unsafe extern "C" fn e_throwf(agent: &mut L2CAgentBase) {
     // vidéo REX : tourbillon de vent cyan au sol autour de lui pendant la charge
     for k in 0..6 {
         frame(lua, 1.0 + 9.0 * k as f32);
-        fx(agent, "sys_whirlwind_l", "top", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.1, CYAN);
-        fx_pose(agent, "sys_spin_wind", "top", (0.0, 1.0, 0.0), (90.0, 0.0, 0.0), 1.4, CYAN);
+        // demandé : blanc (le cyan faisait une fumée verte bizarre)
+        fx(agent, "sys_whirlwind_l", "top", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.1, BLANC);
+        fx_pose(agent, "sys_spin_wind", "top", (0.0, 1.0, 0.0), (90.0, 0.0, 0.0), 1.4, BLANC);
     }
     frame(lua, 54.0);
     off(agent, "sys_whirlwind_l");
@@ -310,12 +311,13 @@ unsafe extern "C" fn e_throwf(agent: &mut L2CAgentBase) {
 unsafe extern "C" fn s_throwf(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
     frame(lua, 1.0);
-    son(agent, "se_sonic_special_s01");
+    son(agent, "se_sonic_rise");
     frame(lua, 60.0);
     if is_excute(agent) {
         PLAY_SEQUENCE(agent, Hash40::new("seq_sonic_rnd_attack"));
     }
-    son(agent, "se_sonic_smash_s01");
+    son(agent, "se_sonic_dash_start");
+    son(agent, "se_sonic_smash_s02");
     son(agent, "se_common_throw_02");
 }
 
@@ -360,7 +362,10 @@ unsafe extern "C" fn e_throwb(agent: &mut L2CAgentBase) {
     fx_pose(agent, "sys_hit_elec", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.9, OR);
     // REX (images 32 à 45) : il revient en boule dorée, anneau de vent cyan, traînée
     frame(lua, 31.0);
-    fx(agent, "sys_score_aura", "hip", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.0, OR);
+    // demandé : l'aura était tournée vers le haut ; il revient en arrière : aura couchée derrière lui, flammes vers
+    // l'avant (le contraire du Boost du f-smash, qui va vers l'avant)
+    fx(agent, "sys_score_aura", "top", (0.0, 6.0, -4.0), (90.0, 0.0, 0.0), 1.2, OR);
+    fx(agent, "sonic_spintrace", "top", (0.0, 7.0, 0.0), (0.0, 0.0, 0.0), 0.8, OR);
     fx(agent, "sys_spin_wind", "hip", (0.0, 0.0, 0.0), (0.0, 90.0, 0.0), 1.2, CYAN);
     fx(agent, "sys_attack_speedline", "top", (0.0, 8.0, 6.0), (0.0, 180.0, 0.0), 1.2, BLANC);
     frame(lua, 37.0);
@@ -368,6 +373,7 @@ unsafe extern "C" fn e_throwb(agent: &mut L2CAgentBase) {
     fx_pose(agent, "sys_smash_flash", "top", (0.0, 8.0, -4.0), (0.0, 0.0, 0.0), 1.3, CYAN);
     frame(lua, 45.0);
     off(agent, "sys_score_aura");
+    off(agent, "sonic_spintrace");
     off(agent, "sys_spin_wind");
 }
 unsafe extern "C" fn s_throwb(agent: &mut L2CAgentBase) {
@@ -375,7 +381,7 @@ unsafe extern "C" fn s_throwb(agent: &mut L2CAgentBase) {
     frame(lua, 14.0);
     son(agent, "se_common_throw_01");
     frame(lua, 32.0);
-    son(agent, "se_sonic_special_s01");
+    son(agent, "se_sonic_dash_start");
     frame(lua, 37.0);
     if is_excute(agent) {
         PLAY_SEQUENCE(agent, Hash40::new("seq_sonic_rnd_attack"));
@@ -437,21 +443,22 @@ unsafe extern "C" fn e_throwhi(agent: &mut L2CAgentBase) {
     // départ : coup de pied qui l'envoie en l'air (éclat blanc)
     frame(lua, 6.0);
     fx_pose(agent, "sys_smash_flash", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.3, BLANC);
-    // vidéo REX : à chaque coup, éclat blanc, anneau de vent et arc cyan autour de l'adversaire
+    // demandé : l'effet du f-smash qui le suit (Boost doré : aura, traînée jaune) pendant qu'il fonce autour de lui
+    frame(lua, 18.0);
+    fx(agent, "sys_score_aura", "hip", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.1, OR);
+    fx(agent, "sonic_spintrace", "hip", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.9, OR);
+    // à chaque coup : éclat blanc sur l'adversaire, traits de vitesse dorés
     for f in HI_COUPS {
         frame(lua, f);
         fx_pose(agent, "sys_attack_impact", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.2, BLANC);
-        fx_pose(agent, "sys_spin_wind", "throw", (0.0, 0.0, 0.0), (0.0, f * 7.0, 90.0), 1.0, CYAN);
-        fx(agent, "sys_attack_arc", "hip", (0.0, 0.0, 0.0), (0.0, 0.0, f * 13.0), 1.1, CYAN);
+        fx(agent, "sys_attack_speedline", "hip", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.1, OR);
     }
     frame(lua, 53.0);
     fx_pose(agent, "sys_smash_flash", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 2.2, BLANC);
-    fx_pose(agent, "sys_attack_impact", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.8, CYAN);
-    // il monte en colonne de lumière (REX : TransN monte à 72)
-    frame(lua, 54.0);
-    fx(agent, "sys_attack_speedline", "top", (0.0, 4.0, 0.0), (-90.0, 0.0, 0.0), 1.6, CYAN);
+    fx_pose(agent, "sys_attack_impact", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.8, BLANC);
     frame(lua, 60.0);
-    off(agent, "sys_attack_speedline");
+    off(agent, "sys_score_aura");
+    off(agent, "sonic_spintrace");
 }
 unsafe extern "C" fn s_throwhi(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
@@ -496,8 +503,9 @@ unsafe extern "C" fn e_throwlw(agent: &mut L2CAgentBase) {
     frame(lua, 7.0);
     fx(agent, "sys_smash_flash", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.9, OR);
     frame(lua, 14.0);
-    fx_pose(agent, "sys_bomb_b", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.3, BLANC);
-    fx_pose(agent, "sys_smash_flash", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 2.6, BLANC);
+    // explosion de lumière (vidéo REX : blanche et dorée, sans feu ni fumée)
+    fx_pose(agent, "sys_smash_flash", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 2.4, BLANC);
+    fx_pose(agent, "sys_attack_impact", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 2.0, BLANC);
     fx_pose(agent, "sys_hit_elec", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.6, OR);
     if is_excute(agent) {
         smash_script::macros::QUAKE(agent, *CAMERA_QUAKE_KIND_M);
@@ -598,7 +606,17 @@ unsafe extern "C" fn e_downattack(agent: &mut L2CAgentBase) {
     }
 }
 
+/// demandé (vidéo) : le lancer bas de Sonic le met en boule ; dans REX il reste en corps normal (tous les lancers)
+unsafe extern "C" fn x_lancer(agent: &mut L2CAgentBase) {
+    if is_excute(agent) {
+        VisibilityModule::set_int64(agent.module_accessor, smash::hash40("body"), smash::hash40("body_normal"));
+    }
+}
+
 pub fn install(a: &mut Agent) {
+    for n in ["expression_throwf", "expression_throwb", "expression_throwhi", "expression_throwlw"] {
+        a.acmd(n, x_lancer, Priority::Low);
+    }
     a.acmd("game_throwf", g_throwf, Priority::Low);
     a.acmd("effect_throwf", e_throwf, Priority::Low);
     a.acmd("sound_throwf", s_throwf, Priority::Low);

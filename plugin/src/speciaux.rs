@@ -377,7 +377,7 @@ unsafe extern "C" fn e_boost_sol(agent: &mut L2CAgentBase) { e_freinage(agent, S
 unsafe extern "C" fn e_boost_air(agent: &mut L2CAgentBase) { e_freinage(agent, S_L_AIR); }
 unsafe extern "C" fn s_boost(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
-        PLAY_SE(agent, Hash40::new("se_sonic_special_s01"));
+        PLAY_SE(agent, Hash40::new("se_sonic_dash_start"));
     }
 }
 

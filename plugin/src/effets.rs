@@ -162,8 +162,26 @@ pub unsafe fn boost_side_b(fighter: &mut L2CFighterCommon) {
         }
         BOOST[id][0] = n;
     }
-    // pas de traînée en anneaux de Sonic (sonic_spintrace) ici : c'est l'effet de son spin dash, il le faisait
-    // ressembler au side B de Sonic
+    // demandé : la traînée jaune du f-smash derrière lui (sonic_spintrace, jaune avec le fichier d'effets du mod) et
+    // ses traits de vitesse dorés
+    let h = BOOST[id][1];
+    if h == 0 || !EffectModule::is_exist_effect(boma, h) {
+        let p = Vector3f { x: 0.0, y: 7.0, z: 0.0 };
+        let n = EffectModule::req_follow(boma, Hash40::new("sonic_spintrace"), Hash40::new("top"), &p, &z, 0.8, false,
+            0, 0, 0, 0, 0, false, false) as u32;
+        if n != 0 {
+            EffectModule::set_alpha(boma, n, 0.7);
+        }
+        BOOST[id][1] = n;
+    }
+    if BOOST_T[id] % 6 == 1 {
+        let p = Vector3f { x: 0.0, y: 8.0, z: -4.0 };
+        let n = EffectModule::req_follow(boma, Hash40::new("sys_attack_speedline"), Hash40::new("top"), &p, &z, 1.2, false,
+            0, 0, 0, 0, 0, false, false) as u32;
+        if n != 0 {
+            EffectModule::set_rgb(boma, n, OR.0, OR.1, OR.2);
+        }
+    }
     if BOOST_T[id] % 4 == 1 && StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
         // demandé : la fumée au sol un peu plus derrière lui
         let p = Vector3f { x: 0.0, y: 0.0, z: -11.0 };
