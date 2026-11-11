@@ -42,7 +42,8 @@ unsafe fn situation(fighter: &mut L2CFighterCommon, sol_mot: &str, air_mot: &str
         KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_GROUND_STOP);
         GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_GROUND_CLIFF_STOP));
     } else {
-        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
+        // en l'air : il tombe normalement (contrôle gardé), comme dans REX
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_FALL);
         GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
     }
     let m = Hash40::new(if sol { sol_mot } else { air_mot });
@@ -89,6 +90,17 @@ unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     let e = slot(boma);
     situation(fighter, "special_s_start", "special_air_s_start", false);
     let f = MotionModule::frame(boma);
+    // vitesses de l'animation de REX (FSM) : visée ralentie (0,5) tant que B est tenu, puis 1,15 et 1,63 après le lancer
+    let rate = if f < 10.0 {
+        1.0
+    } else if f < G_LANCER {
+        if ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_SPECIAL) { 0.5 } else { 1.0 }
+    } else if f < 22.0 {
+        1.15
+    } else {
+        1.63
+    };
+    MotionModule::set_rate(boma, rate);
     if G_ETAT[e] == 0 && f >= G_PRISE && !ItemModule::is_have_item(boma, 0) {
         ItemModule::have_item(boma, ItemKind(*ITEM_KIND_CHEWING), 0, 0, false, false);
         G_ETAT[e] = 1;
@@ -298,7 +310,10 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
                 if libre.contains(&st) {
                     L_RECH[e] = 40;
                     L_ELAN_ATT[e] = true;
-                    if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND || st == *FIGHTER_STATUS_KIND_FALL_SPECIAL {
+                    if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
+                        // au sol : il décolle (saut), l'élan de la colonne remplace celui du saut
+                        StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_JUMP, true);
+                    } else if st == *FIGHTER_STATUS_KIND_FALL_SPECIAL {
                         StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_FALL, true);
                     }
                     eff_monde(boma, "sys_smash_flash", bx, by + 3.0, 0.0, 0.9, (0.75, 0.9, 1.0));
