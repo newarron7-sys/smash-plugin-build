@@ -157,6 +157,9 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     // -> sur l'os « sphere », qui suit maintenant la boule (sauf le premier coup, au sol, sur TopN)
     let evs_v: Vec<Ev> = if script == "game_attackhi4" {
         mv.evs.iter().map(|e| if !e.clear && e.f >= 19.5 && e.bone == "top" { Ev { bone: "sphere", ..*e } } else { *e }).collect()
+    } else if script == "game_attack11" || script == "game_attack12" || script == "game_attack13" {
+        // demandé : hitbox des jabs agrandies (x1,5)
+        mv.evs.iter().map(|e| if e.clear || e.rate > 0.0 || e.body >= 0 { *e } else { Ev { size: e.size * 1.5, ..*e } }).collect()
     } else {
         mv.evs.to_vec()
     };
