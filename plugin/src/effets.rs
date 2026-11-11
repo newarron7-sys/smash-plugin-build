@@ -346,10 +346,7 @@ unsafe extern "C" fn e_attacklw4(agent: &mut L2CAgentBase) {
         fx_sol(agent, "sys_atk_smoke", 0.8);
         fx(agent, "sys_attack_line", "top", (0.0, 1.5, 2.0), (0.0, sens, 0.0), 1.3, ROUGE);
         fx(agent, "sys_attack_arc_b", "footl", (-6.0, -5.0, 0.0), (90.0, 180.0, 60.0), 1.1, ROUGE);
-        if is_excute(agent) {
-            EFFECT(agent, Hash40::new("sys_flame"), Hash40::new("footl"), 0, 0, 0, 0, 0, 0, 0.6, 0, 0, 0, 0, 0, 0, true);
-            LAST_EFFECT_SET_COLOR(agent, 1.0, 0.25, 0.1);
-        }
+        // demandé : pas d'explosion de feu sur les coups de pied
         trainee(agent, &["footl"], f, f + 8.0, 0.8, ROUGE);
     }
 }
