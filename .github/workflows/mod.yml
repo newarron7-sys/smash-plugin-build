@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "175172"
+      MOD: "cherche:snake"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
@@ -18,6 +18,40 @@ jobs:
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
           mkdir -p /tmp/m /tmp/out && cd /tmp/m
+          if [ "${MOD%%:*}" = "cherche" ]; then
+            # recherche d'un mod qui contient une banque de sons du perso (modèle de banque), arborescences des archives
+            python3 - "${MOD#cherche:}" <<'PY' > /tmp/m/recherche.txt 2>&1 || true
+          import json, sys, urllib.request, urllib.parse
+          q = sys.argv[1]
+          def get(u):
+              r = urllib.request.Request(u, headers={'User-Agent': 'Mozilla/5.0'})
+              return json.load(urllib.request.urlopen(r, timeout=60))
+          vus = set()
+          for terme in [q + ' sound', q + ' sfx', q + ' voice', q]:
+              for page in (1, 2, 3):
+                  u = 'https://gamebanana.com/apiv11/Util/Search/Results?_sModelName=Mod&_sOrder=best_match&_idGameRow=6498&_sSearchString=%s&_nPage=%d&_nPerpage=50' % (urllib.parse.quote(terme), page)
+                  try:
+                      res = get(u).get('_aRecords', [])
+                  except Exception as e:
+                      print('ERR', e); break
+                  for m in res:
+                      i = m['_idRow']
+                      if i in vus: continue
+                      vus.add(i)
+                      try:
+                          prof = get('https://gamebanana.com/apiv11/Mod/%d/ProfilePage' % i)
+                      except Exception:
+                          continue
+                      for f in prof.get('_aFiles', []):
+                          try:
+                              tree = json.dumps(get('https://gamebanana.com/apiv11/File/%d' % f['_idRow']).get('_aMetadata', {}))
+                          except Exception:
+                              tree = ''
+                          if 'se_%s' % q in tree:
+                              print('MOD', i, f['_idRow'], f.get('_nFilesize'), m.get('_sName'))
+          PY
+            cp /tmp/m/recherche.txt /tmp/out/ ; cd /tmp/out && printf '%s' "$CLE" > /tmp/k && openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -in recherche.txt -out recherche.txt.enc && rm -f recherche.txt /tmp/k && exit 0
+          fi
           # fiche du mod (nom, mises à jour, fichiers) puis tous ses fichiers ; rien n'est affiché
           curl -sSL -A "Mozilla/5.0" -o info.json "https://gamebanana.com/apiv11/Mod/$MOD/ProfilePage" || true
           curl -sSL -A "Mozilla/5.0" -o maj.json "https://gamebanana.com/apiv11/Mod/$MOD/Updates?_nPage=1&_nPerpage=20" || true
