@@ -131,6 +131,14 @@ unsafe extern "C" fn n_hit_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         // plongée jusqu'au sol, puis rebond (REX SpecialNBounce : élan 0,32 vers l'avant, 2,8 vers le haut)
         NH_T[e] += 1;
         vitesse(fighter, 0.0, -6.0);
+        // vidéo REX : colonne de lumière blanche derrière lui pendant la plongée
+        let mut p = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+        ModelModule::joint_global_position(boma, Hash40::new("hip"), &mut p, true);
+        let r = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+        let h = EffectModule::req(boma, Hash40::new("sys_smash_flash_s"), &p, &r, 1.3, 0, 0, false, 0) as u32;
+        if h != 0 {
+            EffectModule::set_rgb(boma, h, 1.0, 1.0, 1.0);
+        }
         let sol = StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND
             || GroundModule::is_touch(boma, *GROUND_TOUCH_FLAG_DOWN as u32);
         if sol {
@@ -220,8 +228,9 @@ unsafe extern "C" fn g_specialnhoming(agent: &mut L2CAgentBase) {
 }
 unsafe extern "C" fn e_nhit(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
-        EFFECT_FOLLOW(agent, Hash40::new("sys_attack_impact"), Hash40::new("hip"), 0, 0, 0, 0, 0, 0, 1.2, true);
-        LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+        // vidéo REX : éclat blanc en étoile à l'impact
+        EFFECT(agent, Hash40::new("sys_attack_impact"), Hash40::new("hip"), 0, 0, 0, 0, 0, 0, 1.6, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("sys_smash_flash"), Hash40::new("hip"), 0, 0, 0, 0, 0, 0, 1.4, 0, 0, 0, 0, 0, 0, true);
     }
 }
 unsafe extern "C" fn s_nhit(agent: &mut L2CAgentBase) {
@@ -491,8 +500,11 @@ unsafe extern "C" fn e_vol(agent: &mut L2CAgentBase) {
     while f < 17.0 {
         frame(lua, f);
         if is_excute(agent) {
-            EFFECT(agent, Hash40::new("sys_smash_flash_s"), Hash40::new("hip"), 0, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, true);
-            LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+            // vidéo REX : traînée de lumière blanche et dorée
+            EFFECT(agent, Hash40::new("sys_smash_flash_s"), Hash40::new("hip"), 0, 0, 0, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, true);
+            if (f as i32) % 2 == 0 {
+                LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
+            }
         }
         f += 1.0;
     }

@@ -316,19 +316,24 @@ unsafe extern "C" fn e_attackhi4(agent: &mut L2CAgentBase) {
     frame(lua, 50.0);
     fx_sol(agent, "sys_down_smoke", 1.0);
 }
-// smash bas : deux coups de pied tournants (images 10 et 24 : REX + 6 images de AttackLw4Start)
+// smash bas « Sonic Flare » (vidéo REX) : anneau de lumière blanc pendant la charge, puis une lame de feu ROUGE au ras
+// du sol à chaque coup de pied (devant à l'image 10, derrière à l'image 24 : REX + 6 images de AttackLw4Start)
+const BLANC: (f32, f32, f32) = (1.0, 1.0, 1.0);
 unsafe extern "C" fn e_attacklw4(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
-    frame(lua, 4.0);
-    fx(agent, "sys_smash_flash", "footl", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.8, OR);
-    frame(lua, 9.0);
-    fx_sol(agent, "sys_atk_smoke", 0.8);
-    fx(agent, "sys_attack_arc_b", "footl", (-6.0, -5.0, 0.0), (90.0, 180.0, 60.0), 1.1, OR);
-    trainee(agent, &["footl", "kneel"], 9.0, 20.0, 0.7, OR);
-    frame(lua, 23.0);
-    fx_sol(agent, "sys_atk_smoke", 0.8);
-    fx(agent, "sys_attack_arc_b", "footl", (-6.0, -5.0, 0.0), (90.0, 180.0, 60.0), 1.1, OR);
-    trainee(agent, &["footl", "kneel"], 23.0, 31.0, 0.7, OR);
+    frame(lua, 2.0);
+    fx(agent, "sys_smash_flash", "hip", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.3, BLANC);
+    for (f, sens) in [(9.0, 0.0), (23.0, 180.0)] {
+        frame(lua, f);
+        fx_sol(agent, "sys_atk_smoke", 0.8);
+        fx(agent, "sys_attack_line", "top", (0.0, 1.5, 2.0), (0.0, sens, 0.0), 1.3, ROUGE);
+        fx(agent, "sys_attack_arc_b", "footl", (-6.0, -5.0, 0.0), (90.0, 180.0, 60.0), 1.1, ROUGE);
+        if is_excute(agent) {
+            EFFECT(agent, Hash40::new("sys_flame"), Hash40::new("footl"), 0, 0, 0, 0, 0, 0, 0.6, 0, 0, 0, 0, 0, 0, true);
+            LAST_EFFECT_SET_COLOR(agent, 1.0, 0.25, 0.1);
+        }
+        trainee(agent, &["footl"], f, f + 8.0, 0.8, ROUGE);
+    }
 }
 // aériens : traînée dorée sur les membres qui frappent pendant leurs coups
 unsafe extern "C" fn e_attackairn(agent: &mut L2CAgentBase) {
@@ -371,6 +376,9 @@ fn install_coups(a: &mut Agent) {
     a.acmd("effect_attackairhi", e_attackairhi, Priority::Low);
     a.acmd("effect_attackairlw", e_attackairlw, Priority::Low);
     a.acmd("expression_attackhi4", x_attackhi4, Priority::Low);
+    a.acmd("expression_attacks4", x_attacks4, Priority::Low);
+    a.acmd("expression_attacks4hi", x_attacks4, Priority::Low);
+    a.acmd("expression_attacks4lw", x_attacks4, Priority::Low);
 }
 
 // smash haut : en boule comme dans REX (son corps est remplacé par la boule de l'image 21 à 46 : REX 7 à 32 + 14),
@@ -383,6 +391,22 @@ unsafe extern "C" fn x_attackhi4(agent: &mut L2CAgentBase) {
         crate::boule(agent.module_accessor, true);
     }
     frame(lua, 46.0);
+    if is_excute(agent) {
+        VisibilityModule::set_int64(agent.module_accessor, hash40("body"), hash40("body_normal"));
+        crate::boule(agent.module_accessor, false);
+    }
+}
+
+// smash avant « Drop Dash » (REX AttackS4S : changement de modèle en boule à l'image 6, retour à 25 ; + 8 images de
+// AttackS4Start ; vidéo REX : boule dorée qui charge sur place puis fonce)
+unsafe extern "C" fn x_attacks4(agent: &mut L2CAgentBase) {
+    let lua = agent.lua_state_agent;
+    frame(lua, 14.0);
+    if is_excute(agent) {
+        VisibilityModule::set_int64(agent.module_accessor, hash40("body"), hash40("body_sphere"));
+        crate::boule(agent.module_accessor, true);
+    }
+    frame(lua, 33.0);
     if is_excute(agent) {
         VisibilityModule::set_int64(agent.module_accessor, hash40("body"), hash40("body_normal"));
         crate::boule(agent.module_accessor, false);
