@@ -223,7 +223,7 @@ fn extras(script: &str, out: &mut Vec<(f32, Fx)>) {
             out.push((0.0, Fx::Sol("sys_crown", 1.0)));
             out.push((0.0, Fx::Sol("sys_landing_smoke", 1.3)));
             out.push((0.0, Fx::Quake));
-            out.push((0.0, Fx::Son("se_common_down_l_01")));
+            out.push((0.0, Fx::Son("se_common_bomb_m")));
         }
         _ => {}
     }
