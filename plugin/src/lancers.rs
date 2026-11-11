@@ -230,6 +230,36 @@ unsafe fn frame_throw_hi(fighter: &mut L2CFighterCommon, lancer: bool) {
     }
 }
 
+static mut AURA_HI: [u32; 8] = [0; 8];
+/// lancer haut : aura du Boost (f-smash) devant lui, flammes vers l'arrière, dans le repère du monde (pas des hanches,
+/// qui tournent dans tous les sens pendant l'animation), déplacée sur ses hanches à chaque image
+unsafe fn aura_haut(boma: *mut BattleObjectModuleAccessor, actif: bool) {
+    let e = slot(boma);
+    let h = AURA_HI[e];
+    if !actif {
+        if h != 0 && EffectModule::is_exist_effect(boma, h) {
+            EffectModule::kill(boma, h, false, false);
+        }
+        AURA_HI[e] = 0;
+        return;
+    }
+    let lr = PostureModule::lr(boma);
+    let mut p = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    ModelModule::joint_global_position(boma, Hash40::new("hip"), &mut p, true);
+    let pos = smash::phx::Vector3f { x: p.x + 4.0 * lr, y: p.y, z: p.z };
+    if h == 0 || !EffectModule::is_exist_effect(boma, h) {
+        // le haut de l'effet pointe derrière lui (comme la rotation X -90 du f-smash, ici autour de l'axe du monde)
+        let rot = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 90.0 * lr };
+        let n = EffectModule::req(boma, Hash40::new("sys_score_aura"), &pos, &rot, 1.2, 0, 0, false, 0) as u32;
+        if n != 0 {
+            EffectModule::set_rgb(boma, n, OR.0, OR.1, OR.2);
+        }
+        AURA_HI[e] = n;
+    } else {
+        EffectModule::set_pos(boma, h, &pos);
+    }
+}
+
 /// chaque image (ss_frame)
 pub unsafe fn frame_throw(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
@@ -238,6 +268,8 @@ pub unsafe fn frame_throw(fighter: &mut L2CFighterCommon) {
     let mk = MotionModule::motion_kind(boma);
     frame_throw_f(fighter, lancer && mk == smash::hash40("throw_f"));
     frame_throw_hi(fighter, lancer && mk == smash::hash40("throw_hi"));
+    let fh = MotionModule::frame(boma);
+    aura_haut(boma, lancer && mk == smash::hash40("throw_hi") && fh >= 18.0 && fh < 60.0);
     if lancer && mk == smash::hash40("throw_b") {
         frame_recul(fighter, &AV_B, AV_B0);
     } else if lancer && mk == smash::hash40("throw_lw") {
@@ -445,7 +477,8 @@ unsafe extern "C" fn e_throwhi(agent: &mut L2CAgentBase) {
     fx_pose(agent, "sys_smash_flash", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.3, BLANC);
     // demandé : l'effet du f-smash qui le suit (Boost doré : aura, traînée jaune) pendant qu'il fonce autour de lui
     frame(lua, 18.0);
-    fx(agent, "sys_score_aura", "hip", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.1, OR);
+    // l'aura couchée devant lui est posée et déplacée image par image par aura_haut (sur les hanches, l'aura suivait
+    // leur rotation et pointait vers le haut : demandé, devant lui comme le f-smash)
     fx(agent, "sonic_spintrace", "hip", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.9, OR);
     // à chaque coup : éclat blanc sur l'adversaire, traits de vitesse dorés
     for f in HI_COUPS {
@@ -457,7 +490,6 @@ unsafe extern "C" fn e_throwhi(agent: &mut L2CAgentBase) {
     fx_pose(agent, "sys_smash_flash", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 2.2, BLANC);
     fx_pose(agent, "sys_attack_impact", "throw", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.8, BLANC);
     frame(lua, 60.0);
-    off(agent, "sys_score_aura");
     off(agent, "sonic_spintrace");
 }
 unsafe extern "C" fn s_throwhi(agent: &mut L2CAgentBase) {
