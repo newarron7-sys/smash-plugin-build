@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "338954"
+      MOD: "cherche:gooey|sticky bomb|chewing|powderbox|blast box item|explosive crate|crate item|bombe collante"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
