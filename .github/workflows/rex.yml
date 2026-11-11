@@ -37,6 +37,25 @@ jobs:
           cd /tmp/w && mkdir -p /tmp/x /tmp/pub
           7z l -ba -slt sd.raw | awk '/^Path = /{p=substr($0,8)} /^Size = /{print $3"\t"p}' > /tmp/x/liste_sd.txt
           7z x -y sd.raw "rex_/pf/Fighter/chief/*" "rex_/pf/module/ft_chief.rel" "rex_/pf/info/portrite/*" "rex_/pf/*/*/*hief*" "rex_/pf/*/*/*HIEF*" "rex_/pf/*/*hief*" "rex_/pf/sound/strm/Victory! 2/Master_Chief.brstm" -o/tmp/x >/dev/null || true
+          # sons de Chief : fiches BrawlEx (numéro de banque de sons), puis la banque .sawnd de Chief
+          7z x -y sd.raw "rex_/pf/BrawlEx/FighterConfig/*" -o/tmp/x >/dev/null || true
+          python3 - > /tmp/x/banque.txt <<'PY'
+          import os, struct, glob
+          d = '/tmp/x/rex_/pf/BrawlEx/FighterConfig/'
+          cfg = {os.path.basename(f): open(f, 'rb').read() for f in glob.glob(d + '*.dat')}
+          sawnd = set(l.split('\t')[1].rsplit('/', 1)[1][:-6].upper() for l in open('/tmp/x/liste_sd.txt') if '/sfx/' in l and l.strip().endswith('.sawnd'))
+          c = cfg.get('Fighter5B.dat', b'')
+          print('Fighter5B', len(c), c[:64].hex())
+          for o in range(0, len(c) - 1):
+              for fmt in ('>H', '>I'):
+                  if o + struct.calcsize(fmt) <= len(c):
+                      v = struct.unpack_from(fmt, c, o)[0]
+                      if '%03X' % v in sawnd and v > 0x10:
+                          n1bb = sum(1 for x in cfg.values() if o + 4 <= len(x) and struct.unpack_from(fmt, x, o)[0] == 0x1BB)
+                          print('CAND', o, fmt, '%03X' % v, 'autres fiches a 1BB a cet endroit :', n1bb)
+          PY
+          B=$(awk '/^CAND/ && $NF>0 {print $4}' /tmp/x/banque.txt | sort -u); [ -n "$B" ] || B=$(awk '/^CAND/ {print $4}' /tmp/x/banque.txt | sort -u | head -6)
+          for b in $B; do 7z x -y sd.raw "rex_/pf/sfx/$b.sawnd" -o/tmp/x >/dev/null || true; done
           rm -f sd.raw
           echo "liste : $(wc -l < /tmp/x/liste_sd.txt) lignes"; echo "fichiers : $(find /tmp/x -type f | wc -l), taille : $(du -sh /tmp/x | cut -f1)"
           printf '%s' "$CLE" > /tmp/k
