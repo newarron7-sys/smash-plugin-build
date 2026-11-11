@@ -52,6 +52,19 @@ fn couleur(script: &str, e: &Ev) -> C {
     }
 }
 
+/// coups à l'arme (pas d'éclat d'impact électrique : feu et fumée au canon, voir canon())
+fn arme(script: &str) -> bool {
+    matches!(script, "game_attacks3" | "game_attacks4" | "game_attacklw4" | "game_attackhi3" | "game_attacklw3")
+}
+
+/// tir d'une arme à balles : flamme au bout du canon puis fumée qui en sort (demandé : « logique »)
+fn canon(out: &mut Vec<(f32, Fx)>, f: f32, os: &'static str, p: (f32, f32, f32), sc: f32) {
+    out.push((f, Fx::Pose("sys_hit_fire", os, p, (0.0, 0.0, 0.0), 0.35 * sc, (1.0, 1.0, 1.0))));
+    out.push((f, Fx::Pose("sys_smash_flash_s", os, p, (0.0, 0.0, 0.0), 0.35 * sc, (1.0, 0.85, 0.5))));
+    out.push((f + 1.0, Fx::Pose("sys_dash_smoke", os, p, (0.0, 0.0, 0.0), 0.45 * sc, (0.85, 0.85, 0.85))));
+    out.push((f + 4.0, Fx::Pose("sys_dash_smoke", os, (p.0, p.1 + 1.0, p.2 + 1.0), (0.0, 0.0, 0.0), 0.35 * sc, (0.7, 0.7, 0.7))));
+}
+
 /// effets d'une image de coups (une seule fois par image)
 fn effets_coups(script: &str, evs: &[Ev], out: &mut Vec<(f32, Fx)>) {
     let mut vu: Vec<f32> = Vec::new();
@@ -59,37 +72,27 @@ fn effets_coups(script: &str, evs: &[Ev], out: &mut Vec<(f32, Fx)>) {
         if e.clear || e.rate > 0.0 || e.body >= 0 {
             continue;
         }
-        let c = couleur(script, e);
+        if vu.contains(&e.f) {
+            continue;
+        }
         if e.cap {
-            if vu.contains(&e.f) {
-                continue;
-            }
             vu.push(e.f);
-            // éclair au canon
-            out.push((e.f, Fx::Pose("sys_smash_flash_s", "top", (e.x, e.y, e.z), (0.0, 0.0, 0.0), 0.8, c)));
-            // traçantes le long du tir (sys_attack_line : trait le long de Z ; incliné de -pente autour de X)
-            let (dy, dz) = (e.y2 - e.y, e.z2 - e.z);
-            let l = (dy * dy + dz * dz).sqrt().max(0.001);
-            let pente = dy.atan2(dz).to_degrees();
-            let pas = 15.0;
-            let n = ((l / pas) as i32).clamp(1, 14);
-            let angles: &[f32] = if script == "game_attacks4" { &[-9.0, 0.0, 9.0] } else { &[0.0] };
-            for a in angles {
-                for k in 0..n {
-                    let t = (k as f32 + 0.5) * pas / l;
-                    let p = (e.x, e.y + dy * t, e.z + dz * t);
-                    out.push((e.f, Fx::Pose("sys_attack_line", "top", p, (-(pente + a), 0.0, 0.0),
-                                            if script == "game_attacks4" { 0.9 } else { 0.55 }, c)));
+            let p = (e.x, e.y, e.z);
+            match script {
+                // fusil à pompe : grosse flamme en cône devant le canon
+                "game_attacks4" => {
+                    canon(out, e.f, "top", p, 2.0);
+                    for k in 1..4 {
+                        let d = 4.0 * k as f32;
+                        out.push((e.f, Fx::Pose("sys_hit_fire", "top", (e.x, e.y, e.z + d), (0.0, 0.0, 0.0), 0.4 + 0.15 * k as f32, (1.0, 1.0, 1.0))));
+                    }
                 }
+                "game_attacklw4" => canon(out, e.f, "top", p, 1.6),
+                _ => canon(out, e.f, "top", p, 1.0),
             }
-            if script == "game_attacks4" {
-                out.push((e.f, Fx::Pose("sys_bomb_a", "top", (e.x, e.y, e.z + 6.0), (0.0, 0.0, 0.0), 0.45, ORANGE)));
-            }
-        } else {
-            if vu.contains(&e.f) {
-                continue;
-            }
+        } else if !arme(script) {
             vu.push(e.f);
+            let c = couleur(script, e);
             let eff = match e.attr {
                 "collision_attr_elec" | "collision_attr_paralyze" => "sys_hit_elec",
                 _ => "sys_attack_impact",
@@ -141,14 +144,18 @@ fn extras(script: &str, out: &mut Vec<(f32, Fx)>) {
         "game_attackhi3" => {
             // mitraillettes : éclairs aux deux mains à chaque rafale
             for f in [25.0, 28.0, 30.0, 32.0, 36.0] {
-                out.push((f, Fx::Suit("sys_smash_flash_s", "haver", (0.0, 0.0, 4.0), (0.0, 0.0, 0.0), 0.5, JAUNE)));
-                out.push((f, Fx::Suit("sys_smash_flash_s", "havel", (0.0, 0.0, 4.0), (0.0, 0.0, 0.0), 0.5, JAUNE)));
+                canon(out, f, "haver", (0.0, 0.0, 4.0), 0.8);
+                canon(out, f, "havel", (0.0, 0.0, 4.0), 0.8);
             }
         }
         "game_attacklw3" => {
-            // pistolet plasma : lueur verte au canon
+            // pistolet plasma : lueur verte au canon, tir vert devant
             for f in [2.0, 26.0] {
                 out.push((f, Fx::Suit("sys_smash_flash_s", "haver", (0.0, 0.0, 3.0), (0.0, 0.0, 0.0), 0.6, VERT)));
+            }
+            for f in [4.0, 30.0] {
+                out.push((f, Fx::Pose("sys_smash_flash", "top", (0.0, 3.0, 12.0), (0.0, 0.0, 0.0), 0.5, VERT)));
+                out.push((f + 1.0, Fx::Pose("sys_dash_smoke", "top", (0.0, 2.0, 10.0), (0.0, 0.0, 0.0), 0.4, (0.6, 0.9, 0.6))));
             }
         }
         "game_attackhi4" => {

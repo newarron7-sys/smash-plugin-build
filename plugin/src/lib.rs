@@ -215,6 +215,7 @@ unsafe extern "C" fn mc_frame(fighter: &mut L2CFighterCommon) {
     armes::visibilite(fighter);
     armes::attaque_course(fighter);
     armes::ground_pound(fighter);
+    armes::suivre_animation(fighter);
 }
 
 macro_rules! scripts {

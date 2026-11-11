@@ -112,3 +112,24 @@ pub unsafe fn ground_pound(fighter: &mut L2CFighterCommon) {
         }
     }
 }
+
+/// demandé (vidéo : « il se téléporte ») : ses animations de REX avancent (TransN : uppercut du jab +18, smash avant,
+/// attaques en course) ; dans les statuts d'attaque au sol de Snake le jeu ne suivait pas ce déplacement : le modèle
+/// partait devant puis revenait d'un coup à sa place. Physique « MOTION » : le perso suit le déplacement de
+/// l'animation (comme les attaques en course du jeu)
+pub unsafe fn suivre_animation(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    if StatusModule::situation_kind(boma) != *SITUATION_KIND_GROUND {
+        return;
+    }
+    let st = StatusModule::status_kind(boma);
+    let sol = [*FIGHTER_STATUS_KIND_ATTACK, *FIGHTER_STATUS_KIND_ATTACK_S3, *FIGHTER_STATUS_KIND_ATTACK_HI3,
+               *FIGHTER_STATUS_KIND_ATTACK_LW3, *FIGHTER_STATUS_KIND_ATTACK_S4, *FIGHTER_STATUS_KIND_ATTACK_HI4,
+               *FIGHTER_STATUS_KIND_ATTACK_LW4, *FIGHTER_STATUS_KIND_ATTACK_DASH];
+    if !sol.contains(&st) {
+        return;
+    }
+    if KineticModule::get_kinetic_type(boma) != *FIGHTER_KINETIC_TYPE_MOTION {
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_MOTION);
+    }
+}
