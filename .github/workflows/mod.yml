@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "cherche:snake moveset|snake animation|snake animations|over snake moveset"
+      MOD: "635988"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
