@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "cherche:snake" # 2
+      MOD: "cherche:snake" # 3
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
@@ -39,6 +39,8 @@ jobs:
                       i = m['_idRow']
                       if i in vus: continue
                       vus.add(i)
+                      print('NOM', i, m.get('_sName'), (m.get('_aRootCategory') or {}).get('_sName'))
+                      continue
                       try:
                           prof = get('https://gamebanana.com/apiv11/Mod/%d/ProfilePage' % i)
                       except Exception:
