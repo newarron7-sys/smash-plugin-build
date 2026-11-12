@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "635988"
+      MOD: "cherche:DI indicator|DI effect|directional influence|blue DI|ef_cmn|hit effects"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
