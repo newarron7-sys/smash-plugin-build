@@ -249,7 +249,13 @@ unsafe fn jouer(agent: &mut L2CAgentBase, script: &str) {
     for (f, fx) in l {
         // une image avant celle du coup (comme les scripts du jeu) : à l'image du coup, l'arrêt sur l'impact
         // (hitlag) fige les scripts d'effets / de sons, le son du tir partait après le coup (vidéo down smash)
-        let af = ((f - 1.0) / r).max(1.0);
+        let mut af = ((f - 1.0) / r).max(1.0);
+        // smashs : ce qui vient après la charge ne doit pas tomber sur l'image de la charge (sinon il part dès le
+        // début de la charge : tir du smash avant à l'image 29 de REX -> 28 = image de la charge, vidéo) : au plus
+        // tôt l'image juste après, quand le smash est relâché
+        if mv.kind == 1 && mv.hold > 0.0 && f > mv.hold {
+            af = af.max(mv.hold / r + 0.5);
+        }
         if af > cur {
             frame(lua, af);
             cur = af;

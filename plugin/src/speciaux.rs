@@ -12,7 +12,7 @@
 //!   violette) ; grande colonne de lumière blanche / bleue ; Chief n'est pas propulsé en le posant : il doit marcher
 //!   dedans, il s'accroupit puis monte très haut (~5 fois sa taille) et retombe ; il peut y retourner. En l'air :
 //!   lancé en diagonale vers le bas. S'il est déjà posé : « NotReady » (drapeau V22000010 de REX).
-//!   Effets bleus : ceux de la DI d'Ultimate (sys_direction2), agrandis (demandé).
+//!   (essai de sys_direction2 pour les effets bleus : ce sont des traits blancs fins, retiré)
 //! Statuts de Snake remplacés (Nikita, Cypher, C4 jamais créés) ; animations de REX : retarget_exo.py chief_speciaux.
 
 use smash::app::lua_bind::*;
@@ -29,8 +29,6 @@ use smashline::*;
 
 const BLEU: (f32, f32, f32) = (0.35, 0.7, 1.0);
 const VIOLET: (f32, f32, f32) = (0.75, 0.35, 1.0);
-/// effet bleu de la DI d'Ultimate (paramètres communs direction_effect_*) : demandé pour les effets bleus
-const DI: &str = "sys_direction2";
 
 unsafe fn slot(boma: *mut BattleObjectModuleAccessor) -> usize {
     (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7)
@@ -161,11 +159,7 @@ unsafe fn lueur_grenade(boma: *mut BattleObjectModuleAccessor) {
     let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
     let h = EffectModule::req_follow(ib, Hash40::new("sys_hit_elec"), Hash40::new("top"), &z, &z, 0.3, true, 0, 0, 0, 0, 0, false, false);
     EffectModule::set_rgb(ib, h as u32, BLEU.0, BLEU.1, BLEU.2);
-    // lueur bleue : effet de la DI (demandé), en croix, agrandi
-    for rz in [0.0f32, 90.0] {
-        let r = Vector3f { x: 0.0, y: 0.0, z: rz };
-        EffectModule::req_follow(ib, Hash40::new(DI), Hash40::new("top"), &z, &r, 1.2, true, 0, 0, 0, 0, 0, false, false);
-    }
+
 }
 
 // ------------------------------------------------------------------ down B : Fusion Coil
@@ -460,13 +454,14 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
             }
             let (bx, by) = L_POS[e];
             c4_silence(boma);
-            // colonne de lumière bleue (effets de la DI, demandé, agrandis) du sol jusqu'en haut de l'écran
+            // colonne de lumière blanche / bleue du sol jusqu'en haut de l'écran (vidéo de REX)
             if L_T[e] % 8 == 0 {
                 eff_monde(boma, "sys_smash_flash_s", bx, by + 2.0, 0.0, 1.0, Some((0.85, 0.95, 1.0)));
-                let mut h = 4.0;
+                // faisceaux verticaux blanc bleuté (pas l'effet sys_direction2 : traits blancs fins, vidéo)
+                let mut h = 6.0;
                 while h < L_HAUT {
-                    eff_monde(boma, DI, bx - 1.5, by + h, 0.0, 2.6, None);
-                    eff_monde(boma, DI, bx + 1.5, by + h + 6.0, 0.0, 2.6, None);
+                    eff_monde(boma, "sys_attack_line", bx - 2.0, by + h, -90.0, 1.6, Some((0.6, 0.85, 1.0)));
+                    eff_monde(boma, "sys_attack_line", bx + 2.0, by + h + 6.0, -90.0, 1.6, Some((0.85, 0.95, 1.0)));
                     h += 13.0;
                 }
             }
