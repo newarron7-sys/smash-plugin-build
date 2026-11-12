@@ -248,8 +248,10 @@ unsafe fn jouer(agent: &mut L2CAgentBase, script: &str) {
         // smashs : ce qui vient après la charge ne doit pas tomber sur l'image de la charge (sinon il part dès le
         // début de la charge : tir du smash avant à l'image 29 de REX -> 28 = image de la charge, vidéo) : au plus
         // tôt l'image juste après, quand le smash est relâché
+        // (le drapeau de charge est posé 2 images avant celle de REX, voir run() : au plus tôt l'image de charge de
+        // REX, soit 2 images après le drapeau)
         if mv.kind == 1 && mv.hold > 0.0 && f > mv.hold {
-            af = af.max(mv.hold / r + 0.5);
+            af = af.max(mv.hold / r);
         }
         if af > cur {
             frame(lua, af);

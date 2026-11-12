@@ -168,7 +168,11 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     let mut smash_hold_done = false;
     let mut landing_on = false;
     let lr_check = if script == "game_attackairb" { *ATTACK_LR_CHECK_B } else { *ATTACK_LR_CHECK_F };
-    let hold_f = if mv.hold > 0.0 { mv.hold / r } else { ((first_hit - 2.0) / r).max(1.0) };
+    // charge du smash : le jeu passe à la charge une image APRÈS le drapeau (l'animation avance encore d'une image) :
+    // tout ce qui est à moins de 2 images après le drapeau part donc avant la charge (vidéos : tir, flamme et son du
+    // smash avant dès le début de la charge ; REX : charge à 28, son à 29, tir à 30). Drapeau posé 2 images plus tôt
+    // que dans REX : le son, les effets et le coup tombent tous après le relâchement
+    let hold_f = if mv.hold > 0.0 { ((mv.hold - 2.0) / r).max(1.0) } else { ((first_hit - 4.0) / r).max(1.0) };
     for e in evs {
         let af = if e.rate > 0.0 { e.f / r } else { (e.f / r).max(1.0) };
         if mv.kind == 1 && !smash_hold_done && af >= hold_f {
