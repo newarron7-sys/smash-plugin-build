@@ -75,6 +75,9 @@ fn effets_coups(script: &str, evs: &[Ev], out: &mut Vec<(f32, Fx)>) {
         if vu.contains(&e.f) {
             continue;
         }
+        if e.cap && script == "game_attackhi4" {
+            continue;                           // rayon du laser : effets dans extras()
+        }
         if e.cap {
             vu.push(e.f);
             let p = (e.x, e.y, e.z);
@@ -244,7 +247,9 @@ unsafe fn jouer(agent: &mut L2CAgentBase, script: &str) {
     let lua = agent.lua_state_agent;
     let mut cur = 0.0f32;
     for (f, fx) in l {
-        let af = (f / r).max(1.0);
+        // une image avant celle du coup (comme les scripts du jeu) : à l'image du coup, l'arrêt sur l'impact
+        // (hitlag) fige les scripts d'effets / de sons, le son du tir partait après le coup (vidéo down smash)
+        let af = ((f - 1.0) / r).max(1.0);
         if af > cur {
             frame(lua, af);
             cur = af;

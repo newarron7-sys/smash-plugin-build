@@ -121,6 +121,21 @@ fn son(attr: &str) -> i32 {
 fn coups(script: &str, mv: &Mv) -> Vec<Ev> {
     mv.evs.iter().map(|e| {
         let mut e = *e;
+        if script == "game_attackhi4" && !e.clear && e.rate <= 0.0 && e.body < 0 {
+            // laser spartan (demandé : « agrandis beaucoup beaucoup la hitbox du up smash ») : dans REX ses coups
+            // sont 3 petites boules espacées (y 34 / 57 / 137) ; ici une grosse colonne continue du sol jusqu'en
+            // haut, mêmes dégâts par hauteur (bas 16 / 13 %, milieu 12 %, haut 9 %)
+            let (y0, y1) = match e.id { 0 => (3.0, 48.0), 1 => (48.0, 92.0), _ => (92.0, 150.0) };
+            e.cap = true;
+            e.x = 0.0;
+            e.x2 = 0.0;
+            e.z = 3.0;
+            e.z2 = 3.0;
+            e.y = y0;
+            e.y2 = y1;
+            e.size = 11.0;
+            return e;
+        }
         if e.cap {
             // capsules très fines dans REX (0,6) : un peu épaissies pour toucher comme son tir (rayon du jeu)
             e.size = e.size.max(2.0);
