@@ -1,8 +1,8 @@
 [package]
-name = "super_sonic"
+name = "master_chief"
 version = "0.1.0"
 edition = "2021"
-description = "Super Sonic (Super Smash Bros REX) sur Sonic : portage (usage perso)"
+description = "Master Chief (Super Smash Bros REX) sur Snake : portage (usage perso)"
 
 [package.metadata.skyline]
 titleid = "01006A800016E000"
