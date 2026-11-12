@@ -306,7 +306,7 @@ const L_VOL: i32 = 14;              // lancé : images jusqu'au sol
 const L_DEVANT: f32 = 11.0;         // vidéo de REX : posé ~0,6 fois sa taille devant lui
 const L_LARGE: f32 = 5.0;           // demi-largeur de la colonne (vidéo : ~ la moitié de sa taille)
 const L_HAUT: f32 = 110.0;          // colonne : dépasse le haut de l'écran (vidéo)
-const L_ELAN: f32 = 3.9;            // vidéo : il monte ~5 fois sa taille (~95)
+const L_ELAN: f32 = 3.4;            // vidéo de REX : ~5 fois sa taille ; 3,9 l'envoyait hors de l'écran (vidéo v9)
 static mut L_ETAT: [u8; 8] = [0; 8];    // 0 rien, 1 en vol, 2 posé
 static mut L_POS: [(f32, f32); 8] = [(0.0, 0.0); 8];
 static mut L_DE: [(f32, f32); 8] = [(0.0, 0.0); 8];
@@ -473,17 +473,30 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
                 return;
             }
             // centre = position réelle de l'objet posé (vidéo : la colonne était à côté de l'ascenseur)
+            // (vidéo v9 : le modèle s'affiche ~13 plus loin que la position de l'objet) : position de l'os du modèle
             if let Some(cb) = c4_boma(boma) {
-                let cp = PostureModule::pos(cb);
-                L_POS[e] = ((*cp).x, L_POS[e].1);
+                let mut v = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+                ModelModule::joint_global_position(cb, Hash40::new("ChiefRoot"), &mut v, true);
+                if v.x.is_finite() && (v.x != 0.0 || v.y != 0.0) && (v.x - L_POS[e].0).abs() < 40.0 {
+                    L_POS[e] = (v.x, L_POS[e].1);
+                } else {
+                    let cp = PostureModule::pos(cb);
+                    L_POS[e] = ((*cp).x, L_POS[e].1);
+                }
             }
             let (bx, by) = L_POS[e];
             c4_silence(boma);
-            // faisceau du Boss Galaga (rayon tracteur bleu) retourné vers le haut : un seul, recréé s'il s'éteint
-            if L_FAISCEAU[e] == 0 || !EffectModule::is_exist_effect(boma, L_FAISCEAU[e]) {
-                let p = Vector3f { x: bx, y: by, z: 0.0 };
-                let r = Vector3f { x: 0.0, y: 0.0, z: 180.0 };
-                L_FAISCEAU[e] = EffectModule::req(boma, Hash40::new("sys_bossgalaga_beam"), &p, &r, 1.6, 0, 0, false, 0) as u32;
+            // colonne de lumière blanc bleuté (vidéo de REX) : traits lumineux verticaux serrés (l'effet du laser du
+            // up smash, visible en jeu) ; le faisceau du Boss Galaga ne s'affichait pas (vidéo v9)
+            if L_T[e] % 4 == 0 {
+                for (k, dx) in [-3.0f32, -1.0, 1.0, 3.0].iter().enumerate() {
+                    let c = if k % 2 == 0 { (0.55, 0.8, 1.0) } else { (0.9, 0.97, 1.0) };
+                    let mut h = 6.0 + 4.0 * k as f32;
+                    while h < L_HAUT {
+                        eff_monde(boma, "sys_attack_line", bx + dx, by + h, -90.0, 2.0, Some(c));
+                        h += 16.0;
+                    }
+                }
             }
             if L_T[e] % 10 == 0 {
                 eff_monde(boma, "sys_smash_flash_s", bx, by + 2.0, 0.0, 1.0, Some((0.85, 0.95, 1.0)));
