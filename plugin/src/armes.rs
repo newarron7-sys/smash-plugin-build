@@ -27,6 +27,9 @@ fn armes_de(motion: u64) -> &'static [&'static str] {
         m if m == hash40("attack_lw4") || m == hash40("attack_lw4_hold") => &["chief_sniper", "chief_rifledos"],
         m if m == hash40("attack_air_f") || m == hash40("landing_air_f") => &["chief_sword", "chief_swordb", "chief_rifledos"],
         m if m == hash40("attack_air_hi") || m == hash40("landing_air_hi") => &["chief_plasmar", "chief_plasmarl", "chief_rifledos"],
+        // B neutre tapé : magnum (REX : effet 0x1FB0012 sur LHaveN, fusil rangé dans le dos) et son rechargement
+        m if m == hash40("special_n_throw_m") || m == hash40("special_air_n_throw_m")
+            || m == hash40("special_lw_squat_start") || m == hash40("special_air_lw_wall") => &["chief_magnum", "chief_rifledos"],
         _ => &["chief_rifle"],
     }
 }

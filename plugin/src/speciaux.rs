@@ -31,12 +31,12 @@ use smashline::*;
 const BLEU: (f32, f32, f32) = (0.35, 0.7, 1.0);
 const VIOLET: (f32, f32, f32) = (0.75, 0.35, 1.0);
 
-unsafe fn slot(boma: *mut BattleObjectModuleAccessor) -> usize {
+pub(crate) unsafe fn slot(boma: *mut BattleObjectModuleAccessor) -> usize {
     (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7)
 }
 
 /// sol / air pendant un spécial : physique et animation suivent (il peut tomber d'un bord ou atterrir)
-unsafe fn situation(fighter: &mut L2CFighterCommon, sol_mot: &str, air_mot: &str, init: bool) {
+pub(crate) unsafe fn situation(fighter: &mut L2CFighterCommon, sol_mot: &str, air_mot: &str, init: bool) {
     let boma = fighter.module_accessor;
     let sol = StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND;
     if !init && !StatusModule::is_situation_changed(boma) {
@@ -58,7 +58,7 @@ unsafe fn situation(fighter: &mut L2CFighterCommon, sol_mot: &str, air_mot: &str
     }
 }
 
-unsafe fn finir(fighter: &mut L2CFighterCommon) -> bool {
+pub(crate) unsafe fn finir(fighter: &mut L2CFighterCommon) -> bool {
     let boma = fighter.module_accessor;
     if !MotionModule::is_end(boma) {
         return false;
@@ -386,7 +386,7 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     0.into()
 }
 
-unsafe fn eff_monde(boma: *mut BattleObjectModuleAccessor, eff: &str, x: f32, y: f32, rx: f32, sc: f32, c: Option<(f32, f32, f32)>) {
+pub(crate) unsafe fn eff_monde(boma: *mut BattleObjectModuleAccessor, eff: &str, x: f32, y: f32, rx: f32, sc: f32, c: Option<(f32, f32, f32)>) {
     let p = Vector3f { x, y, z: 0.0 };
     let r = Vector3f { x: rx, y: 0.0, z: 0.0 };
     let h = EffectModule::req(boma, Hash40::new(eff), &p, &r, sc, 0, 0, false, 0) as u32;
@@ -609,7 +609,7 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
 }
 
 // ------------------------------------------------------------------ scripts (effets / sons aux images de REX)
-unsafe extern "C" fn rien(_agent: &mut L2CAgentBase) {}
+pub(crate) unsafe extern "C" fn rien(_agent: &mut L2CAgentBase) {}
 
 unsafe extern "C" fn son_grenade(agent: &mut L2CAgentBase) {
     frame(agent.lua_state_agent, 3.0);
