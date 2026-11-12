@@ -276,6 +276,12 @@ unsafe fn jouer(agent: &mut L2CAgentBase, script: &str) {
 
 unsafe extern "C" fn vide(_agent: &mut L2CAgentBase) {}
 
+unsafe extern "C" fn son_charge_laser(agent: &mut L2CAgentBase) {
+    if is_excute(agent) {
+        PLAY_SE(agent, Hash40::new("se_snake_smash_h01"));
+    }
+}
+
 macro_rules! effets {
     ($($f:ident => $g:literal : $e:literal, $s:literal),* $(,)?) => {
         $( unsafe extern "C" fn $f(agent: &mut L2CAgentBase) { jouer(agent, $g); } )*
@@ -285,6 +291,11 @@ macro_rules! effets {
                 // sons de Snake (voix, RPG, mortier…) retirés ; les sons de Chief passent par l'effet (Fx::Son)
                 a.acmd($s, vide, Priority::Low);
             )*
+            // charge des smashs : les scripts de son de Snake jouent ses sons de smash, qui sont maintenant ceux de
+            // Chief (tir du fusil à pompe pendant la charge : vidéo) ; REX : seul le laser a un son de charge (n° 5)
+            a.acmd("sound_attacks4charge", vide, Priority::Low);
+            a.acmd("sound_attacklw4charge", vide, Priority::Low);
+            a.acmd("sound_attackhi4charge", son_charge_laser, Priority::Low);
         }
     };
 }
