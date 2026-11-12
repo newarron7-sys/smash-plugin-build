@@ -230,12 +230,14 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
 mod effets;
 mod armes;
 mod speciaux;
+mod galerie;
 
 unsafe extern "C" fn mc_frame(fighter: &mut L2CFighterCommon) {
     armes::visibilite(fighter);
     armes::ground_pound(fighter);
     armes::suivre_animation(fighter);
     speciaux::chaque_image(fighter);
+    galerie::chaque_image(fighter);
 }
 
 macro_rules! scripts {
