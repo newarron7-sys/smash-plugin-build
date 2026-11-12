@@ -203,7 +203,7 @@ unsafe fn item_manager() -> *mut smash::app::ItemManager {
     if ITEM_MGR == 0 { std::ptr::null_mut() } else { *(ITEM_MGR as *const *mut smash::app::ItemManager) }
 }
 
-const C_RAYON: f32 = 7.0;
+const C_RAYON: f32 = 10.0;
 static mut C_BOUM: [i32; 8] = [0; 8];
 
 /// demandé : la Fusion Coil explose au premier contact : un adversaire qui la touche (ou la frappe), elle-même frappée
@@ -237,7 +237,11 @@ unsafe fn coil_contact(fighter: &mut L2CFighterCommon) {
     }
     let cp = PostureModule::pos(ib);
     let (cx, cy) = ((*cp).x, (*cp).y);
-    let mut boum = DamageModule::damage(ib, 0) > 0.0;
+    // la caisse touche quelqu'un (lancée) ou se fait frapper : explosion à cette image même (vidéo : elle explosait
+    // après le contact, en retombant au sol)
+    let mut boum = DamageModule::damage(ib, 0) > 0.0
+        || AttackModule::is_infliction_status(ib, *COLLISION_KIND_MASK_HIT | *COLLISION_KIND_MASK_SHIELD)
+        || AttackModule::is_infliction(ib, *COLLISION_KIND_MASK_HIT | *COLLISION_KIND_MASK_SHIELD);
     if (st == *ITEM_STATUS_KIND_THROW || st == *ITEM_STATUS_KIND_THROWN)
         && GroundModule::is_touch(ib, *GROUND_TOUCH_FLAG_ALL as u32) {
         boum = true;
@@ -306,6 +310,15 @@ static mut L_ELAN_ATT: [bool; 8] = [false; 8];
 /// armé quand Chief est hors de la colonne : il faut y entrer pour être propulsé (pas en le posant, pas en
 /// retombant dedans)
 static mut L_ARME: [bool; 8] = [false; 8];
+static mut L_FAISCEAU: [u32; 8] = [0; 8];
+
+unsafe fn faisceau_fin(boma: *mut BattleObjectModuleAccessor) {
+    let e = slot(boma);
+    if L_FAISCEAU[e] != 0 {
+        EffectModule::kill(boma, L_FAISCEAU[e], false, true);
+        L_FAISCEAU[e] = 0;
+    }
+}
 static mut HI_FAIT: [bool; 8] = [false; 8];
 static mut HI_VOL: [i32; 8] = [L_VOL; 8];
 static mut HI_PAS_PRET: [bool; 8] = [false; 8];
@@ -450,20 +463,24 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
             if L_T[e] <= 0 {
                 L_ETAT[e] = 0;
                 c4_retirer(boma);
+                faisceau_fin(boma);
                 return;
+            }
+            // centre = position réelle de l'objet posé (vidéo : la colonne était à côté de l'ascenseur)
+            if let Some(cb) = c4_boma(boma) {
+                let cp = PostureModule::pos(cb);
+                L_POS[e] = ((*cp).x, L_POS[e].1);
             }
             let (bx, by) = L_POS[e];
             c4_silence(boma);
-            // colonne de lumière blanche / bleue du sol jusqu'en haut de l'écran (vidéo de REX)
-            if L_T[e] % 8 == 0 {
+            // faisceau du Boss Galaga (rayon tracteur bleu) retourné vers le haut : un seul, recréé s'il s'éteint
+            if L_FAISCEAU[e] == 0 || !EffectModule::is_exist_effect(boma, L_FAISCEAU[e]) {
+                let p = Vector3f { x: bx, y: by, z: 0.0 };
+                let r = Vector3f { x: 0.0, y: 0.0, z: 180.0 };
+                L_FAISCEAU[e] = EffectModule::req(boma, Hash40::new("sys_bossgalaga_beam"), &p, &r, 1.6, 0, 0, false, 0) as u32;
+            }
+            if L_T[e] % 10 == 0 {
                 eff_monde(boma, "sys_smash_flash_s", bx, by + 2.0, 0.0, 1.0, Some((0.85, 0.95, 1.0)));
-                // faisceaux verticaux blanc bleuté (pas l'effet sys_direction2 : traits blancs fins, vidéo)
-                let mut h = 6.0;
-                while h < L_HAUT {
-                    eff_monde(boma, "sys_attack_line", bx - 2.0, by + h, -90.0, 1.6, Some((0.6, 0.85, 1.0)));
-                    eff_monde(boma, "sys_attack_line", bx + 2.0, by + h + 6.0, -90.0, 1.6, Some((0.85, 0.95, 1.0)));
-                    h += 13.0;
-                }
             }
             // Chief entre dans la colonne au sol (en marchant, en courant...) : accroupi puis propulsé (vidéo de REX)
             let p = PostureModule::pos(boma);
@@ -515,6 +532,7 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
         L_ARME[e] = false;
         C_BOUM[e] = 0;
         c4_retirer(boma);
+        L_FAISCEAU[e] = 0;
         return;
     }
     lueur_grenade(fighter.module_accessor);

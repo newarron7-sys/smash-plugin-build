@@ -178,9 +178,10 @@ fn extras(script: &str, out: &mut Vec<(f32, Fx)>) {
             for f in [2.0, 26.0] {
                 out.push((f, Fx::Suit("sys_smash_flash_s", "haver", (0.0, 0.0, 3.0), (0.0, 0.0, 0.0), 0.6, VERT)));
             }
+            // demandé : explosions au point d'impact (coups à (0, 2, 11,6)) à la place de la fumée verte
             for f in [4.0, 30.0] {
                 out.push((f, Fx::Pose("sys_smash_flash", "top", (0.0, 3.0, 12.0), (0.0, 0.0, 0.0), 0.5, VERT)));
-                out.push((f + 1.0, Fx::Pose("sys_dash_smoke", "top", (0.0, 2.0, 10.0), (0.0, 0.0, 0.0), 0.4, (0.6, 0.9, 0.6))));
+                out.push((f, Fx::Pose("sys_bomb_a", "top", (0.0, 3.0, 11.6), (0.0, 0.0, 0.0), 0.55, (1.0, 1.0, 1.0))));
             }
         }
         "game_attackhi4" => {
