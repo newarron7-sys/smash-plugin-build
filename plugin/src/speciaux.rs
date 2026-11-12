@@ -9,7 +9,8 @@
 //!   explose quand on la frappe : ~10-19 %) = ITEM_KIND_POWDERBOX d'Ultimate ; une à la fois. Demandé : elle explose
 //!   au premier contact (la caisse d'Ultimate encaisse plusieurs coups) : explosion faite par le plugin.
 //! - up B « Gravity Lift » (vidéo de REX) : jeté au sol DEVANT lui à l'image 13 (V12000043), s'ouvre à plat (étoile
-//!   violette) ; grande colonne de lumière blanche / bleue ; Chief n'est pas propulsé en le posant : il doit marcher
+//!   violette) ; colonne de lumière (demandé : le jet cyan choisi sur photo, vers le haut, dans un halo blanc, comme
+//!   le Chief d'un autre moddeur) ; Chief n'est pas propulsé en le posant : il doit marcher
 //!   dedans, il s'accroupit puis monte très haut (~5 fois sa taille) et retombe ; il peut y retourner. En l'air :
 //!   lancé en diagonale vers le bas. S'il est déjà posé : « NotReady » (drapeau V22000010 de REX).
 //!   (essai de sys_direction2 pour les effets bleus : ce sont des traits blancs fins, retiré)
@@ -305,7 +306,8 @@ const L_DUREE: i32 = 600;           // « reste en place un bon moment » : 10 s
 const L_VOL: i32 = 14;              // lancé : images jusqu'au sol
 const L_DEVANT: f32 = 11.0;         // vidéo de REX : posé ~0,6 fois sa taille devant lui
 const L_LARGE: f32 = 5.0;           // demi-largeur de la colonne (vidéo : ~ la moitié de sa taille)
-const L_HAUT: f32 = 110.0;          // colonne : dépasse le haut de l'écran (vidéo)
+const L_HAUT: f32 = 110.0;          // zone où il est « dans la colonne » (vidéo de REX : jusqu'en haut de l'écran)
+const L_HALO: f32 = 45.0;           // hauteur du halo blanc (vidéo de l'autre Chief : ~2 fois sa taille)
 const L_ELAN: f32 = 3.4;            // vidéo de REX : ~5 fois sa taille ; 3,9 l'envoyait hors de l'écran (vidéo v9)
 static mut L_ETAT: [u8; 8] = [0; 8];    // 0 rien, 1 en vol, 2 posé
 static mut L_POS: [(f32, f32); 8] = [(0.0, 0.0); 8];
@@ -317,6 +319,8 @@ static mut L_ELAN_ATT: [bool; 8] = [false; 8];
 /// retombant dedans)
 static mut L_ARME: [bool; 8] = [false; 8];
 static mut L_FAISCEAU: [u32; 8] = [0; 8];
+static mut L_FAISCEAU_T: [i32; 8] = [0; 8];
+static mut L_TIRS: [u8; 8] = [0; 8];
 
 unsafe fn faisceau_fin(boma: *mut BattleObjectModuleAccessor) {
     let e = slot(boma);
@@ -391,11 +395,22 @@ unsafe fn eff_monde(boma: *mut BattleObjectModuleAccessor, eff: &str, x: f32, y:
     }
 }
 
-/// le modèle de REX de l'ascenseur est mis sur la C4 de Snake (dossier du costume c140 seulement). Créée, la C4 est
-/// dans la main de Snake (statut START, attachée à sa main : c'est pour ça qu'elle flottait à côté de Chief et le
-/// suivait, vidéo) : on la passe au statut « posée au sol » (ESTABLISH_GROUND, comme le bas B de Snake au sol) à
-/// l'endroit voulu. Effets / sons de C4 coupés ; jamais déclenchée (bas B remplacé), retirée à la fin (sa minuterie
-/// de 1600 images ne peut pas arriver : 600 images)
+/// le modèle de REX de l'ascenseur est mis sur la C4 de Snake (dossier du costume c140 seulement).
+///
+/// Vidéos v8 à v10 : l'ascenseur s'affichait toujours au centre du terrain (l'origine du monde), la colonne et la zone
+/// de propulsion au bon endroit, devant Chief. Code du jeu relu (statuts de la C4, lua2cpp_snake ; scripts du bas B
+/// de Snake) ; deux causes possibles, je ne peux pas savoir laquelle sans tester : les deux sont corrigées.
+/// - créée, la C4 est au statut START, tenue par une « contrainte de modèle » sur la main de Snake ; le jeu la libère
+///   avec ArticleModule::shoot (script du bas B : `is_constraint_article` puis `shoot`) ou `detach_constraint`. Les
+///   versions d'avant coupaient le lien (unlink_all) sans retirer la contrainte ;
+/// - au statut ESTABLISH_GROUND (utilisé avant), la C4 se replace toute seule à chaque image sur la position de son
+///   os « rot » (`joint_global_position(rot)` puis `PostureModule::set_pos`), cherche un perso où se coller (SEARCH)
+///   puis le sol sous elle ; notre modèle n'avait pas d'os « rot » : position lue (0, 0) = l'origine du monde.
+/// Maintenant : elle reste au statut START (aucune logique dans ce statut : ni déplacement, ni recherche, ni effet,
+/// ni son), libérée de la main comme le fait le jeu, et replacée à chaque image au point de pose (par l'objet et par
+/// ArticleModule). Le modèle a aussi les os « rot » et « top » (objets_ult.py) : si un statut de la C4 les lit, il
+/// trouve la position du modèle et plus l'origine.
+/// Jamais déclenchée (bas B remplacé), retirée à la fin (sa minuterie de 1600 images ne peut pas arriver : 600)
 unsafe fn c4_boma(boma: *mut BattleObjectModuleAccessor) -> Option<*mut BattleObjectModuleAccessor> {
     if !ArticleModule::is_exist(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4) {
         return None;
@@ -405,31 +420,52 @@ unsafe fn c4_boma(boma: *mut BattleObjectModuleAccessor) -> Option<*mut BattleOb
         return None;
     }
     let id = smash::app::lua_bind::Article::get_battle_object_id(a) as u32;
-    if !sv_battle_object::is_active(id) {
-        return None;
-    }
     let b = sv_battle_object::module_accessor(id);
     if b.is_null() { None } else { Some(b) }
 }
 
-unsafe fn c4_poser(boma: *mut BattleObjectModuleAccessor, x: f32, y: f32) {
+unsafe fn c4_poser(fighter: &mut L2CFighterCommon, x: f32, y: f32) {
+    let boma = fighter.module_accessor;
     if !ArticleModule::is_exist(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4) {
         ArticleModule::generate_article(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, false, -1);
     }
-    if let Some(cb) = c4_boma(boma) {
-        LinkModule::unlink_all(cb);
-    }
-    ArticleModule::set_pos(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, Vector3f { x, y, z: 0.0 });
-    ArticleModule::change_status(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, *WEAPON_SNAKE_C4_STATUS_KIND_ESTABLISH_GROUND,
-                                 ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
-    c4_silence(boma);
+    L_TIRS[slot(boma)] = 0;
+    c4_tenir(fighter, x, y);
 }
 
-unsafe fn c4_silence(boma: *mut BattleObjectModuleAccessor) {
+/// chaque image tant qu'il est posé : libérée de la main, au point de pose, effets / sons de C4 coupés.
+/// Renvoie la position où le modèle est vraiment dessiné (son os « rot »), si on peut la lire
+unsafe fn c4_tenir(fighter: &mut L2CFighterCommon, x: f32, y: f32) -> Option<(f32, f32)> {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    if !ArticleModule::is_exist(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4) {
+        return None;
+    }
+    // la méthode du jeu (3 essais au plus)
+    if L_TIRS[e] < 3 && FighterSpecializer_Snake::is_constraint_article(
+        fighter.battle_object as *mut Fighter, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, ArticleOperationTarget(*ARTICLE_OPE_TARGET_LAST)) {
+        L_TIRS[e] += 1;
+        ArticleModule::shoot(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL), false);
+    }
+    let mut vu = None;
     if let Some(cb) = c4_boma(boma) {
+        // et directement sur l'objet : la contrainte d'abord, le lien ensuite (dans cet ordre)
+        if LinkModule::is_model_constraint(cb) {
+            LinkModule::remove_model_constraint(cb, true);
+            LinkModule::unlink_all(cb);
+        }
+        PostureModule::set_pos(cb, &Vector3f { x, y, z: 0.0 });
         EffectModule::kill_all(cb, 0, true, false);
         SoundModule::stop_all_sound(cb);
+        // os « rot » : sur l'origine du modèle (« ChiefRoot » ne l'est pas : os de référence décalé de 5 vers le bas)
+        let mut v = Vector3f { x: f32::NAN, y: f32::NAN, z: 0.0 };
+        ModelModule::joint_global_position(cb, Hash40::new("rot"), &mut v, true);
+        if v.x.is_finite() && v.y.is_finite() {
+            vu = Some((v.x, v.y));
+        }
     }
+    ArticleModule::set_pos(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, Vector3f { x, y, z: 0.0 });
+    vu
 }
 
 unsafe fn c4_retirer(boma: *mut BattleObjectModuleAccessor) {
@@ -456,8 +492,9 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
             if L_T[e] <= 0 {
                 L_ETAT[e] = 2;
                 L_T[e] = L_DUREE;
+                L_FAISCEAU_T[e] = 6;
                 let (bx, by) = L_POS[e];
-                c4_poser(boma, bx, by);
+                c4_poser(fighter, bx, by);
                 eff_monde(boma, "sys_smash_flash", bx, by + 1.0, 0.0, 0.8, Some(VIOLET));
                 // posé sur lui (au bord) : pas propulsé tant qu'il n'en est pas sorti
                 let p = PostureModule::pos(boma);
@@ -472,29 +509,35 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
                 faisceau_fin(boma);
                 return;
             }
-            // centre = position réelle de l'objet posé (vidéo : la colonne était à côté de l'ascenseur)
-            // (vidéo v9 : le modèle s'affiche ~13 plus loin que la position de l'objet) : position de l'os du modèle
-            if let Some(cb) = c4_boma(boma) {
-                let mut v = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-                ModelModule::joint_global_position(cb, Hash40::new("ChiefRoot"), &mut v, true);
-                if v.x.is_finite() && (v.x != 0.0 || v.y != 0.0) && (v.x - L_POS[e].0).abs() < 40.0 {
-                    L_POS[e] = (v.x, L_POS[e].1);
-                } else {
-                    let cp = PostureModule::pos(cb);
-                    L_POS[e] = ((*cp).x, L_POS[e].1);
+            let (bx, by) = L_POS[e];
+            let vu = c4_tenir(fighter, bx, by);
+            // contrôle (rien si tout va bien) : si le modèle est dessiné ailleurs qu'au point de pose, éclat rouge là
+            // où il est, pour le voir sur une vidéo
+            if let Some((vx, vy)) = vu {
+                if L_T[e] < L_DUREE - 6 && L_T[e] % 20 == 0 && ((vx - bx).abs() > 2.0 || (vy - by).abs() > 2.0) {
+                    eff_monde(boma, "sys_smash_flash_s", vx, vy + 1.0, 0.0, 0.8, Some((1.0, 0.1, 0.1)));
                 }
             }
-            let (bx, by) = L_POS[e];
-            c4_silence(boma);
-            // colonne de lumière blanc bleuté (vidéo de REX) : traits lumineux verticaux serrés (l'effet du laser du
-            // up smash, visible en jeu) ; le faisceau du Boss Galaga ne s'affichait pas (vidéo v9)
-            if L_T[e] % 4 == 0 {
-                for (k, dx) in [-3.0f32, -1.0, 1.0, 3.0].iter().enumerate() {
-                    let c = if k % 2 == 0 { (0.55, 0.8, 1.0) } else { (0.9, 0.97, 1.0) };
-                    let mut h = 6.0 + 4.0 * k as f32;
-                    while h < L_HAUT {
-                        eff_monde(boma, "sys_attack_line", bx + dx, by + h, -90.0, 2.0, Some(c));
-                        h += 16.0;
+            // faisceau (demandé : l'effet bleu de la photo, « comme dans la vidéo » de l'autre Chief : pointe cyan qui
+            // monte de l'ascenseur dans un halo blanc) : le jet de la ceinture-fusée, retourné vers le haut (dans le
+            // jeu il part vers le bas) et étiré en hauteur ; un seul, recréé s'il s'éteint (6 images au moins entre deux)
+            L_FAISCEAU_T[e] += 1;
+            if (L_FAISCEAU[e] == 0 || !EffectModule::is_exist_effect(boma, L_FAISCEAU[e])) && L_FAISCEAU_T[e] >= 6 {
+                L_FAISCEAU_T[e] = 0;
+                let p = Vector3f { x: bx, y: by + 1.0, z: 0.0 };
+                let r = Vector3f { x: 180.0, y: 0.0, z: 0.0 };
+                L_FAISCEAU[e] = EffectModule::req(boma, Hash40::new(crate::armes::JET), &p, &r, 1.0, 0, 0, false, 0) as u32;
+                if L_FAISCEAU[e] != 0 {
+                    EffectModule::set_scale(boma, L_FAISCEAU[e], &Vector3f { x: 1.4, y: 2.6, z: 1.4 });
+                }
+            }
+            // halo : traits lumineux blanc bleuté de part et d'autre (plus léger qu'en v10)
+            if L_T[e] % 6 == 0 {
+                for (k, dx) in [-2.5f32, 2.5].iter().enumerate() {
+                    let mut h = 5.0 + 7.0 * k as f32;
+                    while h < L_HALO {
+                        eff_monde(boma, "sys_attack_line", bx + dx, by + h, -90.0, 1.6, Some((0.85, 0.95, 1.0)));
+                        h += 14.0;
                     }
                 }
             }
@@ -552,6 +595,7 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
         C_BOUM[e] = 0;
         c4_retirer(boma);
         L_FAISCEAU[e] = 0;
+        L_TIRS[e] = 0;
         return;
     }
     lueur_grenade(fighter.module_accessor);

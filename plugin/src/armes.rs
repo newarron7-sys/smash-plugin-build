@@ -7,7 +7,7 @@ use smash::app::*;
 use smash::hash40;
 use smash::lib::lua_const::*;
 use smash::lua2cpp::*;
-use smash::phx::Hash40;
+use smash::phx::{Hash40, Vector3f};
 use smash_script::*;
 
 const TOUTES: [&str; 13] = [
@@ -66,12 +66,49 @@ unsafe fn stop_libre(fighter: &mut L2CFighterCommon) {
     KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_CONTROL);
 }
 
+/// jet bleu choisi par le joueur dans la galerie d'effets (photo : dôme cyan à cœur clair posé au sol = le haut d'un
+/// jet qui part de son origine vers le bas, le reste caché par le sol) : celui de la ceinture-fusée du jeu (dans le
+/// jeu : EFFECT_FOLLOW sur l'objet, taille 1, un par tuyère, en boucle jusqu'à EFFECT_OFF_KIND)
+pub const JET: &str = "sys_rocketbelt_jet";
+const GP_JET_TAILLE: f32 = 0.55;
+static mut GP_JET: [[u32; 2]; 8] = [[0; 2]; 8];
+static mut GP_JET_T: [[i32; 2]; 8] = [[0; 2]; 8];
+
+/// demandé : « mets cet effet-là sur ses deux pieds pendant le down air ». Un jet par pied, créé une fois puis déplacé
+/// à chaque image sur le pied (position monde : il pointe toujours vers le bas, quelle que soit la pose), recréé s'il
+/// s'éteint (4 images au moins entre deux), retiré à la fin du coup
+unsafe fn jets_pieds(boma: *mut BattleObjectModuleAccessor, id: usize, actif: bool) {
+    let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    for (k, os) in ["footl", "footr"].iter().enumerate() {
+        let h = GP_JET[id][k];
+        if !actif {
+            if h != 0 {
+                EffectModule::kill(boma, h, false, true);
+                GP_JET[id][k] = 0;
+            }
+            GP_JET_T[id][k] = 4;
+            continue;
+        }
+        let mut p = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+        ModelModule::joint_global_position(boma, Hash40::new(os), &mut p, true);
+        let pos = Vector3f { x: p.x, y: p.y - 0.5, z: p.z };
+        GP_JET_T[id][k] += 1;
+        if h != 0 && EffectModule::is_exist_effect(boma, h) {
+            EffectModule::set_pos(boma, h, &pos);
+        } else if GP_JET_T[id][k] >= 4 {
+            GP_JET_T[id][k] = 0;
+            GP_JET[id][k] = EffectModule::req(boma, Hash40::new(JET), &pos, &z, GP_JET_TAILLE, 0, 0, false, 0) as u32;
+        }
+    }
+}
+
 pub unsafe fn ground_pound(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let id = id_of(boma);
     let dans = StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_ATTACK_AIR
         && MotionModule::motion_kind(boma) == hash40("attack_air_lw")
         && StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR;
+    jets_pieds(boma, id, dans && MotionModule::frame(boma) >= 3.0);
     if !dans {
         GP_LIBRE[id] = false;
         return;

@@ -215,13 +215,8 @@ fn extras(script: &str, out: &mut Vec<(f32, Fx)>) {
             }
         }
         "game_attackairlw" => {
-            // charge : jets bleus des propulseurs sous lui ; plongée : traînée
-            let mut f = 12.0;
-            while f < 67.0 {
-                out.push((f, Fx::Pose("sys_smash_flash_s", "footl", (0.0, -1.5, 0.0), (0.0, 0.0, 0.0), 0.6, BLEU)));
-                out.push((f, Fx::Pose("sys_smash_flash_s", "footr", (0.0, -1.5, 0.0), (0.0, 0.0, 0.0), 0.6, BLEU)));
-                f += 3.0;
-            }
+            // jets des propulseurs sous ses deux pieds : effet choisi par le joueur dans la galerie (jet bleu de la
+            // ceinture-fusée), tenu pendant tout le coup par armes.rs (ground_pound) ; plongée : traînée
             out.push((87.0, Fx::Suit("sys_attack_speedline", "top", (0.0, 10.0, 0.0), (-70.0, 0.0, 0.0), 1.2, BLANC)));
         }
         "game_landingairlw" => {
