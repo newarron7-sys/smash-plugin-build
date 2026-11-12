@@ -57,12 +57,12 @@ fn arme(script: &str) -> bool {
     matches!(script, "game_attacks3" | "game_attacks4" | "game_attacklw4" | "game_attackhi3" | "game_attacklw3")
 }
 
-/// tir d'une arme à balles : flamme au bout du canon puis fumée qui en sort (demandé : « logique »)
+/// tir d'une arme à balles : éclair de bouche du jeu (sys_muzzleflash) au bout du canon, comme sur la vidéo d'un autre
+/// Chief pour Ultimate (demandé : « les mêmes effets ») ; un petit filet de fumée ensuite
 fn canon(out: &mut Vec<(f32, Fx)>, f: f32, os: &'static str, p: (f32, f32, f32), sc: f32) {
-    out.push((f, Fx::Pose("sys_hit_fire", os, p, (0.0, 0.0, 0.0), 0.35 * sc, (1.0, 1.0, 1.0))));
-    out.push((f, Fx::Pose("sys_smash_flash_s", os, p, (0.0, 0.0, 0.0), 0.35 * sc, (1.0, 0.85, 0.5))));
-    out.push((f + 1.0, Fx::Pose("sys_dash_smoke", os, p, (0.0, 0.0, 0.0), 0.45 * sc, (0.85, 0.85, 0.85))));
-    out.push((f + 4.0, Fx::Pose("sys_dash_smoke", os, (p.0, p.1 + 1.0, p.2 + 1.0), (0.0, 0.0, 0.0), 0.35 * sc, (0.7, 0.7, 0.7))));
+    out.push((f, Fx::Pose("sys_muzzleflash", os, p, (0.0, 0.0, 0.0), 0.8 * sc, (1.0, 1.0, 1.0))));
+    out.push((f, Fx::Pose("sys_smash_flash_s", os, p, (0.0, 0.0, 0.0), 0.25 * sc, (1.0, 0.9, 0.55))));
+    out.push((f + 2.0, Fx::Pose("sys_dash_smoke", os, (p.0, p.1 + 0.5, p.2 + 0.5), (0.0, 0.0, 0.0), 0.22 * sc, (0.85, 0.85, 0.85))));
 }
 
 /// effets d'une image de coups (une seule fois par image)
@@ -83,13 +83,7 @@ fn effets_coups(script: &str, evs: &[Ev], out: &mut Vec<(f32, Fx)>) {
             let p = (e.x, e.y, e.z);
             match script {
                 // fusil à pompe : grosse flamme en cône devant le canon
-                "game_attacks4" => {
-                    canon(out, e.f, "top", p, 2.0);
-                    for k in 1..4 {
-                        let d = 4.0 * k as f32;
-                        out.push((e.f, Fx::Pose("sys_hit_fire", "top", (e.x, e.y, e.z + d), (0.0, 0.0, 0.0), 0.4 + 0.15 * k as f32, (1.0, 1.0, 1.0))));
-                    }
-                }
+                "game_attacks4" => canon(out, e.f, "top", p, 1.8),
                 "game_attacklw4" => canon(out, e.f, "top", p, 1.6),
                 _ => canon(out, e.f, "top", p, 1.0),
             }

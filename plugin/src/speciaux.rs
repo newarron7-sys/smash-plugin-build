@@ -136,30 +136,36 @@ unsafe extern "C" fn s_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     0.into()
 }
 
-/// lueur bleue électrique sur la bombe lancée (tant qu'elle existe)
+/// lueur bleue électrique sur la bombe lancée (tant qu'elle existe) ; quand elle disparaît (elle a explosé),
+/// explosion affichée à sa dernière position (le modèle de Chief n'a pas l'os « Have » où le jeu met la sienne)
+static mut G_POS: [(f32, f32); 8] = [(0.0, 0.0); 8];
+
 unsafe fn lueur_grenade(boma: *mut BattleObjectModuleAccessor) {
     let e = slot(boma);
     let id = G_ID[e];
     if id == 0 {
         return;
     }
-    if !sv_battle_object::is_active(id) || G_T[e] > 600 {
+    let actif = sv_battle_object::is_active(id);
+    let ib = if actif { sv_battle_object::module_accessor(id) } else { std::ptr::null_mut() };
+    if ib.is_null() || G_T[e] > 1500 {
+        if G_T[e] > 2 && G_T[e] <= 1500 {
+            let p = Vector3f { x: G_POS[e].0, y: G_POS[e].1, z: 0.0 };
+            let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+            EffectModule::req(boma, Hash40::new("sys_bomb_a"), &p, &z, 0.9, 0, 0, false, 0);
+        }
         G_ID[e] = 0;
         return;
     }
+    let p = PostureModule::pos(ib);
+    G_POS[e] = ((*p).x, (*p).y);
     G_T[e] += 1;
     if G_T[e] % 6 != 1 {
-        return;
-    }
-    let ib = sv_battle_object::module_accessor(id);
-    if ib.is_null() {
-        G_ID[e] = 0;
         return;
     }
     let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
     let h = EffectModule::req_follow(ib, Hash40::new("sys_hit_elec"), Hash40::new("top"), &z, &z, 0.3, true, 0, 0, 0, 0, 0, false, false);
     EffectModule::set_rgb(ib, h as u32, BLEU.0, BLEU.1, BLEU.2);
-
 }
 
 // ------------------------------------------------------------------ down B : Fusion Coil
