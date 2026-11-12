@@ -229,7 +229,6 @@ mod speciaux;
 
 unsafe extern "C" fn mc_frame(fighter: &mut L2CFighterCommon) {
     armes::visibilite(fighter);
-    armes::attaque_course(fighter);
     armes::ground_pound(fighter);
     armes::suivre_animation(fighter);
     speciaux::chaque_image(fighter);
@@ -255,7 +254,6 @@ scripts! {
     g_attack12 => "game_attack12",
     g_attack13 => "game_attack13",
     g_attackdash => "game_attackdash",
-    g_swingdash => "game_swingdash",
     g_attacks3 => "game_attacks3",
     g_attacks3s2 => "game_attacks3s2",
     g_attacks3s => "game_attacks3s",

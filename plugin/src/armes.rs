@@ -45,21 +45,8 @@ pub unsafe fn visibilite(fighter: &mut L2CFighterCommon) {
     }
 }
 
-/// attaque en course : dans REX, deux versions après le même début (AttackDash) : « Slide Kick » quand il court,
-/// « Spartan Charge » sinon (animation swing_dash = début + glissade, voir retarget_exo.py chief_coups)
-pub unsafe fn attaque_course(fighter: &mut L2CFighterCommon) {
-    let boma = fighter.module_accessor;
-    if StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_DASH {
-        return;
-    }
-    if MotionModule::motion_kind(boma) != hash40("attack_dash") || MotionModule::frame(boma) > 1.0 {
-        return;
-    }
-    if StatusModule::prev_status_kind(boma, 0) == *FIGHTER_STATUS_KIND_RUN {
-        MotionModule::change_motion(boma, Hash40::new("swing_dash"), 0.0, 1.0, false, 0.0, false, false);
-    }
-}
-
+/// attaque en course : « Spartan Charge » (AttackDash + AttackDashSpartan de REX). La « Slide Kick » (2e version de
+/// REX quand il court) passait par le mouvement swing_dash de Snake : pose en T en jeu (vidéo), retirée
 /// « Ground Pound » (images de son animation : départ 0-12, charge 12-67, plongée 67-261) : immobile en l'air
 /// pendant le départ et la charge ; A lâché (ou fin de la charge) -> plongée : petit bond puis piqué (REX : vitesse
 /// 1,6 vers l'avant, 3,8 vers le bas) jusqu'au sol ; l'atterrissage (landing_air_lw) fait l'onde de choc

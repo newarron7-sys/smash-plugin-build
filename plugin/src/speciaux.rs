@@ -6,10 +6,13 @@
 //!   verte de visée) ; ~20 % (vidéo). Ultimate a la même bombe collante (ITEM_KIND_CHEWING) : lueur bleue électrique
 //!   ajoutée dessus (vidéo : « boule bleue électrique »).
 //! - down B « Fusion Coil » : posée à l'image 9 (drapeau V12000044) : la caisse explosive de Brawl (on la porte, elle
-//!   explose quand on la frappe : ~10-19 %) = ITEM_KIND_POWDERBOX d'Ultimate ; une à la fois.
-//! - up B « Gravity Lift » : posé (sol) ou lancé en diagonale vers le bas (air) à l'image 13 (V12000043) ; colonne de
-//!   lumière qui le propulse très haut à chaque passage, reste un bon moment ; s'il est déjà posé : « NotReady »
-//!   (drapeau V22000010 de REX). En l'air il ne monte pas lui-même : il retombe (vidéo).
+//!   explose quand on la frappe : ~10-19 %) = ITEM_KIND_POWDERBOX d'Ultimate ; une à la fois. Demandé : elle explose
+//!   au premier contact (la caisse d'Ultimate encaisse plusieurs coups) : explosion faite par le plugin.
+//! - up B « Gravity Lift » (vidéo de REX) : jeté au sol DEVANT lui à l'image 13 (V12000043), s'ouvre à plat (étoile
+//!   violette) ; grande colonne de lumière blanche / bleue ; Chief n'est pas propulsé en le posant : il doit marcher
+//!   dedans, il s'accroupit puis monte très haut (~5 fois sa taille) et retombe ; il peut y retourner. En l'air :
+//!   lancé en diagonale vers le bas. S'il est déjà posé : « NotReady » (drapeau V22000010 de REX).
+//!   Effets bleus : ceux de la DI d'Ultimate (sys_direction2), agrandis (demandé).
 //! Statuts de Snake remplacés (Nikita, Cypher, C4 jamais créés) ; animations de REX : retarget_exo.py chief_speciaux.
 
 use smash::app::lua_bind::*;
@@ -26,6 +29,8 @@ use smashline::*;
 
 const BLEU: (f32, f32, f32) = (0.35, 0.7, 1.0);
 const VIOLET: (f32, f32, f32) = (0.75, 0.35, 1.0);
+/// effet bleu de la DI d'Ultimate (paramètres communs direction_effect_*) : demandé pour les effets bleus
+const DI: &str = "sys_direction2";
 
 unsafe fn slot(boma: *mut BattleObjectModuleAccessor) -> usize {
     (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7)
@@ -156,8 +161,11 @@ unsafe fn lueur_grenade(boma: *mut BattleObjectModuleAccessor) {
     let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
     let h = EffectModule::req_follow(ib, Hash40::new("sys_hit_elec"), Hash40::new("top"), &z, &z, 0.3, true, 0, 0, 0, 0, 0, false, false);
     EffectModule::set_rgb(ib, h as u32, BLEU.0, BLEU.1, BLEU.2);
-    let h2 = EffectModule::req_follow(ib, Hash40::new("sys_smash_flash_s"), Hash40::new("top"), &z, &z, 0.4, true, 0, 0, 0, 0, 0, false, false);
-    EffectModule::set_rgb(ib, h2 as u32, BLEU.0, BLEU.1, BLEU.2);
+    // lueur bleue : effet de la DI (demandé), en croix, agrandi
+    for rz in [0.0f32, 90.0] {
+        let r = Vector3f { x: 0.0, y: 0.0, z: rz };
+        EffectModule::req_follow(ib, Hash40::new(DI), Hash40::new("top"), &z, &r, 1.2, true, 0, 0, 0, 0, 0, false, false);
+    }
 }
 
 // ------------------------------------------------------------------ down B : Fusion Coil
@@ -190,20 +198,122 @@ unsafe extern "C" fn lw_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     0.into()
 }
 
+/// gestionnaire d'objets du jeu (singleton) : pour retirer la caisse qui explose
+static mut ITEM_MGR: usize = 0;
+unsafe fn item_manager() -> *mut smash::app::ItemManager {
+    if ITEM_MGR == 0 {
+        let mut a: usize = 0;
+        skyline::nn::ro::LookupSymbol(&mut a, "_ZN3lib9SingletonIN3app11ItemManagerEE9instance_E\0".as_ptr() as _);
+        ITEM_MGR = a;
+    }
+    if ITEM_MGR == 0 { std::ptr::null_mut() } else { *(ITEM_MGR as *const *mut smash::app::ItemManager) }
+}
+
+const C_RAYON: f32 = 7.0;
+static mut C_BOUM: [i32; 8] = [0; 8];
+
+/// demandé : la Fusion Coil explose au premier contact : un adversaire qui la touche (ou la frappe), elle-même frappée
+/// (dégâts reçus), ou lancée par Chief quand elle touche le sol / un mur / quelqu'un. Pas tant que Chief la tient.
+/// Explosion : la caisse est retirée, effet + son d'explosion du jeu, coup de Chief (crédité à Chief) à sa place
+unsafe fn coil_contact(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    if C_BOUM[e] > 0 {
+        C_BOUM[e] -= 1;
+        if C_BOUM[e] == 0 {
+            AttackModule::clear(boma, 7, false);
+        }
+    }
+    let id = C_ID[e];
+    if id == 0 {
+        return;
+    }
+    if !sv_battle_object::is_active(id) {
+        C_ID[e] = 0;
+        return;
+    }
+    let ib = sv_battle_object::module_accessor(id);
+    if ib.is_null() {
+        C_ID[e] = 0;
+        return;
+    }
+    let st = StatusModule::status_kind(ib);
+    if st == *ITEM_STATUS_KIND_HAVE {
+        return;
+    }
+    let cp = PostureModule::pos(ib);
+    let (cx, cy) = ((*cp).x, (*cp).y);
+    let mut boum = DamageModule::damage(ib, 0) > 0.0;
+    if (st == *ITEM_STATUS_KIND_THROW || st == *ITEM_STATUS_KIND_THROWN)
+        && GroundModule::is_touch(ib, *GROUND_TOUCH_FLAG_ALL as u32) {
+        boum = true;
+    }
+    if !boum {
+        let moi = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID);
+        let n = smash::app::Fighter::get_fighter_entry_count();
+        for i in 0..n.min(8) {
+            if i == moi {
+                continue;
+            }
+            let fid = smash::app::Fighter::get_id_from_entry_id(i);
+            if !sv_battle_object::is_active(fid) {
+                continue;
+            }
+            let fb = sv_battle_object::module_accessor(fid);
+            if fb.is_null() {
+                continue;
+            }
+            let p = PostureModule::pos(fb);
+            // le perso (pieds à p.y, ~16 de haut) recouvre la caisse
+            if ((*p).x - cx).abs() < C_RAYON && (*p).y < cy + 9.0 && (*p).y + 16.0 > cy - 1.0 {
+                boum = true;
+                break;
+            }
+        }
+    }
+    if !boum {
+        return;
+    }
+    C_ID[e] = 0;
+    let mgr = item_manager();
+    if !mgr.is_null() {
+        smash::app::lua_bind::ItemManager::remove_item_from_id(mgr, id);
+    }
+    let pos = Vector3f { x: cx, y: cy + 4.0, z: 0.0 };
+    let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    EffectModule::req(boma, Hash40::new("sys_bomb_a"), &pos, &z, 1.3, 0, 0, false, 0);
+    PLAY_SE(fighter, Hash40::new("se_common_bomb_l"));
+    // coup d'explosion (REX ~10-19 %) posé sur « top » de Chief, décalé jusqu'à la caisse (z = vers l'avant)
+    let fp = PostureModule::pos(boma);
+    let lr = PostureModule::lr(boma);
+    let dz = (cx - (*fp).x) * lr;
+    let dy = cy + 4.0 - (*fp).y;
+    ATTACK(fighter, 7, 0, Hash40::new("top"), 16.0, 361, 70, 0, 50, 12.0, 0.0, dy, dz, None, None, None, 0.6, 1.0,
+           *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, false, false, false, false, true,
+           *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
+           Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_BOMB);
+    C_BOUM[e] = 3;
+}
+
 // ------------------------------------------------------------------ up B : Gravity Lift
 const L_POSE: f32 = 13.0;
 const L_DUREE: i32 = 600;           // « reste en place un bon moment » : 10 s
-const L_VOL: i32 = 14;              // lancé en l'air : images jusqu'au sol
-const L_LARGE: f32 = 7.0;
-const L_HAUT: f32 = 45.0;
-const L_ELAN: f32 = 4.2;            // propulsé très haut
+const L_VOL: i32 = 14;              // lancé : images jusqu'au sol
+const L_DEVANT: f32 = 11.0;         // vidéo de REX : posé ~0,6 fois sa taille devant lui
+const L_LARGE: f32 = 5.0;           // demi-largeur de la colonne (vidéo : ~ la moitié de sa taille)
+const L_HAUT: f32 = 110.0;          // colonne : dépasse le haut de l'écran (vidéo)
+const L_ELAN: f32 = 3.9;            // vidéo : il monte ~5 fois sa taille (~95)
 static mut L_ETAT: [u8; 8] = [0; 8];    // 0 rien, 1 en vol, 2 posé
 static mut L_POS: [(f32, f32); 8] = [(0.0, 0.0); 8];
 static mut L_DE: [(f32, f32); 8] = [(0.0, 0.0); 8];
 static mut L_T: [i32; 8] = [0; 8];
 static mut L_RECH: [i32; 8] = [0; 8];
 static mut L_ELAN_ATT: [bool; 8] = [false; 8];
+/// armé quand Chief est hors de la colonne : il faut y entrer pour être propulsé (pas en le posant, pas en
+/// retombant dedans)
+static mut L_ARME: [bool; 8] = [false; 8];
 static mut HI_FAIT: [bool; 8] = [false; 8];
+static mut HI_VOL: [i32; 8] = [L_VOL; 8];
 static mut HI_PAS_PRET: [bool; 8] = [false; 8];
 
 unsafe extern "C" fn hi_main(fighter: &mut L2CFighterCommon) -> L2CValue {
@@ -230,21 +340,28 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         HI_FAIT[e] = true;
         let p = PostureModule::pos(boma);
         let (x, y) = ((*p).x, (*p).y);
+        let lr = PostureModule::lr(boma);
+        let mut hit = Vector2f { x: 0.0, y: 0.0 };
         if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
-            L_POS[e] = (x, y);
-            L_ETAT[e] = 2;
-            L_T[e] = L_DUREE;
+            // jeté au sol devant lui (vidéo de REX) ; au bord (pas de sol devant) : à ses pieds
+            let de = Vector2f { x: x + L_DEVANT * lr, y: y + 8.0 };
+            let dir = Vector2f { x: 0.0, y: -20.0 };
+            let (px, py) = if GroundModule::ray_check_hit_pos(boma, &de, &dir, &mut hit, true) { (hit.x, hit.y) } else { (x, y) };
+            L_DE[e] = (x + 4.0 * lr, y + 10.0);
+            L_POS[e] = (px, py);
+            L_ETAT[e] = 1;
+            L_T[e] = 6;
+            HI_VOL[e] = 6;
         } else {
             // lancé en diagonale vers le bas : il se pose là où la diagonale touche le sol
-            let lr = PostureModule::lr(boma);
             let de = Vector2f { x: x + 3.0 * lr, y: y + 6.0 };
             let dir = Vector2f { x: 60.0 * lr, y: -90.0 };
-            let mut hit = Vector2f { x: 0.0, y: 0.0 };
             if GroundModule::ray_check_hit_pos(boma, &de, &dir, &mut hit, true) {
                 L_DE[e] = (de.x, de.y);
                 L_POS[e] = (hit.x, hit.y);
                 L_ETAT[e] = 1;
                 L_T[e] = L_VOL;
+                HI_VOL[e] = L_VOL;
             }
         }
     }
@@ -252,18 +369,20 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     0.into()
 }
 
-unsafe fn eff_monde(boma: *mut BattleObjectModuleAccessor, eff: &str, x: f32, y: f32, rx: f32, sc: f32, c: (f32, f32, f32)) {
+unsafe fn eff_monde(boma: *mut BattleObjectModuleAccessor, eff: &str, x: f32, y: f32, rx: f32, sc: f32, c: Option<(f32, f32, f32)>) {
     let p = Vector3f { x, y, z: 0.0 };
     let r = Vector3f { x: rx, y: 0.0, z: 0.0 };
     let h = EffectModule::req(boma, Hash40::new(eff), &p, &r, sc, 0, 0, false, 0) as u32;
-    if h != 0 {
+    if let (true, Some(c)) = (h != 0, c) {
         EffectModule::set_rgb(boma, h, c.0, c.1, c.2);
     }
 }
 
-/// le modèle de REX de l'ascenseur est mis sur la C4 de Snake (dossier du costume c140 seulement) : objet posé, que
-/// le plugin garde à la place de l'ascenseur ; ses effets / sons de C4 coupés ; jamais déclenché (bas B remplacé),
-/// retiré à la fin (sa minuterie d'explosion de 1600 images ne peut pas arriver : 600 images)
+/// le modèle de REX de l'ascenseur est mis sur la C4 de Snake (dossier du costume c140 seulement). Créée, la C4 est
+/// dans la main de Snake (statut START, attachée à sa main : c'est pour ça qu'elle flottait à côté de Chief et le
+/// suivait, vidéo) : on la passe au statut « posée au sol » (ESTABLISH_GROUND, comme le bas B de Snake au sol) à
+/// l'endroit voulu. Effets / sons de C4 coupés ; jamais déclenchée (bas B remplacé), retirée à la fin (sa minuterie
+/// de 1600 images ne peut pas arriver : 600 images)
 unsafe fn c4_boma(boma: *mut BattleObjectModuleAccessor) -> Option<*mut BattleObjectModuleAccessor> {
     if !ArticleModule::is_exist(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4) {
         return None;
@@ -284,7 +403,16 @@ unsafe fn c4_poser(boma: *mut BattleObjectModuleAccessor, x: f32, y: f32) {
     if !ArticleModule::is_exist(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4) {
         ArticleModule::generate_article(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, false, -1);
     }
+    if let Some(cb) = c4_boma(boma) {
+        LinkModule::unlink_all(cb);
+    }
     ArticleModule::set_pos(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, Vector3f { x, y, z: 0.0 });
+    ArticleModule::change_status(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, *WEAPON_SNAKE_C4_STATUS_KIND_ESTABLISH_GROUND,
+                                 ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
+    c4_silence(boma);
+}
+
+unsafe fn c4_silence(boma: *mut BattleObjectModuleAccessor) {
     if let Some(cb) = c4_boma(boma) {
         EffectModule::kill_all(cb, 0, true, false);
         SoundModule::stop_all_sound(cb);
@@ -297,7 +425,7 @@ unsafe fn c4_retirer(boma: *mut BattleObjectModuleAccessor) {
     }
 }
 
-/// l'ascenseur : vol (lancé en l'air), colonne de lumière, propulsion de Chief quand il est dedans
+/// l'ascenseur : vol jusqu'au sol, colonne de lumière, propulsion de Chief quand il marche dedans
 unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let e = slot(boma);
@@ -306,16 +434,21 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
     }
     match L_ETAT[e] {
         1 => {
+            // la capsule part de sa main vers le point de pose (éclat violet le long du trajet)
             L_T[e] -= 1;
-            let t = 1.0 - (L_T[e].max(0) as f32) / (L_VOL as f32);
+            let t = 1.0 - (L_T[e].max(0) as f32) / (HI_VOL[e].max(1) as f32);
             let x = L_DE[e].0 + (L_POS[e].0 - L_DE[e].0) * t;
             let y = L_DE[e].1 + (L_POS[e].1 - L_DE[e].1) * t;
-            eff_monde(boma, "sys_smash_flash_s", x, y, 0.0, 0.5, VIOLET);
-            c4_poser(boma, x, y);
+            eff_monde(boma, "sys_smash_flash_s", x, y, 0.0, 0.5, Some(VIOLET));
             if L_T[e] <= 0 {
                 L_ETAT[e] = 2;
                 L_T[e] = L_DUREE;
-                eff_monde(boma, "sys_smash_flash", L_POS[e].0, L_POS[e].1 + 1.0, 0.0, 0.8, VIOLET);
+                let (bx, by) = L_POS[e];
+                c4_poser(boma, bx, by);
+                eff_monde(boma, "sys_smash_flash", bx, by + 1.0, 0.0, 0.8, Some(VIOLET));
+                // posé sur lui (au bord) : pas propulsé tant qu'il n'en est pas sorti
+                let p = PostureModule::pos(boma);
+                L_ARME[e] = ((*p).x - bx).abs() >= L_LARGE;
             }
         }
         2 => {
@@ -326,48 +459,50 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
                 return;
             }
             let (bx, by) = L_POS[e];
-            c4_poser(boma, bx, by);
-            // l'objet violet au sol et la colonne de lumière blanche / bleue (rafraîchis)
+            c4_silence(boma);
+            // colonne de lumière bleue (effets de la DI, demandé, agrandis) du sol jusqu'en haut de l'écran
             if L_T[e] % 8 == 0 {
-                eff_monde(boma, "sys_smash_flash_s", bx, by + 1.0, 0.0, 0.7, VIOLET);
-                for k in 0..4 {
-                    eff_monde(boma, "sys_attack_line", bx, by + 6.0 + 11.0 * k as f32, -90.0, 1.1, (0.75, 0.9, 1.0));
+                eff_monde(boma, "sys_smash_flash_s", bx, by + 2.0, 0.0, 1.0, Some((0.85, 0.95, 1.0)));
+                let mut h = 4.0;
+                while h < L_HAUT {
+                    eff_monde(boma, DI, bx - 1.5, by + h, 0.0, 2.6, None);
+                    eff_monde(boma, DI, bx + 1.5, by + h + 6.0, 0.0, 2.6, None);
+                    h += 13.0;
                 }
             }
-            // propulsion : dans la colonne, pas déjà lancé vers le haut
+            // Chief entre dans la colonne au sol (en marchant, en courant...) : accroupi puis propulsé (vidéo de REX)
             let p = PostureModule::pos(boma);
             let (x, y) = ((*p).x, (*p).y);
-            let dedans = (x - bx).abs() < L_LARGE && y >= by - 1.0 && y < by + L_HAUT;
-            if dedans && L_RECH[e] == 0 && !StatusModule::is_situation_changed(boma) {
+            let dedans = (x - bx).abs() < L_LARGE && y >= by - 2.0 && y < by + L_HAUT;
+            if !dedans {
+                L_ARME[e] = true;
+            }
+            let sol = StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND;
+            if dedans && sol && L_ARME[e] && L_RECH[e] == 0 && (y - by).abs() < 3.0 {
                 let st = StatusModule::status_kind(boma);
                 let libre = [*FIGHTER_STATUS_KIND_WAIT, *FIGHTER_STATUS_KIND_WALK, *FIGHTER_STATUS_KIND_DASH,
-                             *FIGHTER_STATUS_KIND_RUN, *FIGHTER_STATUS_KIND_TURN, *FIGHTER_STATUS_KIND_TURN_DASH,
-                             *FIGHTER_STATUS_KIND_TURN_RUN, *FIGHTER_STATUS_KIND_SQUAT, *FIGHTER_STATUS_KIND_SQUAT_WAIT,
-                             *FIGHTER_STATUS_KIND_LANDING, *FIGHTER_STATUS_KIND_LANDING_LIGHT, *FIGHTER_STATUS_KIND_FALL,
-                             *FIGHTER_STATUS_KIND_FALL_AERIAL, *FIGHTER_STATUS_KIND_JUMP, *FIGHTER_STATUS_KIND_JUMP_AERIAL,
-                             *FIGHTER_STATUS_KIND_JUMP_SQUAT, *FIGHTER_STATUS_KIND_FALL_SPECIAL];
+                             *FIGHTER_STATUS_KIND_RUN, *FIGHTER_STATUS_KIND_RUN_BRAKE, *FIGHTER_STATUS_KIND_TURN,
+                             *FIGHTER_STATUS_KIND_TURN_DASH, *FIGHTER_STATUS_KIND_TURN_RUN, *FIGHTER_STATUS_KIND_SQUAT,
+                             *FIGHTER_STATUS_KIND_SQUAT_WAIT, *FIGHTER_STATUS_KIND_SQUAT_RV,
+                             *FIGHTER_STATUS_KIND_LANDING, *FIGHTER_STATUS_KIND_LANDING_LIGHT];
                 if libre.contains(&st) {
+                    L_ARME[e] = false;
                     L_RECH[e] = 40;
                     L_ELAN_ATT[e] = true;
-                    if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
-                        // au sol : il décolle (saut), l'élan de la colonne remplace celui du saut
-                        StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_JUMP, true);
-                    } else if st == *FIGHTER_STATUS_KIND_FALL_SPECIAL {
-                        StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_FALL, true);
-                    }
-                    eff_monde(boma, "sys_smash_flash", bx, by + 3.0, 0.0, 0.9, (0.75, 0.9, 1.0));
+                    StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_JUMP_SQUAT, true);
+                    eff_monde(boma, "sys_smash_flash", bx, by + 3.0, 0.0, 1.0, Some((0.85, 0.95, 1.0)));
                     PLAY_SE(fighter, Hash40::new("se_snake_special_h01"));
                 }
             }
         }
         _ => {}
     }
-    // élan appliqué une fois en l'air (après le changement de statut éventuel)
+    // élan appliqué une fois en l'air (après l'accroupissement)
     if L_ELAN_ATT[e] && StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR
         && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_JUMP_SQUAT {
         L_ELAN_ATT[e] = false;
         sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY, L_ELAN);
-    } else if L_ELAN_ATT[e] && L_RECH[e] < 30 {
+    } else if L_ELAN_ATT[e] && L_RECH[e] < 25 {
         L_ELAN_ATT[e] = false;
     }
 }
@@ -382,10 +517,13 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
         C_ID[e] = 0;
         L_ETAT[e] = 0;
         L_ELAN_ATT[e] = false;
+        L_ARME[e] = false;
+        C_BOUM[e] = 0;
         c4_retirer(boma);
         return;
     }
     lueur_grenade(fighter.module_accessor);
+    coil_contact(fighter);
     ascenseur(fighter);
 }
 
