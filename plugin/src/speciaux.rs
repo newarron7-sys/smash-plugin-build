@@ -424,6 +424,9 @@ unsafe fn c4_boma(boma: *mut BattleObjectModuleAccessor) -> Option<*mut BattleOb
     if b.is_null() { None } else { Some(b) }
 }
 
+/// hauteur de l'os racine du modèle de l'ascenseur par rapport à son origine (model.nusktb, objets_ult.py)
+const C4_RACINE_Y: f32 = -5.235;
+
 unsafe fn c4_poser(fighter: &mut L2CFighterCommon, x: f32, y: f32) {
     let boma = fighter.module_accessor;
     if !ArticleModule::is_exist(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4) {
@@ -434,7 +437,7 @@ unsafe fn c4_poser(fighter: &mut L2CFighterCommon, x: f32, y: f32) {
 }
 
 /// chaque image tant qu'il est posé : libérée de la main, au point de pose, effets / sons de C4 coupés.
-/// Renvoie la position où le modèle est vraiment dessiné (son os « rot »), si on peut la lire
+/// Renvoie la position où le modèle est vraiment dessiné (lue sur son os), si on peut la lire
 unsafe fn c4_tenir(fighter: &mut L2CFighterCommon, x: f32, y: f32) -> Option<(f32, f32)> {
     let boma = fighter.module_accessor;
     let e = slot(boma);
@@ -457,11 +460,12 @@ unsafe fn c4_tenir(fighter: &mut L2CFighterCommon, x: f32, y: f32) -> Option<(f3
         PostureModule::set_pos(cb, &Vector3f { x, y, z: 0.0 });
         EffectModule::kill_all(cb, 0, true, false);
         SoundModule::stop_all_sound(cb);
-        // os « rot » : sur l'origine du modèle (« ChiefRoot » ne l'est pas : os de référence décalé de 5 vers le bas)
+        // os « ChiefRoot » (aucune animation de la C4 ne le connaît) ; il est C4_RACINE_Y sous l'origine du modèle
+        // (os du modèle de référence)
         let mut v = Vector3f { x: f32::NAN, y: f32::NAN, z: 0.0 };
-        ModelModule::joint_global_position(cb, Hash40::new("rot"), &mut v, true);
-        if v.x.is_finite() && v.y.is_finite() {
-            vu = Some((v.x, v.y));
+        ModelModule::joint_global_position(cb, Hash40::new("ChiefRoot"), &mut v, true);
+        if v.x.is_finite() && v.y.is_finite() && (v.x != 0.0 || v.y != 0.0) {
+            vu = Some((v.x, v.y - C4_RACINE_Y));
         }
     }
     ArticleModule::set_pos(boma, *FIGHTER_SNAKE_GENERATE_ARTICLE_C4, Vector3f { x, y, z: 0.0 });
@@ -511,10 +515,11 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
             }
             let (bx, by) = L_POS[e];
             let vu = c4_tenir(fighter, bx, by);
-            // contrôle (rien si tout va bien) : si le modèle est dessiné ailleurs qu'au point de pose, éclat rouge là
-            // où il est, pour le voir sur une vidéo
+            // contrôle (rien si tout va bien) : si le modèle est lu ailleurs qu'au point de pose, éclat rouge là où il
+            // est pendant les 2 premières secondes, pour le voir sur une vidéo
             if let Some((vx, vy)) = vu {
-                if L_T[e] < L_DUREE - 6 && L_T[e] % 20 == 0 && ((vx - bx).abs() > 2.0 || (vy - by).abs() > 2.0) {
+                if L_T[e] < L_DUREE - 6 && L_T[e] > L_DUREE - 126 && L_T[e] % 20 == 0
+                    && ((vx - bx).abs() > 3.0 || (vy - by).abs() > 3.0) {
                     eff_monde(boma, "sys_smash_flash_s", vx, vy + 1.0, 0.0, 0.8, Some((1.0, 0.1, 0.1)));
                 }
             }
