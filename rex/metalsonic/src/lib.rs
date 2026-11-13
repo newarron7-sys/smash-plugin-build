@@ -93,12 +93,17 @@ pub struct Mv {
 
 include!("generated.rs");
 
+mod effets;
+
 
 /// perso de base (nom interne) : Sonic
 pub const BASE: &str = "sonic";
 
 /// demandé : sur la case Metal Sonic déjà présente à la sélection (ui_chara_msonic : costumes c08 à c15 de Sonic)
 pub const SS_COSTUMES: [usize; 8] = [8, 9, 10, 11, 12, 13, 14, 15];
+
+/// poussées (script, image de REX, vitesse vers l'avant, vers le haut) : arrière aérien, réacteur à l'image 6 de REX
+pub const POUSSEES: &[(&str, f32, f32, f32)] = &[("game_attackairb", 6.0, 1.6, 0.4)];
 
 pub(crate) fn find(script: &str) -> Option<&'static Mv> {
     MOVES.iter().find(|m| m.script == script)
@@ -109,6 +114,8 @@ pub(crate) fn find(script: &str) -> Option<&'static Mv> {
 static mut CORPS_CHANGE: [bool; 8] = [false; 8];
 
 unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
+    effets::flamme_course(fighter);
+    effets::corps_normal(fighter);
     let boma = fighter.module_accessor;
     let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
     if id < 8 && CORPS_CHANGE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_S4 {
@@ -146,10 +153,25 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     let delay = 0.0;
     // l'arrière aérien envoie derrière lui
     let lr_check = if script == "game_attackairb" { *ATTACK_LR_CHECK_B } else { *ATTACK_LR_CHECK_F };
+    // demandé : poussée du réacteur (arrière aérien « Jet Thrust » : le feu sort de son dos et le pousse vers l'avant)
+    let poussee = POUSSEES.iter().find(|p| p.0 == script).copied();
+    let mut poussee_faite = false;
     // smash : image où la charge commence (juste avant le coup si REX n'a pas de sous-action « Start »)
     let hold_f = if mv.hold > 0.0 { mv.hold / r } else { ((first_hit - 2.0) / r).max(1.0) };
     for e in evs {
         let af = if e.rate > 0.0 { (e.f + delay) / r } else { ((e.f + delay) / r).max(1.0) };
+        if let Some((_, pf, vx, vy)) = poussee {
+            if !poussee_faite && af >= pf / r {
+                if pf / r > cur {
+                    frame(lua, pf / r);
+                    cur = pf / r;
+                }
+                if is_excute(agent) {
+                    SET_SPEED_EX(agent, vx, vy, *KINETIC_ENERGY_RESERVE_ATTRIBUTE_MAIN);
+                }
+                poussee_faite = true;
+            }
+        }
         if mv.kind == 1 && !smash_hold_done && af >= hold_f {
             // le smash se charge à son image (avant les événements qui viennent après)
             if hold_f > cur {
@@ -228,6 +250,7 @@ macro_rules! scripts {
             let mut a = Agent::new(BASE);
             a.set_costume(SS_COSTUMES.to_vec());
             $( if find($s).is_some() { a.acmd($s, $f, Priority::Low); } )*
+            effets::install(&mut a);
             a.on_line(Main, ss_frame);
             a.install();
         }
