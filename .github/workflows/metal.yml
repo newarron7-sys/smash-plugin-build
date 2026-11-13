@@ -1,7 +1,7 @@
 name: Metal Sonic (REX) sur Sonic c08-c15 - modele, coups, animations (chiffre)
 on:
   push:
-    branches: [ main ]
+    branches: [ metalsonic ]
     paths: [ '.github/workflows/metal.yml' ]
   workflow_dispatch:
 permissions:

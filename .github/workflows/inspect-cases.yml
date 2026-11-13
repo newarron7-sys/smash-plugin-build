@@ -1,7 +1,7 @@
 name: Inspecter les cases (ui_chara_db, msg_name, config.json) - sortie chiffree session
 on:
   push:
-    branches: [ main ]
+    branches: [ metalsonic ]
     paths: [ '.github/workflows/inspect-cases.yml' ]
 permissions:
   contents: write

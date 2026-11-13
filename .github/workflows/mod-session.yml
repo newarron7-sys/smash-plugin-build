@@ -1,7 +1,7 @@
 name: Recuperer un skin (chiffre, cle du depot + cle de la session)
 on:
   push:
-    branches: [ main ]
+    branches: [ metalsonic ]
     paths: [ '.github/workflows/mod-session.yml' ]
 permissions:
   contents: write

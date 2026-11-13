@@ -1,7 +1,7 @@
 name: REX - Metal Sonic (recuperation + analyse, chiffre)
 on:
   push:
-    branches: [ main ]
+    branches: [ metalsonic ]
     paths: [ '.github/workflows/rex-metal.yml' ]
   workflow_dispatch:
 permissions:

@@ -1,7 +1,7 @@
 name: GameBanana - recherche de skins (noms publics)
 on:
   push:
-    branches: [ main ]
+    branches: [ metalsonic ]
     paths: [ '.github/workflows/gb-recherche.yml' ]
 jobs:
   r:
