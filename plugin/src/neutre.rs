@@ -99,7 +99,7 @@ unsafe fn viser(boma: *mut BattleObjectModuleAccessor, deg: f32) {
     tourner(boma, "bust", deg * PART_BUST);
 }
 
-const HAUTS: [&str; 6] = ["special_n_hold", "special_air_n_hold", "special_air_n_throw_lw", "special_air_n_throw_hi",
+const HAUTS: [&str; 10] = ["special_lw_ground", "special_lw_squat_ground", "special_lw_squat_blast", "special_lw_enemy", "special_n_hold", "special_air_n_hold", "special_air_n_throw_lw", "special_air_n_throw_hi",
                            "special_n_throw_hi", "special_n_throw_lw"];
 
 /// où le jeu met le haut du corps pendant la posture : Some(0) = mouvement principal, Some(k) = mouvement partiel k,
@@ -223,6 +223,10 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
     let deg = angle_visee(VISEE[e]);
     viser(boma, deg - angle_visee(VISEE_DEPART));
 
+    // v18 / v19 (vidéo) : immobile en posture, jambes droites et serrées : à l'arrêt le jeu ne met pas de jambes sous
+    // le geste du haut du corps (en marchant, celles de la marche) ; « special_lw_ground » = le tir avec les jambes de
+    // la posture de REX (SpecialNLegWait)
+    let debout = st == *FIGHTER_SNAKE_STATUS_KIND_SPECIAL_N_HOLD_WAIT;
     let a = ControlModule::check_button_trigger(boma, *CONTROL_PAD_BUTTON_ATTACK);
     let libre = HAUT[e] == H_ATTENTE || HAUT[e] == H_TIR || HAUT[e] == H_VIDE;
     if libre && a {
@@ -242,6 +246,8 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
     let t = HT[e];
     match HAUT[e] {
         H_TIR => {
+            // immobile : la version avec les jambes ; en marchant : celle du jeu (haut du corps seul)
+            haut(boma, e, if debout { "special_lw_ground" } else if air { "special_air_n_hold" } else { "special_n_hold" }, false);
             if t % 5 == 0 {
                 // une balle (REX : sous-programme 0x28964 ; 1 %, croissance 25, base 8, taille 1,85)
                 FUSIL[e] -= 1;
@@ -252,6 +258,9 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
                 eclair(boma, my, mz, deg, LONG_FUSIL, 0.7, 0);
                 // geste de tir : c'est l'animation « tenir » du jeu elle-même (SpecialNGunShoot en boucle) : v13 / v14,
                 // jambes figées en marchant quand le plugin changeait le haut du corps à chaque balle
+                if debout {
+                    haut(boma, e, "special_lw_ground", true);
+                }
                 if !RAFALE[e] {
                     SoundModule::play_se(boma, Hash40::new("se_snake_special_n03"), true, false, false, false, enSEType(0));
                     RAFALE[e] = true;
@@ -260,13 +269,16 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
         }
         H_VIDE => {
             if t == 0 {
+                if debout {
+                    haut(boma, e, "special_lw_enemy", true);
+                }
                 PLAY_SE(fighter, Hash40::new("se_snake_special_n05"));
             }
         }
         H_CROSSE => {
             if t == 0 {
                 PLAY_SE(fighter, Hash40::new("se_snake_special_n06"));
-                haut(boma, e, "special_n_throw_hi", true);
+                haut(boma, e, if debout { "special_lw_squat_blast" } else { "special_n_throw_hi" }, true);
             }
             if t == 5 {
                 // REX : 2 coups sur BustN (6 %) : le 1er pour les persos au sol, le 2e (vers le bas) en l'air
@@ -289,7 +301,7 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
         H_RECHARGE => {
             if t == 0 {
                 PLAY_SE(fighter, Hash40::new("se_snake_special_n04"));
-                haut(boma, e, "special_n_throw_lw", true);
+                haut(boma, e, if debout { "special_lw_squat_ground" } else { "special_n_throw_lw" }, true);
             }
             if t == 67 {
                 FUSIL[e] = FUSIL_MAX;
@@ -300,7 +312,7 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
             }
         }
         _ => {
-            haut(boma, e, if air { "special_air_n_hold" } else { "special_n_hold" }, false);
+            haut(boma, e, if debout { "special_lw_ground" } else if air { "special_air_n_hold" } else { "special_n_hold" }, false);
         }
     }
     HT[e] += 1;
@@ -382,7 +394,7 @@ pub fn install(a: &mut Agent) {
     // son B bas réutilisés (création de la C4) : vides, le plugin fait tout
     for m in ["specialnstart", "specialairnstart", "specialnhold", "specialairnhold", "specialnthrowm",
               "specialnthrowhi", "specialnthrowlw", "specialairnthrowm", "specialairnthrowhi", "specialairnthrowlw",
-              "specialnthrowfail", "specialairnthrowfail", "specialnclose", "speciallwsquatstart",
+              "specialnthrowfail", "specialairnthrowfail", "specialnclose", "speciallwsquatstart", "speciallwground", "speciallwsquatground", "speciallwsquatblast", "speciallwenemy",
               "specialairlwwall", "specialairlwblast"] {
         for k in ["game_", "effect_", "sound_", "expression_"] {
             let n: &'static str = Box::leak(format!("{}{}", k, m).into_boxed_str());
