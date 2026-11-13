@@ -1,4 +1,6 @@
 name: Compilation du plugin (code seulement ; donnees chiffrees, sortie chiffree)
+# branche supersonic-vol : Super Sonic compilé à part (ne touche ni main ni la branche sortie de Master Chief) ;
+# sortie sur la branche sortie_supersonic, chiffrée aussi pour la clé publique de la session (cle_session.pem)
 on:
   push:
     branches: [ main ]
@@ -6,7 +8,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: plugin
+  group: plugin-supersonic
   cancel-in-progress: true
 jobs:
   build:
@@ -43,11 +45,15 @@ jobs:
           N=$(ls target/aarch64-skyline-switch/release/*.nro | head -1); test -s "$N"
           rm -f src/generated.rs
           printf '%s' "$CLE" > /tmp/cle && openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/cle -in "$N" -out /tmp/plugin.nro.enc && rm -f /tmp/cle
+          # copie pour la session : clé AES tirée au hasard, elle-même chiffrée avec la clé publique de la session
+          openssl rand -out /tmp/k.bin 32
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in "$N" -out /tmp/plugin.session.enc
+          openssl pkeyutl -encrypt -pubin -inkey ../cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/k.session.enc && rm -f /tmp/k.bin
         env:
           CLE: ${{ secrets.CLE }}
       - name: Sortie chiffree (branche sortie)
         run: |
-          mkdir -p /tmp/sortie && cp /tmp/plugin.nro.enc /tmp/sortie/ && cd /tmp/sortie
-          git init -q -b sortie && git config user.name "github-actions" && git config user.email "github-actions@users.noreply.github.com"
+          mkdir -p /tmp/sortie && cp /tmp/plugin.nro.enc /tmp/plugin.session.enc /tmp/k.session.enc /tmp/sortie/ && cd /tmp/sortie
+          git init -q -b sortie_supersonic && git config user.name "github-actions" && git config user.email "github-actions@users.noreply.github.com"
           git add -A && git commit -q -m "plugin chiffre ${GITHUB_SHA}"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" sortie
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" sortie_supersonic
