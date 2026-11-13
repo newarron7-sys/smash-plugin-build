@@ -31,7 +31,8 @@ fn armes_de(motion: u64) -> &'static [&'static str] {
         m if m == hash40("special_n_throw_m") || m == hash40("special_air_n_throw_m")
             || m == hash40("special_lw_squat_start") || m == hash40("special_air_lw_wall") => &["chief_magnum", "chief_rifledos"],
         // Final Smash : lance-roquettes de REX (FitChiefFinal.pac, effet 0xE00007 sur RHaveN)
-        m if m == hash40("final_start") || m == hash40("final_air_start") => &["chief_lanceur", "chief_rifledos"],
+        m if m == hash40("final_start_r") || m == hash40("final_start_l") || m == hash40("final_air_start_r")
+            || m == hash40("final_air_start_l") => &["chief_lanceur", "chief_rifledos"],
         _ => &["chief_rifle"],
     }
 }

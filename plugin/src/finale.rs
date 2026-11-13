@@ -75,8 +75,9 @@ unsafe fn fx_os(boma: *mut BattleObjectModuleAccessor, name: &str, os: &str, z: 
     h
 }
 
-unsafe fn en_air(boma: *mut BattleObjectModuleAccessor) {
-    StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
+unsafe fn en_air(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    fighter.set_situation(SITUATION_KIND_AIR.into());
     GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
     KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
     KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
@@ -84,13 +85,17 @@ unsafe fn en_air(boma: *mut BattleObjectModuleAccessor) {
 
 unsafe extern "C" fn final_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
+    // v29 (vidéo : après le Final Smash il le gardait) : début du Final Smash annoncé au jeu, comme le statut Final de
+    // Snake (dump Coolsonickirby : événement 0x201bc9217c) ; sans lui la Smash Ball n'est pas consommée
+    notify_event_msc_cmd!(fighter, Hash40::new_raw(0x201bc9217c));
+    AreaModule::set_whole(boma, false);
     let air = StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR;
     let p = *PostureModule::pos(boma);
     let lr = PostureModule::lr(boma);
     let cible = (p.x + CIBLE_AV * lr, if air { p.y - 30.0 } else { p.y });
     ST[slot(boma)] = St { g: 0, air0: air, x0: p.x, y0: p.y, lr, cible, dep: (p.x, p.y + 12.0), aura: 0, vy: 0.0 };
     if air {
-        en_air(boma);
+        en_air(fighter);
     } else {
         KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_GROUND_STOP);
         GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_GROUND_CLIFF_STOP));
@@ -98,7 +103,15 @@ unsafe extern "C" fn final_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
     // REX : intangible (06050100 3)
     HitModule::set_whole(boma, HitStatus(*HIT_STATUS_XLU), 0);
-    MotionModule::change_motion(boma, Hash40::new(if air { "final_air_start" } else { "final_start" }), 0.0, 1.0, false, 0.0, false, false);
+    // v29 (vidéo : T-pose) : les mouvements du Final de Snake s'appellent final_start_r / _l et final_air_start_r / _l
+    // (son statut Final choisit selon lr) ; « final_start » n'existe pas
+    let mot = match (air, lr < 0.0) {
+        (false, false) => "final_start_r",
+        (false, true) => "final_start_l",
+        (true, false) => "final_air_start_r",
+        (true, true) => "final_air_start_l",
+    };
+    MotionModule::change_motion(boma, Hash40::new(mot), 0.0, 1.0, false, 0.0, false, false);
     fighter.sub_shift_status_main(L2CValue::Ptr(final_loop as *const () as _))
 }
 
@@ -111,30 +124,26 @@ unsafe extern "C" fn final_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     if MotionModule::frame(boma) >= MotionModule::end_frame(boma) - 1.0 {
         MotionModule::set_rate(boma, 0.0);
     }
-    // déplacement : immobile, puis montée en arrière qui ralentit, en l'air immobile, puis retombée après le tir
-    let (vx, vy) = if g < G_DECOLLE {
-        (0.0, 0.0)
-    } else if g < G_DECOLLE + G_VOL {
+    // v29 (vidéo : il ne décollait pas) : montée posée image par image (trajet en arrière qui ralentit), immobile en
+    // l'air pendant la visée et le tir, puis chute normale du jeu (gravité ; atterrissage détecté par le jeu)
+    if g >= G_DECOLLE && g <= G_DECOLLE + G_VOL {
         let k = (g - G_DECOLLE) as f32 / G_VOL as f32;
-        let f = 2.0 * (1.0 - k) / G_VOL as f32;
-        (-RECUL * f * s.lr, MONTEE * f)
-    } else if g < G_BOUM + 4 {
-        (0.0, 0.0)
-    } else {
-        ST[e].vy = (ST[e].vy - 0.09).max(-2.2);
-        (0.0, ST[e].vy)
-    };
-    if g >= G_DECOLLE {
-        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, vx, vy);
+        let e2 = 1.0 - (1.0 - k) * (1.0 - k);
+        let z = (*PostureModule::pos(boma)).z;
+        let p = Vector3f { x: s.x0 - RECUL * e2 * s.lr, y: s.y0 + MONTEE * e2, z };
+        PostureModule::set_pos(boma, &p);
+    }
+    if g <= G_BOUM + 4 {
+        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
+    } else if g == G_BOUM + 5 {
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_FALL);
+        KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
     }
     evenement(fighter, g);
     // retombé au sol : fin
-    if g > G_BOUM + 4 && StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
-        fighter.change_status(FIGHTER_STATUS_KIND_LANDING.into(), false.into());
-        return 0.into();
-    }
-    if g > G_BOUM + 4 && GroundModule::is_touch(boma, *GROUND_TOUCH_FLAG_DOWN as u32) {
-        StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_GROUND), true);
+    if g > G_BOUM + 6 && (StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND
+        || GroundModule::is_touch(boma, *GROUND_TOUCH_FLAG_DOWN as u32)) {
+        fighter.set_situation(SITUATION_KIND_GROUND.into());
         GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_GROUND_CLIFF_STOP));
         fighter.change_status(FIGHTER_STATUS_KIND_LANDING.into(), false.into());
         return 0.into();
@@ -164,7 +173,7 @@ unsafe fn evenement(fighter: &mut L2CFighterCommon, g: i32) {
     }
     if g == G_DECOLLE {
         // décollage : éclat blanc au sol, souffle autour de lui (REX image 5 : 2 coups de 14 %)
-        en_air(boma);
+        en_air(fighter);
         PLAY_SE(fighter, Hash40::new("se_snake_final01"));
         fx_w(boma, "sys_smash_flash", s.x0, s.y0 + 4.0, 2.2, BLANC);
         LANDING_EFFECT(fighter, Hash40::new("sys_landing_smoke"), Hash40::new("top"), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false);
@@ -266,7 +275,7 @@ pub fn install(a: &mut Agent) {
     a.status(Exec, *FIGHTER_STATUS_KIND_FINAL, final_exec);
     a.status(End, *FIGHTER_STATUS_KIND_FINAL, final_end);
     // scripts de Snake (Cypher, missiles, caméra) : vidés
-    for m in ["finalstart", "finalairstart", "finalstartl", "finalairstartl"] {
+    for m in ["finalstart", "finalairstart", "finalstartl", "finalairstartl", "finalstartr", "finalairstartr"] {
         for p in ["game_", "effect_", "sound_", "expression_"] {
             let n: &'static str = Box::leak(format!("{}{}", p, m).into_boxed_str());
             a.acmd(n, vide, Priority::Low);
