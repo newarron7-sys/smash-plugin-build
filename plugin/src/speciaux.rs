@@ -459,6 +459,10 @@ unsafe fn c4_tenir(fighter: &mut L2CFighterCommon, x: f32, y: f32) -> Option<(f3
             LinkModule::unlink_all(cb);
         }
         PostureModule::set_pos(cb, &Vector3f { x, y, z: 0.0 });
+        // v13 / v14 : ascenseur debout (pattes et pétales vers le haut) : la C4 garde la rotation de la main de Snake
+        // une fois libérée ; remise à plat (le modèle de REX est à plat dans son repère) et tournée vers la droite
+        PostureModule::set_rot(cb, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 0);
+        PostureModule::set_lr(cb, 1.0);
         EffectModule::kill_all(cb, 0, true, false);
         SoundModule::stop_all_sound(cb);
         // os « ChiefRoot » (aucune animation de la C4 ne le connaît) ; il est C4_RACINE_Y sous l'origine du modèle
