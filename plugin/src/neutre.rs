@@ -96,16 +96,39 @@ unsafe fn viser(boma: *mut BattleObjectModuleAccessor, deg: f32) {
     tourner(boma, "bust", deg * PART_BUST);
 }
 
-/// geste du haut du corps (mouvement partiel du jeu, celui où Snake tient la grenade)
+const HAUTS: [&str; 6] = ["special_n_hold", "special_air_n_hold", "special_air_n_throw_lw", "special_air_n_throw_hi",
+                           "special_n_throw_hi", "special_n_throw_lw"];
+
+/// où le jeu met le haut du corps pendant la posture : Some(0) = mouvement principal, Some(k) = mouvement partiel k,
+/// None = pas trouvé. Vidéo v13 : jambes figées en marchant ; la v13 supposait le haut du corps en mouvement partiel 1
+/// sans le vérifier : si le jeu y met les jambes (h10itemlegs*), le geste du fusil les remplaçait. Cherché à chaque
+/// image (le jeu le remet à chaque changement de statut)
+unsafe fn ou_haut(boma: *mut BattleObjectModuleAccessor) -> Option<i32> {
+    let est = |m: u64| HAUTS.iter().any(|n| hash40(n) == m);
+    if est(MotionModule::motion_kind(boma)) {
+        return Some(0);
+    }
+    (1..5).find(|&k| est(MotionModule::motion_kind_partial(boma, k)))
+}
+
+/// geste du haut du corps, là où le jeu met celui de la posture ; jamais ailleurs (les jambes restent au jeu)
 unsafe fn haut(boma: *mut BattleObjectModuleAccessor, e: usize, mot: &str, reprendre: bool) {
     let h = hash40(mot);
-    let p = PART[e];
+    let p = match ou_haut(boma) {
+        Some(p) => p,
+        None => return,
+    };
+    PART[e] = p;
+    if p == 0 {
+        if MotionModule::motion_kind(boma) != h || reprendre {
+            MotionModule::change_motion(boma, Hash40::new_raw(h), 0.0, 1.0, false, 0.0, false, false);
+        }
+        return;
+    }
     if MotionModule::motion_kind_partial(boma, p) == h && !reprendre {
         return;
     }
-    if MotionModule::motion_kind_partial(boma, p) != hash40("invalid") {
-        MotionModule::remove_motion_partial(boma, p, false);
-    }
+    MotionModule::remove_motion_partial(boma, p, false);
     MotionModule::add_motion_partial(boma, p, Hash40::new_raw(h), 0.0, 1.0, false, false, 0.0, true, true, false);
 }
 
@@ -127,12 +150,22 @@ unsafe fn tir(fighter: &mut L2CFighterCommon, id: u64, dmg: f32, kbg: i32, fkb: 
            Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_PUNCH, *ATTACK_REGION_OBJECT);
 }
 
-/// éclair de bouche au bout du canon (position monde)
-unsafe fn eclair(boma: *mut BattleObjectModuleAccessor, y0: f32, z0: f32, deg: f32, long: f32, taille: f32) {
+/// tir au bout du canon (position monde) ; demandé (v13) : « rajoute les explosions comme sur les smash » : mêmes
+/// effets que canon() d'effets.rs (éclair de bouche, flamme, éclat jaune), plus `cone` flammes devant pour le magnum
+/// (comme le smash avant)
+unsafe fn eclair(boma: *mut BattleObjectModuleAccessor, y0: f32, z0: f32, deg: f32, long: f32, sc: f32, cone: i32) {
     let p = PostureModule::pos(boma);
     let lr = PostureModule::lr(boma);
     let (s, c) = deg.to_radians().sin_cos();
-    eff_monde(boma, "sys_muzzleflash", (*p).x + lr * (z0 + c * long), (*p).y + y0 + s * long, 0.0, taille, None);
+    let x = (*p).x + lr * (z0 + c * long);
+    let y = (*p).y + y0 + s * long;
+    eff_monde(boma, "sys_muzzleflash", x, y, 0.0, 0.8 * sc, None);
+    eff_monde(boma, "sys_hit_fire", x, y, 0.0, 0.35 * sc, None);
+    eff_monde(boma, "sys_smash_flash_s", x, y, 0.0, 0.25 * sc, Some((1.0, 0.9, 0.55)));
+    for k in 1..=cone {
+        let d = 4.0 * k as f32;
+        eff_monde(boma, "sys_hit_fire", x + lr * c * d, y + s * d, 0.0, 0.4 + 0.15 * k as f32, None);
+    }
 }
 
 /// chaque image (ligne principale) : munitions, posture
@@ -164,14 +197,7 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
         VISEE[e] = VISEE_DEPART;
         HAUT[e] = if FUSIL[e] <= 0 { H_RECHARGE } else { H_ATTENTE };
         HT[e] = 0;
-        // quel mouvement partiel le jeu utilise pour le haut du corps
-        PART[e] = 1;
-        for k in 1..5 {
-            let m = MotionModule::motion_kind_partial(boma, k);
-            if m == hash40("special_n_hold") || m == hash40("special_air_n_hold") {
-                PART[e] = k;
-            }
-        }
+        PART[e] = -1;
     }
     let air = StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR;
     // visée : stick haut = image de la visée qui baisse = canon qui monte (REX : -3 × stick par image)
@@ -205,7 +231,7 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
                 AttackModule::clear_all(boma);
                 tir(fighter, 0, 1.0, 25, 0, 8, 1.85, CANON_Y, CANON_Z, deg, 2.0, PORTEE_FUSIL, 0.5);
                 EFFACER[e] = 3;
-                eclair(boma, CANON_Y, CANON_Z, deg, 12.0, 0.45);
+                eclair(boma, CANON_Y, CANON_Z, deg, 12.0, 0.7, 0);
                 haut(boma, e, "special_air_n_throw_lw", true);
                 if !RAFALE[e] {
                     SoundModule::play_se(boma, Hash40::new("se_snake_special_n03"), true, false, false, false, enSEType(0));
@@ -277,8 +303,8 @@ unsafe extern "C" fn lancer_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     let e = slot(boma);
     // relâché pendant le début = B tapé (magnum) ; relâché en posture = fin
     MODE[e] = if StatusModule::prev_status_kind(boma, 0) == *FIGHTER_STATUS_KIND_SPECIAL_N { 0 } else { 2 };
-    let p = MotionModule::motion_kind_partial(boma, PART[e]);
-    if p != hash40("invalid") {
+    // geste du fusil laissé en mouvement partiel : retiré (jamais un partiel que le jeu n'a pas mis pour le haut du corps)
+    if PART[e] > 0 && HAUTS.iter().any(|n| hash40(n) == MotionModule::motion_kind_partial(boma, PART[e])) {
         MotionModule::remove_motion_partial(boma, PART[e], false);
     }
     let (s, a) = mots(e);
@@ -308,7 +334,7 @@ unsafe extern "C" fn lancer_boucle(fighter: &mut L2CFighterCommon) -> L2CValue {
                 tir(fighter, 1, 3.0, 60, 20, 56, 2.5, 15.2, 11.7, 0.0, 0.0, 44.0, 1.0);
                 tir(fighter, 2, 1.0, 0, 0, 7, 1.0, 15.2, 11.7, 0.0, 0.0, 136.0, 1.0);
                 EFFACER[e] = 3;
-                eclair(boma, 15.2, 11.7, 0.0, 3.0, 0.8);
+                eclair(boma, 15.2, 11.7, 0.0, 3.0, 1.6, 2);
             }
             if f >= 30.0 && f < 40.0 && MAGNUM[e] > 0
                 && ControlModule::check_button_trigger(boma, *CONTROL_PAD_BUTTON_SPECIAL) {

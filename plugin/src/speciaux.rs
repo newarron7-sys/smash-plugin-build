@@ -307,7 +307,7 @@ const L_VOL: i32 = 14;              // lancé : images jusqu'au sol
 const L_DEVANT: f32 = 11.0;         // vidéo de REX : posé ~0,6 fois sa taille devant lui
 const L_LARGE: f32 = 5.0;           // demi-largeur de la colonne (vidéo : ~ la moitié de sa taille)
 const L_HAUT: f32 = 110.0;          // zone où il est « dans la colonne » (vidéo de REX : jusqu'en haut de l'écran)
-const L_HALO: f32 = 45.0;           // hauteur du halo blanc (vidéo de l'autre Chief : ~2 fois sa taille)
+const L_JET_HAUT: f32 = 7.0;        // étirement du jet (v13 : 2,6 = ~7 de haut ; vidéo de l'autre Chief : ~25)
 const L_ELAN: f32 = 3.4;            // vidéo de REX : ~5 fois sa taille ; 3,9 l'envoyait hors de l'écran (vidéo v9)
 static mut L_ETAT: [u8; 8] = [0; 8];    // 0 rien, 1 en vol, 2 posé
 static mut L_POS: [(f32, f32); 8] = [(0.0, 0.0); 8];
@@ -425,7 +425,7 @@ unsafe fn c4_boma(boma: *mut BattleObjectModuleAccessor) -> Option<*mut BattleOb
 }
 
 /// hauteur de l'os racine du modèle de l'ascenseur par rapport à son origine (model.nusktb, objets_ult.py)
-const C4_RACINE_Y: f32 = -5.235;
+const C4_RACINE_Y: f32 = 0.0;
 
 unsafe fn c4_poser(fighter: &mut L2CFighterCommon, x: f32, y: f32) {
     let boma = fighter.module_accessor;
@@ -514,40 +514,21 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
                 return;
             }
             let (bx, by) = L_POS[e];
-            let vu = c4_tenir(fighter, bx, by);
-            // contrôle (rien si tout va bien) : si le modèle est lu ailleurs qu'au point de pose, éclat rouge là où il
-            // est pendant les 2 premières secondes, pour le voir sur une vidéo
-            if let Some((vx, vy)) = vu {
-                if L_T[e] < L_DUREE - 6 && L_T[e] > L_DUREE - 126 && L_T[e] % 20 == 0
-                    && ((vx - bx).abs() > 3.0 || (vy - by).abs() > 3.0) {
-                    eff_monde(boma, "sys_smash_flash_s", vx, vy + 1.0, 0.0, 0.8, Some((1.0, 0.1, 0.1)));
-                }
-            }
-            // faisceau (demandé : l'effet bleu de la photo, « comme dans la vidéo » de l'autre Chief : pointe cyan qui
-            // monte de l'ascenseur dans un halo blanc) : le jet de la ceinture-fusée, retourné vers le haut (dans le
-            // jeu il part vers le bas) et étiré en hauteur ; un seul, recréé s'il s'éteint (6 images au moins entre deux)
+            c4_tenir(fighter, bx, by);
+            // faisceau (demandé, vidéo v13 : « enlève l'effet blanc, garde que le bleu, place-le comme dans la vidéo » de
+            // l'autre Chief : une pointe cyan fine qui monte du centre de l'ascenseur, ~1,3 fois sa taille) : le jet de
+            // la ceinture-fusée (il part vers le bas dans le jeu) retourné dans le plan de l'écran (z 180° ; en v13
+            // x 180° le montrait de biais, en arc à côté de l'ascenseur) et étiré en hauteur ; un seul, recréé s'il
+            // s'éteint (6 images au moins entre deux)
             L_FAISCEAU_T[e] += 1;
             if (L_FAISCEAU[e] == 0 || !EffectModule::is_exist_effect(boma, L_FAISCEAU[e])) && L_FAISCEAU_T[e] >= 6 {
                 L_FAISCEAU_T[e] = 0;
-                let p = Vector3f { x: bx, y: by + 1.0, z: 0.0 };
-                let r = Vector3f { x: 180.0, y: 0.0, z: 0.0 };
+                let p = Vector3f { x: bx, y: by + 0.5, z: 0.0 };
+                let r = Vector3f { x: 0.0, y: 0.0, z: 180.0 };
                 L_FAISCEAU[e] = EffectModule::req(boma, Hash40::new(crate::armes::JET), &p, &r, 1.0, 0, 0, false, 0) as u32;
                 if L_FAISCEAU[e] != 0 {
-                    EffectModule::set_scale(boma, L_FAISCEAU[e], &Vector3f { x: 1.4, y: 2.6, z: 1.4 });
+                    EffectModule::set_scale(boma, L_FAISCEAU[e], &Vector3f { x: 1.0, y: L_JET_HAUT, z: 1.0 });
                 }
-            }
-            // halo : traits lumineux blanc bleuté de part et d'autre (plus léger qu'en v10)
-            if L_T[e] % 6 == 0 {
-                for (k, dx) in [-2.5f32, 2.5].iter().enumerate() {
-                    let mut h = 5.0 + 7.0 * k as f32;
-                    while h < L_HALO {
-                        eff_monde(boma, "sys_attack_line", bx + dx, by + h, -90.0, 1.6, Some((0.85, 0.95, 1.0)));
-                        h += 14.0;
-                    }
-                }
-            }
-            if L_T[e] % 10 == 0 {
-                eff_monde(boma, "sys_smash_flash_s", bx, by + 2.0, 0.0, 1.0, Some((0.85, 0.95, 1.0)));
             }
             // Chief entre dans la colonne au sol (en marchant, en courant...) : accroupi puis propulsé (vidéo de REX)
             let p = PostureModule::pos(boma);
