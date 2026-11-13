@@ -1,0 +1,60 @@
+name: Inspecter les cases (ui_chara_db, msg_name, config.json) - sortie chiffree session
+on:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/inspect-cases.yml' ]
+permissions:
+  contents: write
+jobs:
+  i:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dechiffrer et inventorier (rien n'est affiche)
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          printf '%s' "$CLE" > /tmp/k; mkdir -p /tmp/x/donnees_ui /tmp/out
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/k -in donnees/ui.tgz.enc | tar xz -C /tmp/x/donnees_ui || true
+          for b in ui sortie; do
+            git fetch -q --depth 1 origin $b:refs/remotes/origin/$b || continue
+            mkdir -p /tmp/x/$b
+            for f in $(git ls-tree -r --name-only origin/$b); do
+              case "$f" in
+                *.tgz.enc|*.tgz.enc.*) ;;
+                *) git show origin/$b:"$f" > "/tmp/x/$b/$(basename $f)";;
+              esac
+            done
+            ls origin/$b >/dev/null 2>&1 || true
+            parts=$(git ls-tree -r --name-only origin/$b | grep -E '\.tgz\.enc' | sort)
+            [ -n "$parts" ] && for f in $parts; do git show origin/$b:"$f"; done | openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/k 2>/dev/null | tar xz -C /tmp/x/$b 2>/dev/null || true
+            for z in /tmp/x/$b/*.enc; do [ -f "$z" ] || continue; openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/k -in "$z" -out "${z%.enc}" 2>/dev/null || rm -f "${z%.enc}"; done
+            for z in $(find /tmp/x/$b -name '*.zip'); do mkdir -p "$z.d"; unzip -q -o "$z" -d "$z.d" || true; done
+          done
+          rm -f /tmp/k
+          find /tmp/x -type f -printf '%s\t%P\n' | sort -k2 > /tmp/out/liste.txt
+          for f in $(find /tmp/x -name 'config.json' -o -name 'run.sh' -o -name '*.md' -o -name '*.txt' | head -80); do echo "=== $f"; head -c 6000 "$f"; echo; done > /tmp/out/textes.txt
+          for f in $(find /tmp/x -name 'ui_chara_db.prc' -o -name '*.msbt'); do echo "=== $f"; strings -n 3 "$f" | grep -iE 'metal|ui_chara|nam_|c1[0-9][0-9]|sonic|chief|snake|shadow' | head -400; strings -el -n 3 "$f" | head -300; done > /tmp/out/prc_msbt.txt
+          cp $(find /tmp/x -name 'ui_chara_db.prc' | head -3) /tmp/out/ 2>/dev/null || true
+          pip install -q pyprc >/dev/null 2>&1 && python3 - <<'PY' >> /tmp/out/prc_msbt.txt 2>&1 || true
+          import glob, pyprc
+          for p in glob.glob('/tmp/x/**/ui_chara_db.prc', recursive=True):
+              print('#### PRC', p)
+              root = pyprc.param(p)
+              lst = list(root)[0][1]
+              for i, e in enumerate(lst):
+                  d = {str(k): str(v.value) for k, v in e}
+                  keep = {k: d[k] for k in d if k in ('ui_chara_id','name_id','disp_order','is_dlc','color_num','n00_index','c00_index','chara_count','exhibit_year')}
+                  if 'sonic' in str(d).lower() or 'snake' in str(d).lower() or 'metal' in str(d).lower() or 'chief' in str(d).lower() or i > 85:
+                      print(i, keep)
+          PY
+          tar cz -C /tmp/out . > /tmp/o.tgz; mkdir -p /tmp/pub
+          openssl rand 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz -out /tmp/pub/out.session.enc
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin
+          echo "fichiers : $(wc -l < /tmp/out/liste.txt)"
+      - name: Publier (branche inspect_cases)
+        run: |
+          cd /tmp/pub && git init -q -b inspect_cases && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m inspect && git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" inspect_cases
