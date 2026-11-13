@@ -468,9 +468,10 @@ unsafe fn vol_effets(boma: *mut BattleObjectModuleAccessor, e: usize, vx: f32, v
         VOL_DIR[e] = dir;
         // sys_score_aura : debout telle quelle (vers le haut), couchée devant lui à -90 (comme le smash avant)
         VOL_FX[e][0] = match dir {
-            1 => vol_fx(boma, "sys_score_aura", (0.0, 9.0, 0.0), (0.0, 0.0, 0.0), 1.1, true),
+            // v12c (demandé) : en montant comme en descendant, l'aura est sous ses pieds (avant : au-dessus de la tête
+            // en montant, autour de la taille en descendant)
+            1 | 3 => vol_fx(boma, "sys_score_aura", (0.0, -3.0, 0.0), (180.0, 0.0, 0.0), 1.1, true),
             2 => vol_fx(boma, "sys_score_aura", (0.0, 6.0, 9.0), (-90.0, 0.0, 0.0), 1.0, true),
-            3 => vol_fx(boma, "sys_score_aura", (0.0, 4.0, 0.0), (180.0, 0.0, 0.0), 1.0, true),
             _ => 0,
         };
     }
@@ -519,7 +520,8 @@ unsafe extern "C" fn hi_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     if sol {
         vol_fx(boma, "sys_landing_smoke", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 1.2, false);
     }
-    MotionModule::change_motion(boma, Hash40::new("special_hi"), 0.0, 1.0, false, 0.0, false, false);
+    // v12c : il décolle dans sa pose d'attente (la vidéo de REX : debout)
+    MotionModule::change_motion(boma, Hash40::new("wait"), 0.0, 1.0, false, 0.0, false, false);
     fighter.sub_shift_status_main(L2CValue::Ptr(hi_loop as *const () as _))
 }
 
@@ -531,10 +533,21 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     }
     VOL_T[e] += 1;
     let t = VOL_T[e];
-    let lr = PostureModule::lr(boma);
-    let sx = ControlModule::get_stick_x(boma) * lr;
+    let mut lr = PostureModule::lr(boma);
+    let mut sx = ControlModule::get_stick_x(boma) * lr;
     let sy = ControlModule::get_stick_y(boma);
     let (mut vx, mut vy) = VOL_V[e];
+    // v12c (demandé) : quand il part vers l'arrière, il se retourne (l'aura repart devant lui, dans le bon sens)
+    if t > VOL_DECOL && sx < -0.3 {
+        PostureModule::reverse_lr(boma);
+        PostureModule::update_rot_y_lr(boma);
+        lr = -lr;
+        sx = -sx;
+        vx = -vx;
+        VOL_DIR[e] = 0;
+        vol_fx_off(boma, e, 0);
+    }
+    let _ = lr;
     if t <= VOL_DECOL {
         // décollage : la montée ralentit de 3,0 à la vitesse du vol ; le stick ne fait que le déporter un peu
         vy = 3.0 - (3.0 - VOL_VY) * (t as f32 / VOL_DECOL as f32);
@@ -561,11 +574,16 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     vitesse(fighter, vx, vy);
     // poses (vidéo REX) : debout quand il monte, descend ou plane ; allongé quand il file sur le côté, et penché vers
     // le bas quand il redescend en diagonale (l'os « rot » est incliné selon la pente du vol)
-    let fm = MotionModule::frame(boma);
+    // v12c (demandé) : son animation d'attente (wait) quand il n'avance pas : sur place, en montant, en descendant ;
+    // allongé (UpBMove de REX) seulement quand il file sur le côté
     let couche = t > VOL_DECOL && vx.abs() > 0.9 && sx.abs() > 0.3;
-    let (a, b) = if couche { (VOL_SEG[0], VOL_SEG[1]) } else { (0.0, VOL_SEG[0]) };
-    if fm < a || fm >= b - 1.0 {
-        MotionModule::set_frame(boma, a, false);
+    if couche {
+        let fm = MotionModule::frame(boma);
+        if MotionModule::motion_kind(boma) != smash::hash40("special_hi") || fm < VOL_SEG[0] || fm >= VOL_SEG[1] - 1.0 {
+            MotionModule::change_motion(boma, Hash40::new("special_hi"), VOL_SEG[0], 1.0, false, 0.0, false, false);
+        }
+    } else if MotionModule::motion_kind(boma) != smash::hash40("wait") || MotionModule::is_end(boma) {
+        MotionModule::change_motion(boma, Hash40::new("wait"), 0.0, 1.0, false, 0.0, false, false);
     }
     if couche {
         let pente = (-vy).atan2(vx.abs()).to_degrees().clamp(-35.0, 50.0);
