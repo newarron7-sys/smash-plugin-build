@@ -1,7 +1,8 @@
 //! Lancers de Master Chief (REX : sous-actions ThrowF / ThrowB / ThrowHi / ThrowLw de FitChief.pac), sur ses animations
 //! de REX (retarget_exo.py, groupe chief_lancers, sur place) :
 //! - avant : coup sur l'adversaire tenu (image 22, 10 %, angle 80), lâché à 26 (2 %, angle 45) ; libre à 30 ;
-//! - arrière : il le fait tourner autour de lui et le lâche derrière à 67 (5 %, angle 40 vers l'arrière), puis recule
+//! - arrière (Giant Swing / Plasma Grenade) : il le fait tourner autour de lui (tenu par les pieds), le lâche derrière à 67
+//!   (5 %, angle 40 vers l'arrière) avec une grenade plasma collée qui explose ~20 images après ; puis il recule
 //!   (TransN de REX : 18,8) ; il finit retourné (le jeu le retourne à la fin, comme Brawl) ; vitesse 0,8 puis 1,3 ;
 //! - haut : épée à énergie, 2 coups électriques sur l'adversaire tenu (18 : 2 %, 39 : 5 %), lâché à 41 (1 %, angle 91),
 //!   un pas en avant (TransN de REX : 6,6) ; libre à 58 ;
@@ -16,7 +17,7 @@ use smash::app::*;
 use smash::hash40;
 use smash::lib::lua_const::*;
 use smash::lua2cpp::*;
-use smash::phx::Hash40;
+use smash::phx::{Hash40, Vector3f};
 use smash_script::macros::*;
 use smash_script::*;
 use smashline::*;
@@ -25,6 +26,9 @@ use crate::speciaux::slot;
 
 const ECHELLE: f32 = 0.82;
 const CYAN: (f32, f32, f32) = (0.3, 0.95, 1.0);
+const BLEU: (f32, f32, f32) = (0.35, 0.6, 1.0);
+/// bout du canon du fusil d'assaut sur l'os haver (le fusil va jusqu'à ~7,2 devant la main ; tir de REX à 10)
+const CANON: f32 = 8.0;
 
 /// lâcher : l'adversaire part avec le coup du lancer
 unsafe fn lacher(agent: &mut L2CAgentBase) {
@@ -228,25 +232,38 @@ unsafe extern "C" fn game_throwlw(agent: &mut L2CAgentBase) {
 }
 
 unsafe extern "C" fn effect_throwlw(agent: &mut L2CAgentBase) {
+    // plaquage au sol (REX : gros impact au sol, ondes)
     frame(agent.lua_state_agent, 18.0);
     if is_excute(agent) {
-        LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 1, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, false);
+        LANDING_EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("top"), 0, 0, 3, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, false);
+        LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 3, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, false);
+        QUAKE(agent, *CAMERA_QUAKE_KIND_S);
     }
-    // tir au fusil d'assaut : bout du canon de REX (effet 0x1FB0007 à 10 devant la main : (0 ; 4,1 ; 1,8) sur top à
-    // l'image 24), éclair jaune sur Chief (REX : 21050600 jaune, images 24 à 27)
-    frame(agent.lua_state_agent, 24.0);
-    if is_excute(agent) {
-        EFFECT(agent, Hash40::new("sys_muzzleflash"), Hash40::new("top"), 0, 4.1, 1.8, 0, 0, 0, 0.6, 0, 0, 0, 0, 0, 0, true);
-        EFFECT(agent, Hash40::new("sys_hit_fire"), Hash40::new("top"), 0, 4.1, 1.8, 0, 0, 0, 0.3, 0, 0, 0, 0, 0, 0, true);
-        smash_script::macros::FLASH(agent, 1, 1, 0, 0.33);
+    // v25 (vidéo : « pas d'effet au bout de son canon ») : rafale au fusil d'assaut, éclairs au bout du canon qui suivent
+    // l'arme (os haver = RHaveN de REX : effet de tir 0x1FB0007 de REX à 10 devant la main), images 22 à 27
+    for f in [22.0, 23.0, 24.0, 25.0, 26.0, 27.0] {
+        frame(agent.lua_state_agent, f);
+        if is_excute(agent) {
+            EFFECT_FOLLOW(agent, Hash40::new("sys_muzzleflash"), Hash40::new("haver"), 0, 0, CANON, 0, 0, 0, 1.0, true);
+            EFFECT_FOLLOW(agent, Hash40::new("sys_hit_fire"), Hash40::new("haver"), 0, 0, CANON, 0, 0, 0, 0.4, true);
+            EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash_s"), Hash40::new("haver"), 0, 0, CANON, 0, 0, 0, 0.4, true);
+            LAST_EFFECT_SET_COLOR(agent, 1.0, 0.9, 0.55);
+            if f == 22.0 {
+                smash_script::macros::FLASH(agent, 1, 1, 0, 0.33);
+            }
+        }
     }
-    frame(agent.lua_state_agent, 27.0);
+    frame(agent.lua_state_agent, 28.0);
     if is_excute(agent) {
         smash_script::macros::COL_NORMAL(agent);
+        EFFECT_FOLLOW(agent, Hash40::new("sys_dash_smoke"), Hash40::new("haver"), 0, 0, CANON, 0, 0, 0, 0.3, true);
     }
+    // coup au sol final
     frame(agent.lua_state_agent, 86.0);
     if is_excute(agent) {
-        LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 1, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, false);
+        LANDING_EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("top"), 0, 0, 2, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
+        LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 2, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, false);
+        QUAKE(agent, *CAMERA_QUAKE_KIND_S);
     }
 }
 
@@ -256,12 +273,13 @@ unsafe extern "C" fn sound_throwlw(agent: &mut L2CAgentBase) {
         PLAY_SE(agent, Hash40::new("se_common_throw_01"));
         smash_script::macros::PLAY_DOWN_SE(agent, Hash40::new("se_common_down_soil_s"));
     }
-    // rafale de REX (19328 en boucle, images 24 à 28 : son du fusil d'assaut du B neutre)
-    frame(agent.lua_state_agent, 24.0);
+    // v25 (vidéo : pas de son de rafale) : rafale du fusil d'assaut (19328 de REX = son du tir du B neutre), tenue
+    // jusqu'à la fin des éclairs (avant elle était coupée au bout de 4 images)
+    frame(agent.lua_state_agent, 21.0);
     if is_excute(agent) {
         PLAY_SE(agent, Hash40::new("se_snake_special_n03"));
     }
-    frame(agent.lua_state_agent, 28.0);
+    frame(agent.lua_state_agent, 36.0);
     if is_excute(agent) {
         smash_script::macros::STOP_SE(agent, Hash40::new("se_snake_special_n03"));
     }
@@ -331,10 +349,119 @@ fn table(t: &[f32], f: f32) -> f32 {
     t[i] + (t[i + 1] - t[i]) * (k - i as f32)
 }
 
+// ------------------------------------------------------------------ lancer arrière : grenade plasma collée
+// REX (« Giant Swing / Plasma Grenade ») : une grenade plasma (objet créé à l'image 0 du lancer) est collée sur
+// l'adversaire ; lueur bleue sur lui pendant qu'il tourne, puis grosse explosion plasma bleue sur lui ~20 images après
+// le lâcher (vidéo de REX : lâché à 1,6 s, explosion à 1,9 s). Dégâts de l'explosion : pas dans le PSA (objet de REX) :
+// estimés (7 %, électrique)
+const GR_LUEUR: f32 = 8.0;
+const GR_LACHER: f32 = 67.0;
+const GR_DELAI: i32 = 20;
+static mut GR_CIBLE: [u32; 8] = [0; 8];
+static mut GR_T: [i32; 8] = [-1; 8];        // images depuis le lâcher (-1 : pas encore lâché)
+static mut GR_BOUM: [i32; 8] = [0; 8];
+
+unsafe fn victime(id: u32) -> *mut BattleObjectModuleAccessor {
+    if id == 0 || !sv_battle_object::is_active(id) {
+        return std::ptr::null_mut();
+    }
+    sv_battle_object::module_accessor(id)
+}
+
+unsafe fn lueur(vb: *mut BattleObjectModuleAccessor, t: i32) {
+    let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    if t % 3 == 0 {
+        let h = EffectModule::req_follow(vb, Hash40::new("sys_smash_flash_s"), Hash40::new("hip"), &z, &z, 0.5, true, 0, 0, 0, 0, 0, false, false) as u32;
+        EffectModule::set_rgb(vb, h, BLEU.0, BLEU.1, BLEU.2);
+    }
+    if t % 6 == 0 {
+        let h = EffectModule::req_follow(vb, Hash40::new("sys_hit_elec"), Hash40::new("hip"), &z, &z, 0.3, true, 0, 0, 0, 0, 0, false, false) as u32;
+        EffectModule::set_rgb(vb, h, BLEU.0, BLEU.1, BLEU.2);
+    }
+}
+
+unsafe fn grenade(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let e = slot(boma);
+    if GR_BOUM[e] > 0 {
+        GR_BOUM[e] -= 1;
+        if GR_BOUM[e] == 0 {
+            AttackModule::clear(boma, 6, false);
+        }
+    }
+    let lancer_b = StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_THROW
+        && MotionModule::motion_kind(boma) == hash40("throw_b");
+    if lancer_b && GR_T[e] < 0 {
+        let f = MotionModule::frame(boma);
+        if f < 2.0 {
+            GR_CIBLE[e] = 0;
+        }
+        if f < GR_LACHER {
+            // adversaire tenu (connu tant qu'il est tenu)
+            let id = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_OBJECT) as u32;
+            if id != 0 {
+                GR_CIBLE[e] = id;
+            }
+            if f >= GR_LUEUR {
+                let vb = victime(GR_CIBLE[e]);
+                if !vb.is_null() {
+                    lueur(vb, f as i32);
+                }
+            }
+            return;
+        }
+        if GR_CIBLE[e] != 0 {
+            GR_T[e] = 0;
+        }
+    }
+    if GR_T[e] < 0 {
+        // lancer interrompu avant le lâcher : pas de grenade
+        if !lancer_b {
+            GR_CIBLE[e] = 0;
+        }
+        return;
+    }
+    let vb = victime(GR_CIBLE[e]);
+    if vb.is_null() {
+        GR_T[e] = -1;
+        GR_CIBLE[e] = 0;
+        return;
+    }
+    GR_T[e] += 1;
+    if GR_T[e] < GR_DELAI {
+        lueur(vb, GR_T[e]);
+        return;
+    }
+    // explosion sur l'adversaire
+    GR_T[e] = -1;
+    GR_CIBLE[e] = 0;
+    let vp = PostureModule::pos(vb);
+    let (vx, vy) = ((*vp).x, (*vp).y + 7.0);
+    let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let p = Vector3f { x: vx, y: vy, z: 0.0 };
+    for (eff, sc) in [("sys_bomb_a", 1.5), ("sys_smash_flash", 1.6), ("sys_hit_elec", 1.8)] {
+        let h = EffectModule::req(boma, Hash40::new(eff), &p, &z, sc, 0, 0, false, 0) as u32;
+        if h != 0 && eff != "sys_bomb_a" {
+            EffectModule::set_rgb(boma, h, BLEU.0, BLEU.1, BLEU.2);
+        }
+    }
+    PLAY_SE(fighter, Hash40::new("se_common_bomb_l"));
+    let fp = PostureModule::pos(boma);
+    let lr = PostureModule::lr(boma);
+    let dz = (vx - (*fp).x) * lr;
+    let dy = vy - (*fp).y;
+    ATTACK(fighter, 6, 0, Hash40::new("top"), 7.0, 361, 70, 0, 40, 11.0, 0.0, dy, dz, None, None, None, 1.0, 1.0,
+           *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, false, false, false, false, true,
+           *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
+           Hash40::new("collision_attr_elec"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_ELEC, *ATTACK_REGION_BOMB);
+    GR_BOUM[e] = 3;
+}
+
 /// chaque image : déplacement réel des lancers arrière / haut, demi-tour à la fin du lancer arrière
 pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let e = slot(boma);
+    grenade(fighter);
     if StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_THROW {
         if DOS[e] {
             DOS[e] = false;
