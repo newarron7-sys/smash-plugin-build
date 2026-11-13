@@ -231,6 +231,7 @@ mod effets;
 mod armes;
 mod speciaux;
 mod galerie;
+mod prises;
 mod neutre;
 
 unsafe extern "C" fn mc_frame(fighter: &mut L2CFighterCommon) {
@@ -238,7 +239,6 @@ unsafe extern "C" fn mc_frame(fighter: &mut L2CFighterCommon) {
     armes::ground_pound(fighter);
     armes::suivre_animation(fighter);
     speciaux::chaque_image(fighter);
-    galerie::chaque_image(fighter);
     neutre::chaque_image(fighter);
 }
 
@@ -252,6 +252,7 @@ macro_rules! scripts {
             effets::install(&mut a);
             speciaux::install(&mut a);
             neutre::install(&mut a);
+            prises::install(&mut a);
             a.on_line(Main, mc_frame);
             a.install();
         }
