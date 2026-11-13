@@ -103,6 +103,41 @@ unsafe extern "C" fn sound_appealhi(agent: &mut L2CAgentBase) {
     }
 }
 
+/// provocation bas (REX AppealLw, image 40) : une des 7 répliques de Chief au hasard (vc_snake_001 à 007)
+unsafe extern "C" fn sound_appeallw(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 40.0);
+    if is_excute(agent) {
+        let n = smash::app::sv_math::rand(smash::hash40("fighter"), 7) + 1;
+        let lab = format!("vc_snake_00{}", n);
+        PLAY_SE(agent, Hash40::new(&lab));
+    }
+}
+
+/// provocation côté (REX AppealS, image 30 : réplique n° 19 = vc_snake_008)
+unsafe extern "C" fn sound_appeals(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 30.0);
+    if is_excute(agent) {
+        PLAY_SE(agent, Hash40::new("vc_snake_008"));
+    }
+}
+
+/// v26 (vidéo : « à la fin il s'accroupit comme Snake ») : après une provocation, Snake passe dans sa boîte en carton
+/// (statuts APPEAL_WAIT / APPEAL_END, animations de Snake accroupi) : Chief revient directement à l'attente
+pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let st = StatusModule::status_kind(boma);
+    if st == *FIGHTER_SNAKE_STATUS_KIND_APPEAL_WAIT || st == *FIGHTER_SNAKE_STATUS_KIND_APPEAL_END {
+        StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_WAIT, false);
+        return;
+    }
+    if st == *FIGHTER_STATUS_KIND_APPEAL {
+        let end = MotionModule::end_frame(boma);
+        if MotionModule::frame(boma) + MotionModule::rate(boma) >= end - 1.0 {
+            StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_WAIT, false);
+        }
+    }
+}
+
 pub fn install(a: &mut Agent) {
     a.acmd("game_catch", game_catch, Priority::Low);
     a.acmd("game_catchdash", game_catchdash, Priority::Low);
@@ -120,7 +155,14 @@ pub fn install(a: &mut Agent) {
         let x: &'static str = Box::leak(format!("expression_{}", m).into_boxed_str());
         a.acmd(g, vide, Priority::Low);
         a.acmd(e, vide, Priority::Low);
-        a.acmd(s, if m.starts_with("appealhi") { sound_appealhi } else { vide }, Priority::Low);
+        let son: unsafe extern "C" fn(&mut L2CAgentBase) = if m.starts_with("appealhi") {
+            sound_appealhi
+        } else if m.starts_with("appeallw") {
+            sound_appeallw
+        } else {
+            sound_appeals
+        };
+        a.acmd(s, son, Priority::Low);
         a.acmd(x, expression_appeal, Priority::Low);
     }
 }

@@ -235,7 +235,7 @@ unsafe extern "C" fn effect_throwlw(agent: &mut L2CAgentBase) {
     // plaquage au sol (REX : gros impact au sol, ondes)
     frame(agent.lua_state_agent, 18.0);
     if is_excute(agent) {
-        LANDING_EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("top"), 0, 0, 3, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, false);
+        LANDING_EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("top"), 0, 0, 3, 0, 0, 0, 0.6, 0, 0, 0, 0, 0, 0, false);
         LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 3, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, false);
         QUAKE(agent, *CAMERA_QUAKE_KIND_S);
     }
@@ -244,12 +244,11 @@ unsafe extern "C" fn effect_throwlw(agent: &mut L2CAgentBase) {
     for f in [22.0, 23.0, 24.0, 25.0, 26.0, 27.0] {
         frame(agent.lua_state_agent, f);
         if is_excute(agent) {
-            EFFECT_FOLLOW(agent, Hash40::new("sys_muzzleflash"), Hash40::new("haver"), 0, 0, CANON, 0, 0, 0, 1.0, true);
-            EFFECT_FOLLOW(agent, Hash40::new("sys_hit_fire"), Hash40::new("haver"), 0, 0, CANON, 0, 0, 0, 0.4, true);
-            EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash_s"), Hash40::new("haver"), 0, 0, CANON, 0, 0, 0, 0.4, true);
-            LAST_EFFECT_SET_COLOR(agent, 1.0, 0.9, 0.55);
+            // v26 (vidéo : « enlève un peu les effets blancs ») : éclair plus petit, sans l'éclat blanc
+            EFFECT_FOLLOW(agent, Hash40::new("sys_muzzleflash"), Hash40::new("haver"), 0, 0, CANON, 0, 0, 0, 0.6, true);
+            EFFECT_FOLLOW(agent, Hash40::new("sys_hit_fire"), Hash40::new("haver"), 0, 0, CANON, 0, 0, 0, 0.3, true);
             if f == 22.0 {
-                smash_script::macros::FLASH(agent, 1, 1, 0, 0.33);
+                smash_script::macros::FLASH(agent, 1, 1, 0, 0.2);
             }
         }
     }
@@ -261,7 +260,7 @@ unsafe extern "C" fn effect_throwlw(agent: &mut L2CAgentBase) {
     // coup au sol final
     frame(agent.lua_state_agent, 86.0);
     if is_excute(agent) {
-        LANDING_EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("top"), 0, 0, 2, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
+        LANDING_EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("top"), 0, 0, 2, 0, 0, 0, 0.6, 0, 0, 0, 0, 0, 0, false);
         LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 2, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, false);
         QUAKE(agent, *CAMERA_QUAKE_KIND_S);
     }
@@ -279,7 +278,8 @@ unsafe extern "C" fn sound_throwlw(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         PLAY_SE(agent, Hash40::new("se_snake_special_n03"));
     }
-    frame(agent.lua_state_agent, 36.0);
+    // v26 : « allonge un tout petit peu » la rafale
+    frame(agent.lua_state_agent, 42.0);
     if is_excute(agent) {
         smash_script::macros::STOP_SE(agent, Hash40::new("se_snake_special_n03"));
     }
@@ -353,7 +353,7 @@ fn table(t: &[f32], f: f32) -> f32 {
 // REX (« Giant Swing / Plasma Grenade ») : une grenade plasma (objet créé à l'image 0 du lancer) est collée sur
 // l'adversaire ; lueur bleue sur lui pendant qu'il tourne, puis grosse explosion plasma bleue sur lui ~20 images après
 // le lâcher (vidéo de REX : lâché à 1,6 s, explosion à 1,9 s). Dégâts de l'explosion : pas dans le PSA (objet de REX) :
-// estimés (7 %, électrique)
+// notes de la vidéo de REX : ~11 % (45 -> 50 au lâcher, 61 à l'explosion)
 const GR_LUEUR: f32 = 8.0;
 const GR_LACHER: f32 = 67.0;
 const GR_DELAI: i32 = 20;
@@ -450,7 +450,7 @@ unsafe fn grenade(fighter: &mut L2CFighterCommon) {
     let lr = PostureModule::lr(boma);
     let dz = (vx - (*fp).x) * lr;
     let dy = vy - (*fp).y;
-    ATTACK(fighter, 6, 0, Hash40::new("top"), 7.0, 361, 70, 0, 40, 11.0, 0.0, dy, dz, None, None, None, 1.0, 1.0,
+    ATTACK(fighter, 6, 0, Hash40::new("top"), 11.0, 361, 70, 0, 40, 11.0, 0.0, dy, dz, None, None, None, 1.0, 1.0,
            *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, false, false, false, false, true,
            *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
            Hash40::new("collision_attr_elec"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_ELEC, *ATTACK_REGION_BOMB);

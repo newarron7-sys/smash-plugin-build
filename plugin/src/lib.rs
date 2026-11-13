@@ -242,6 +242,7 @@ unsafe extern "C" fn mc_frame(fighter: &mut L2CFighterCommon) {
     speciaux::chaque_image(fighter);
     neutre::chaque_image(fighter);
     lancers::chaque_image(fighter);
+    prises::chaque_image(fighter);
 }
 
 macro_rules! scripts {
