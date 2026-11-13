@@ -233,7 +233,10 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
     // v18 / v19 (vidéo) : immobile en posture, jambes droites et serrées : à l'arrêt le jeu ne met pas de jambes sous
     // le geste du haut du corps (en marchant, celles de la marche) ; « special_lw_ground » = le tir avec les jambes de
     // la posture de REX (SpecialNLegWait)
-    let debout = st == *FIGHTER_SNAKE_STATUS_KIND_SPECIAL_N_HOLD_WAIT;
+    // v21 (vidéo) : en reculant, jambes figées : la version avec jambes était mise d'après le statut (« attente »).
+    // Règle juste : jambes ajoutées seulement quand le jeu joue le haut du corps comme mouvement PRINCIPAL (aucune
+    // jambe dessous) ; quand il est en mouvement partiel, les jambes viennent de la marche / course du jeu
+    let debout = !air && ou_haut(boma) == Some(0);
     let a = ControlModule::check_button_trigger(boma, *CONTROL_PAD_BUTTON_ATTACK);
     let libre = HAUT[e] == H_ATTENTE || HAUT[e] == H_TIR || HAUT[e] == H_VIDE;
     if libre && a {
