@@ -32,14 +32,14 @@ unsafe fn lacher(agent: &mut L2CAgentBase) {
     let target = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_OBJECT);
     let group = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_GROUP);
     let no = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_NO);
-    ATK_HIT_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, Hash40::new("throw"), target, group, no);
+    smash_script::macros::ATK_HIT_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, Hash40::new("throw"), target, group, no);
 }
 
 /// coups du lancer de REX : t = n° 0 (l'adversaire lancé), c = n° 1 (dégâts, angle, croissance, fixe, base)
 unsafe fn lancer_abs(agent: &mut L2CAgentBase, t: (f32, u64, i32, i32, i32), c: (f32, u64, i32, i32, i32)) {
-    ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, 0, t.0, t.1, t.2, t.3, t.4, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+    smash_script::macros::ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, 0, t.0, t.1, t.2, t.3, t.4, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
                Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
-    ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, c.0, c.1, c.2, c.3, c.4, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+    smash_script::macros::ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, c.0, c.1, c.2, c.3, c.4, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
                Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
 }
 
@@ -67,7 +67,7 @@ unsafe extern "C" fn game_throwf(agent: &mut L2CAgentBase) {
     }
     frame(agent.lua_state_agent, 21.0);
     if is_excute(agent) {
-        CHECK_FINISH_CAMERA(agent, 12, 10);
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, 12, 10);
     }
     frame(agent.lua_state_agent, 22.0);
     if is_excute(agent) {
@@ -104,7 +104,7 @@ unsafe extern "C" fn game_throwb(agent: &mut L2CAgentBase) {
     FT_MOTION_RATE(agent, 1.0 / 1.3);
     frame(agent.lua_state_agent, 66.0);
     if is_excute(agent) {
-        CHECK_FINISH_CAMERA(agent, -16, 12);
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, -16, 12);
     }
     frame(agent.lua_state_agent, 67.0);
     if is_excute(agent) {
@@ -148,7 +148,7 @@ unsafe extern "C" fn game_throwhi(agent: &mut L2CAgentBase) {
     }
     frame(agent.lua_state_agent, 40.0);
     if is_excute(agent) {
-        CHECK_FINISH_CAMERA(agent, 4, 24);
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, 4, 24);
     }
     frame(agent.lua_state_agent, 41.0);
     if is_excute(agent) {
@@ -208,7 +208,7 @@ unsafe extern "C" fn game_throwlw(agent: &mut L2CAgentBase) {
     FT_MOTION_RATE(agent, 1.0 / 1.4);
     frame(agent.lua_state_agent, 85.0);
     if is_excute(agent) {
-        CHECK_FINISH_CAMERA(agent, 0, 3);
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, 0, 3);
     }
     frame(agent.lua_state_agent, 86.0);
     FT_MOTION_RATE(agent, 1.0 / 1.34783);
@@ -238,11 +238,11 @@ unsafe extern "C" fn effect_throwlw(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         EFFECT(agent, Hash40::new("sys_muzzleflash"), Hash40::new("top"), 0, 4.1, 1.8, 0, 0, 0, 0.6, 0, 0, 0, 0, 0, 0, true);
         EFFECT(agent, Hash40::new("sys_hit_fire"), Hash40::new("top"), 0, 4.1, 1.8, 0, 0, 0, 0.3, 0, 0, 0, 0, 0, 0, true);
-        FLASH(agent, 1, 1, 0, 0.33);
+        smash_script::macros::FLASH(agent, 1, 1, 0, 0.33);
     }
     frame(agent.lua_state_agent, 27.0);
     if is_excute(agent) {
-        COL_NORMAL(agent);
+        smash_script::macros::COL_NORMAL(agent);
     }
     frame(agent.lua_state_agent, 86.0);
     if is_excute(agent) {
@@ -254,7 +254,7 @@ unsafe extern "C" fn sound_throwlw(agent: &mut L2CAgentBase) {
     frame(agent.lua_state_agent, 17.0);
     if is_excute(agent) {
         PLAY_SE(agent, Hash40::new("se_common_throw_01"));
-        PLAY_DOWN_SE(agent, Hash40::new("se_common_down_soil_s"));
+        smash_script::macros::PLAY_DOWN_SE(agent, Hash40::new("se_common_down_soil_s"));
     }
     // rafale de REX (19328 en boucle, images 24 à 28 : son du fusil d'assaut du B neutre)
     frame(agent.lua_state_agent, 24.0);
@@ -263,7 +263,7 @@ unsafe extern "C" fn sound_throwlw(agent: &mut L2CAgentBase) {
     }
     frame(agent.lua_state_agent, 28.0);
     if is_excute(agent) {
-        STOP_SE(agent, Hash40::new("se_snake_special_n03"));
+        smash_script::macros::STOP_SE(agent, Hash40::new("se_snake_special_n03"));
     }
     frame(agent.lua_state_agent, 85.0);
     if is_excute(agent) {
