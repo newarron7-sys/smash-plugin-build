@@ -37,8 +37,8 @@ const CANON_Y: f32 = 13.6;
 const CANON_Z: f32 = 4.0;
 const PORTEE_FUSIL: f32 = 150.0;
 /// bout du canon devant la main (vidéo v15 : fusil ~4 devant la main droite ; magnum ~2,5)
-const LONG_FUSIL: f32 = 4.0;
-const LONG_MAGNUM: f32 = 2.5;
+const LONG_FUSIL: f32 = 6.0;
+const LONG_MAGNUM: f32 = 4.0;
 /// tailles de REX × 0,82 (même échelle que ses autres coups, gen_rex.py)
 const ECHELLE: f32 = 0.82;
 
@@ -167,21 +167,28 @@ unsafe fn main_arme(boma: *mut BattleObjectModuleAccessor, os: &str) -> (f32, f3
     (v.y - (*p).y, (v.x - (*p).x) * lr)
 }
 
-/// tir au bout du canon (position monde) ; demandé (v13) : « rajoute les explosions comme sur les smash » : mêmes
-/// effets que canon() d'effets.rs (éclair de bouche, flamme, éclat jaune), plus `cone` flammes devant pour le magnum
-/// (comme le smash avant)
+/// tir au bout du canon ; demandé (v13) : « rajoute les explosions comme sur les smash » : mêmes effets que canon()
+/// d'effets.rs (éclair de bouche, flamme, éclat jaune), plus `cone` flammes devant pour le magnum (comme le smash avant).
+/// v20 : « l'effet de feu est sur l'arme, je t'ai dit au bout du canon, fais comme pour le tilt haut, smash avant, smash
+/// bas » : comme eux, effets posés sur l'os « top » (ils suivent Chief), au bout du canon : main avant + `long` dans
+/// l'axe visé (REX : départ du tir à 3,8 devant LHaveN = « havel »)
 unsafe fn eclair(boma: *mut BattleObjectModuleAccessor, y0: f32, z0: f32, deg: f32, long: f32, sc: f32, cone: i32) {
-    let p = PostureModule::pos(boma);
-    let lr = PostureModule::lr(boma);
     let (s, c) = deg.to_radians().sin_cos();
-    let x = (*p).x + lr * (z0 + c * long);
-    let y = (*p).y + y0 + s * long;
-    eff_monde(boma, "sys_muzzleflash", x, y, 0.0, 0.8 * sc, None);
-    eff_monde(boma, "sys_hit_fire", x, y, 0.0, 0.35 * sc, None);
-    eff_monde(boma, "sys_smash_flash_s", x, y, 0.0, 0.25 * sc, Some((1.0, 0.9, 0.55)));
+    let y = y0 + s * long;
+    let z = z0 + c * long;
+    let pose = |eff: &str, y: f32, z: f32, t: f32, rgb: Option<(f32, f32, f32)>| {
+        let h = EffectModule::req_follow(boma, Hash40::new(eff), Hash40::new("top"), &Vector3f { x: 0.0, y, z },
+                                         &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, t, false, 0, 0, 0, 0, 0, false, false) as u32;
+        if let (Some((r, g, b)), true) = (rgb, h != 0) {
+            EffectModule::set_rgb(boma, h, r, g, b);
+        }
+    };
+    pose("sys_muzzleflash", y, z, 0.8 * sc, None);
+    pose("sys_hit_fire", y, z, 0.35 * sc, None);
+    pose("sys_smash_flash_s", y, z, 0.25 * sc, Some((1.0, 0.9, 0.55)));
     for k in 1..=cone {
         let d = 4.0 * k as f32;
-        eff_monde(boma, "sys_hit_fire", x + lr * c * d, y + s * d, 0.0, 0.4 + 0.15 * k as f32, None);
+        pose("sys_hit_fire", y + s * d, z + c * d, 0.4 + 0.15 * k as f32, None);
     }
 }
 
@@ -252,10 +259,10 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
                 // une balle (REX : sous-programme 0x28964 ; 1 %, croissance 25, base 8, taille 1,85)
                 FUSIL[e] -= 1;
                 AttackModule::clear_all(boma);
-                let (my, mz) = main_arme(boma, "haver");
+                let (my, mz) = main_arme(boma, "havel");
                 tir(fighter, 0, 1.0, 25, 0, 8, 1.85, my, mz, deg, 2.0, PORTEE_FUSIL, 0.5);
                 EFFACER[e] = 3;
-                eclair(boma, my, mz, deg, LONG_FUSIL, 0.7, 0);
+                eclair(boma, my, mz, deg, LONG_FUSIL, 0.55, 0);
                 // geste de tir : c'est l'animation « tenir » du jeu elle-même (SpecialNGunShoot en boucle) : v13 / v14,
                 // jambes figées en marchant quand le plugin changeait le haut du corps à chaque balle
                 if debout {

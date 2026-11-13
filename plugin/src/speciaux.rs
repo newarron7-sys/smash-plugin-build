@@ -442,31 +442,17 @@ unsafe fn c4_poser(fighter: &mut L2CFighterCommon, x: f32, y: f32) {
 
 /// chaque image tant qu'il est posé : libérée de la main, au point de pose, effets / sons de C4 coupés.
 /// Renvoie la position où le modèle est vraiment dessiné (lue sur son os), si on peut la lire
-/// vidéos v13 à v18 : ascenseur toujours debout, même remis à plat par set_rot. Le modèle a 6 copies de son maillage
-/// (objets_ult.py), le haut de l'ascenseur sur chacun des 6 axes du modèle (+Y, -Y, +X, -X, +Z, -Z), et 3 os repères
-/// à 10 le long de ses axes. Ici : on mesure dans le monde quel axe du modèle pointe le plus vers le haut et on
-/// n'affiche que la copie dont le haut est sur cet axe : l'ascenseur est à plat quelle que soit la rotation du jeu
+/// vidéos v13 à v20 : ascenseur toujours debout, vu par la tranche. Le modèle a 6 copies de son maillage
+/// (objets_ult.py), le haut de l'ascenseur sur chacun des 6 axes du modèle. v19 / v20 : choisir la copie en lisant la
+/// position de 3 os repères n'a rien changé (copie d'origine affichée : la position des os ne suit pas la rotation du
+/// dessin). Relu sur les vidéos : la copie d'origine (haut sur +Y) est dessinée en lame verticale vue par la tranche,
+/// haute d'environ 10 = l'étendue de son axe Z au-dessus du sol (9,9 ; son axe X donnerait 12,7) : le jeu dessine
+/// l'axe Z du modèle vers le haut. On affiche les copies « haut sur +Z » et « haut sur -Z » : celle qui est dans le bon
+/// sens est à plat sur le sol, l'autre à plat sous le sol (cachée par le décor)
 unsafe fn lift_a_plat(cb: *mut BattleObjectModuleAccessor) {
-    let lire = |n: &str| {
-        let mut v = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-        ModelModule::joint_global_position(cb, Hash40::new(n), &mut v, true);
-        v
-    };
-    let o = lire("ChiefRoot");
-    let mut meilleur = ("_py", 0.0f32);
-    for (axe, pos, neg) in [("axe_x", "_px", "_nx"), ("axe_y", "_py", "_ny"), ("axe_z", "_pz", "_nz")] {
-        let dy = lire(axe).y - o.y;
-        if dy.abs() > meilleur.1.abs() {
-            meilleur = (if dy > 0.0 { pos } else { neg }, dy);
-        }
-    }
-    if meilleur.1.abs() < 1.0 {
-        // repères illisibles : on garde le modèle tel quel
-        meilleur.0 = "_py";
-    }
     for v in ["_py", "_ny", "_px", "_nx", "_pz", "_nz"] {
         let n = format!("lift_0{}", v);
-        ModelModule::set_mesh_visibility(cb, Hash40::new(&n), v == meilleur.0);
+        ModelModule::set_mesh_visibility(cb, Hash40::new(&n), v == "_pz" || v == "_nz");
     }
 }
 
