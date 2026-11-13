@@ -34,6 +34,19 @@ fn armes_de(motion: u64) -> &'static [&'static str] {
     }
 }
 
+/// lancer haut (REX : épée 0x1FB0001 à l'image 0, lames 0x1FB0009 à 9, lames retirées à 104, épée à 124)
+fn epee_lancer_haut(f: f32) -> &'static [&'static str] {
+    if f < 9.0 {
+        &["chief_sword", "chief_rifledos"]
+    } else if f < 104.0 {
+        &["chief_sword", "chief_swordb", "chief_rifledos"]
+    } else if f < 124.0 {
+        &["chief_sword", "chief_rifledos"]
+    } else {
+        &["chief_rifle"]
+    }
+}
+
 unsafe fn id_of(boma: *mut BattleObjectModuleAccessor) -> usize {
     (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7)
 }
@@ -42,7 +55,7 @@ pub unsafe fn visibilite(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let m = MotionModule::motion_kind(boma);
     // à chaque image (le modèle peut être rechargé : entrée, réapparition)
-    let on = armes_de(m);
+    let on = if m == hash40("throw_hi") { epee_lancer_haut(MotionModule::frame(boma)) } else { armes_de(m) };
     for n in TOUTES {
         ModelModule::set_mesh_visibility(boma, Hash40::new(n), on.contains(&n));
     }
