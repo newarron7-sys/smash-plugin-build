@@ -50,7 +50,7 @@ jobs:
             # tout ce qui porte "metal" (portraits, menus, sons de victoire...)
             cut -f2 /tmp/x/out/fichiers_metal.txt > /tmp/x/l.txt
             7z x -y sd.raw @/tmp/x/l.txt -o/tmp/x >/dev/null || true
-            rel=$(ls /tmp/x/rex_/pf/module/ft_*.rel 2>/dev/null | head -1)
+            rel=$(ls /tmp/x/rex_/pf/module/ft_$p.rel /tmp/x/rex_/pf/module/ft_$P.rel 2>/dev/null | head -1)
             python3 "$GITHUB_WORKSPACE/rex/tools/analyse_rex.py" "/tmp/x/$F" "$rel" "MetalSonic" > /tmp/x/out/analyse_metal.txt 2>&1 || true
           fi
           rm -f sd.raw /tmp/x/l.txt
