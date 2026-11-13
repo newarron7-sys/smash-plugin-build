@@ -1,11 +1,14 @@
-//! Final Smash de Master Chief (REX : sous-action « FinalSmashplaceholder » de FitChief.pac + FitChiefFinal.pac).
-//! Dans REX : vitesse 0,6 puis 0,5 (image 11) ; intangible ; lance-roquettes (modèle WpnChiefRocketLauncher, effet
-//! 0xE00007 sur RHaveN, tourné de 90°) ; image 5 : souffle autour de lui (14 %, angles 69 / 80, fixe 168) ; image 26 :
-//! cible posée 45 devant et 24 sous lui (effet 0x1FB0015) ; image 39 : tir de la roquette (son 58) ; image 43 : énorme
-//! explosion sur la cible (46 %, angle 48, base 255, taille 45, son 59) ; fin à 95.
-//! REX n'a pas d'animation pour ce Final Smash (« placeholder ») : pose du lance-roquettes de REX (ItemLauncher, visée
-//! vers le bas), voir retarget_exo.py (groupe chief_final). Statut FINAL de Snake remplacé (comme le Final Smash de
-//! Zero sur Roy) ; fin : statut de fin du jeu (remise à zéro de l'état « Final Smash »).
+//! Final Smash de Master Chief « Grenade Launcher » (REX : sous-action « FinalSmashplaceholder » de FitChief.pac +
+//! lance-roquettes de FitChiefFinal.pac), refait d'après la vidéo de REX envoyée par le joueur :
+//! 1. debout, aura du Final Smash qui change de couleur (bleu, cyan, vert, jaune, orange) ;
+//! 2. il décolle en arrière et vers le haut (éclat blanc et souffle au sol : REX image 5, 14 % autour de lui), jets
+//!    sous les pieds, lance-roquettes en main ;
+//! 3. en l'air, il vise devant / en bas (cible rouge), tire une grenade (traînée blanche) ;
+//! 4. énorme explosion sur la cible (REX : 46 %, angle 48, base 255, taille 45) ;
+//! 5. il retombe avec le lance-roquettes jusqu'au sol.
+//! Animation : poses du lance-roquettes de REX (ItemLauncher / ItemLauncherFall / ItemLauncherAirFire), voir
+//! retarget_exo.py (groupe chief_final). Statut FINAL de Snake remplacé (comme le Final Smash de Zero sur Roy) ; fin :
+//! statut de fin du jeu (remise à zéro de l'état « Final Smash »).
 
 use smash::app::lua_bind::*;
 use smash::app::*;
@@ -20,24 +23,38 @@ use smashline::*;
 use crate::speciaux::slot;
 
 const ECHELLE: f32 = 0.82;
-const BLEU: (f32, f32, f32) = (0.45, 0.65, 1.0);
+const BLANC: (f32, f32, f32) = (1.0, 1.0, 1.0);
 const ROUGE: (f32, f32, f32) = (1.0, 0.1, 0.05);
 const ORANGE: (f32, f32, f32) = (1.0, 0.55, 0.15);
-const CIBLE_AV: f32 = 45.0;
-const CIBLE_BAS: f32 = 24.0;
-const T_FIN: f32 = 95.0;
+/// couleurs successives de l'aura (vidéo de REX)
+const AURA: [(f32, f32, f32); 5] = [(0.3, 0.5, 1.0), (0.3, 1.0, 1.0), (0.5, 1.0, 0.3), (1.0, 0.95, 0.3), (1.0, 0.55, 0.15)];
+
+// images du jeu (animation : 20 debout + 54 en vol + 12 tir + 72 retombée)
+const G_DECOLLE: i32 = 20;
+const G_VOL: i32 = 40;          // durée de la montée
+const G_CIBLE: i32 = 50;
+const G_TIR: i32 = 76;
+const G_BOUM: i32 = 84;
+const G_FIN: i32 = 158;
+/// vol : recul et montée totaux (vidéo : ~2 tailles en arrière, ~2,5 tailles en haut)
+const RECUL: f32 = 40.0;
+const MONTEE: f32 = 45.0;
+/// cible : devant son point de départ (vidéo : sur l'adversaire, ~2,5 tailles devant lui)
+const CIBLE_AV: f32 = 50.0;
 
 #[derive(Clone, Copy)]
 struct St {
-    t: f32,
-    fait: i32,
-    air: bool,
+    g: i32,
+    air0: bool,
     x0: f32,
     y0: f32,
     lr: f32,
+    cible: (f32, f32),
     dep: (f32, f32),
+    aura: u32,
+    vy: f32,
 }
-static mut ST: [St; 8] = [St { t: 0.0, fait: -1, air: false, x0: 0.0, y0: 0.0, lr: 1.0, dep: (0.0, 0.0) }; 8];
+static mut ST: [St; 8] = [St { g: 0, air0: false, x0: 0.0, y0: 0.0, lr: 1.0, cible: (0.0, 0.0), dep: (0.0, 0.0), aura: 0, vy: 0.0 }; 8];
 
 unsafe fn fx_w(boma: *mut BattleObjectModuleAccessor, name: &str, x: f32, y: f32, sc: f32, c: (f32, f32, f32)) {
     let pos = Vector3f { x, y, z: 0.0 };
@@ -48,27 +65,37 @@ unsafe fn fx_w(boma: *mut BattleObjectModuleAccessor, name: &str, x: f32, y: f32
     }
 }
 
-/// centre visible de l'explosion : la cible de REX (24 sous lui) ; au sol, posée au niveau du sol
-unsafe fn centre(s: &St) -> (f32, f32) {
-    let x = s.x0 + CIBLE_AV * s.lr;
-    let y = if s.air { s.y0 - CIBLE_BAS } else { s.y0 + 3.0 };
-    (x, y)
+unsafe fn fx_os(boma: *mut BattleObjectModuleAccessor, name: &str, os: &str, z: f32, sc: f32, c: (f32, f32, f32)) -> u32 {
+    let p = Vector3f { x: 0.0, y: 0.0, z };
+    let r = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let h = EffectModule::req_follow(boma, Hash40::new(name), Hash40::new(os), &p, &r, sc, true, 0, 0, 0, 0, 0, false, false) as u32;
+    if h != 0 {
+        EffectModule::set_rgb(boma, h, c.0, c.1, c.2);
+    }
+    h
+}
+
+unsafe fn en_air(boma: *mut BattleObjectModuleAccessor) {
+    StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
+    GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
+    KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
+    KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
 }
 
 unsafe extern "C" fn final_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
     let air = StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR;
     let p = *PostureModule::pos(boma);
-    ST[slot(boma)] = St { t: 0.0, fait: -1, air, x0: p.x, y0: p.y, lr: PostureModule::lr(boma), dep: (p.x, p.y + 12.0) };
+    let lr = PostureModule::lr(boma);
+    let cible = (p.x + CIBLE_AV * lr, if air { p.y - 30.0 } else { p.y });
+    ST[slot(boma)] = St { g: 0, air0: air, x0: p.x, y0: p.y, lr, cible, dep: (p.x, p.y + 12.0), aura: 0, vy: 0.0 };
     if air {
-        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_AIR_STOP);
-        GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
-        KineticModule::unable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
-        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
+        en_air(boma);
     } else {
         KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_GROUND_STOP);
         GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_GROUND_CLIFF_STOP));
     }
+    sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
     // REX : intangible (06050100 3)
     HitModule::set_whole(boma, HitStatus(*HIT_STATUS_XLU), 0);
     MotionModule::change_motion(boma, Hash40::new(if air { "final_air_start" } else { "final_start" }), 0.0, 1.0, false, 0.0, false, false);
@@ -78,111 +105,142 @@ unsafe extern "C" fn final_main(fighter: &mut L2CFighterCommon) -> L2CValue {
 unsafe extern "C" fn final_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
     let e = slot(boma);
-    // la pose finale (visée vers le bas) reste jusqu'à la fin
+    ST[e].g += 1;
+    let g = ST[e].g;
+    let s = ST[e];
     if MotionModule::frame(boma) >= MotionModule::end_frame(boma) - 1.0 {
         MotionModule::set_rate(boma, 0.0);
     }
-    if ST[e].air {
-        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
+    // déplacement : immobile, puis montée en arrière qui ralentit, en l'air immobile, puis retombée après le tir
+    let (vx, vy) = if g < G_DECOLLE {
+        (0.0, 0.0)
+    } else if g < G_DECOLLE + G_VOL {
+        let k = (g - G_DECOLLE) as f32 / G_VOL as f32;
+        let f = 2.0 * (1.0 - k) / G_VOL as f32;
+        (-RECUL * f * s.lr, MONTEE * f)
+    } else if g < G_BOUM + 4 {
+        (0.0, 0.0)
+    } else {
+        ST[e].vy = (ST[e].vy - 0.09).max(-2.2);
+        (0.0, ST[e].vy)
+    };
+    if g >= G_DECOLLE {
+        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, vx, vy);
     }
-    // temps de REX : vitesse 0,6 jusqu'à l'image 11, puis 0,5
-    let t0 = ST[e].t;
-    ST[e].t += if t0 < 11.0 { 0.6 } else { 0.5 };
-    let t = ST[e].t;
-    let mut k = ST[e].fait + 1;
-    while (k as f32) <= t {
-        evenement(fighter, k);
-        k += 1;
+    evenement(fighter, g);
+    // retombé au sol : fin
+    if g > G_BOUM + 4 && StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
+        fighter.change_status(FIGHTER_STATUS_KIND_LANDING.into(), false.into());
+        return 0.into();
     }
-    ST[e].fait = k - 1;
-    // roquette en vol (images 39 à 43 de REX) : traînée de feu et de fumée de sa main jusqu'à la cible
-    if t > 39.0 && t < 43.0 {
-        let s = ST[e];
-        let (cx, cy) = centre(&s);
-        let a = (t - 39.0) / 4.0;
-        let x = s.dep.0 + (cx - s.dep.0) * a;
-        let y = s.dep.1 + (cy - s.dep.1) * a;
-        fx_w(boma, "sys_hit_fire", x, y, 0.6, (1.0, 1.0, 1.0));
-        fx_w(boma, "sys_dash_smoke", x, y, 0.5, (0.8, 0.8, 0.8));
+    if g > G_BOUM + 4 && GroundModule::is_touch(boma, *GROUND_TOUCH_FLAG_DOWN as u32) {
+        StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_GROUND), true);
+        GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_GROUND_CLIFF_STOP));
+        fighter.change_status(FIGHTER_STATUS_KIND_LANDING.into(), false.into());
+        return 0.into();
     }
-    if t >= T_FIN {
+    if g >= G_FIN + 60 {
         let st = if StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR { FIGHTER_STATUS_KIND_FALL } else { FIGHTER_STATUS_KIND_WAIT };
         fighter.change_status(st.into(), false.into());
     }
     0.into()
 }
 
-unsafe fn evenement(fighter: &mut L2CFighterCommon, k: i32) {
+unsafe fn evenement(fighter: &mut L2CFighterCommon, g: i32) {
     let boma = fighter.module_accessor;
-    let s = ST[slot(boma)];
-    let (cx, cy) = centre(&s);
-    match k {
-        0 => {
-            // REX : écran teinté (11170700 : 120, 90, 190), lueur sur le buste et les pieds (0x1FB0006)
-            FLASH(fighter, 0.47, 0.35, 0.75, 0.35);
-            EFFECT_FOLLOW(fighter, Hash40::new("sys_final_aura"), Hash40::new("hip"), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.1, true);
-            LAST_EFFECT_SET_COLOR(fighter, BLEU.0, BLEU.1, BLEU.2);
-            LANDING_EFFECT(fighter, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 0.8, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false);
-        }
-        5 => {
-            // souffle autour de lui (REX : 2 coups spéciaux sur TopN, 14 %)
-            PLAY_SE(fighter, Hash40::new("se_snake_final01"));
-            for (id, ang, t) in [(0u64, 69u64, 6.0f32), (1, 80, 9.0)] {
-                ATTACK(fighter, id, 0, Hash40::new("top"), 14.0, ang, 100, 168, 0, t * ECHELLE, 0.0, 0.0, 0.0, None, None, None, 0.3, 1.0,
-                       *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, false, false, false, false, true,
-                       *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
-                       Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_PUNCH, *ATTACK_REGION_BOMB);
-            }
-            fx_w(boma, "sys_smash_flash", s.x0, s.y0 + 8.0, 1.6, BLEU);
-        }
-        9 => {
-            AttackModule::clear_all(boma);
-            COL_NORMAL(fighter);
-        }
-        26..=38 => {
-            // cible de REX (0x1FB0015) : 45 devant, 24 sous lui
-            if (k - 26) % 3 == 0 {
-                fx_w(boma, "sys_smash_flash_s", cx, cy, 1.6, ROUGE);
-            }
-        }
-        39 => {
-            // tir de la roquette (REX : son 58, effet 0xE00006)
-            PLAY_SE(fighter, Hash40::new("se_snake_final02"));
-            EFFECT_FOLLOW(fighter, Hash40::new("sys_muzzleflash"), Hash40::new("haver"), 0.0, 0.0, 8.0, 0.0, 0.0, 0.0, 1.6, true);
-            EFFECT_FOLLOW(fighter, Hash40::new("sys_hit_fire"), Hash40::new("haver"), 0.0, 0.0, 8.0, 0.0, 0.0, 0.0, 0.8, true);
-            // souffle arrière du lance-roquettes
-            EFFECT(fighter, Hash40::new("sys_dash_smoke"), Hash40::new("haver"), 0.0, 0.0, -16.0, 0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, true);
-            QUAKE(fighter, *CAMERA_QUAKE_KIND_S);
-            let mut p = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-            ModelModule::joint_global_position(boma, Hash40::new("haver"), &mut p, true);
-            ST[slot(boma)].dep = (p.x, p.y);
-        }
-        43 => {
-            // explosion sur la cible (REX : 46 %, angle 48, base 255, taille 45, centre 45 devant / 24 dessous)
-            PLAY_SE(fighter, Hash40::new("se_snake_final03"));
-            PLAY_SE(fighter, Hash40::new("se_common_bomb_l"));
-            fx_w(boma, "sys_bomb_a", cx, cy + 6.0, 3.6, (1.0, 1.0, 1.0));
-            fx_w(boma, "sys_bomb_a", cx - 16.0, cy + 2.0, 2.2, (1.0, 1.0, 1.0));
-            fx_w(boma, "sys_bomb_a", cx + 16.0, cy + 2.0, 2.2, (1.0, 1.0, 1.0));
-            fx_w(boma, "sys_smash_flash", cx, cy + 10.0, 3.0, ORANGE);
-            QUAKE(fighter, *CAMERA_QUAKE_KIND_XL);
-            AttackModule::clear_all(boma);
-            ATTACK(fighter, 0, 0, Hash40::new("top"), 46.0, 48, 100, 0, 255, 45.0 * ECHELLE, 0.0, -CIBLE_BAS, CIBLE_AV, None, None, None, 2.0, 1.0,
+    let e = slot(boma);
+    let s = ST[e];
+    // aura du Final Smash, couleur qui change toutes les 8 images
+    if g == 1 {
+        ST[e].aura = fx_os(boma, "sys_final_aura", "hip", 0.0, 1.1, AURA[0]);
+        FLASH(fighter, 0.47, 0.35, 0.75, 0.3);
+    }
+    if g % 8 == 0 && ST[e].aura != 0 && g < G_BOUM + 20 {
+        let c = AURA[((g / 8) as usize) % AURA.len()];
+        EffectModule::set_rgb(boma, ST[e].aura, c.0, c.1, c.2);
+    }
+    if g == 8 {
+        COL_NORMAL(fighter);
+    }
+    if g == G_DECOLLE {
+        // décollage : éclat blanc au sol, souffle autour de lui (REX image 5 : 2 coups de 14 %)
+        en_air(boma);
+        PLAY_SE(fighter, Hash40::new("se_snake_final01"));
+        fx_w(boma, "sys_smash_flash", s.x0, s.y0 + 4.0, 2.2, BLANC);
+        LANDING_EFFECT(fighter, Hash40::new("sys_landing_smoke"), Hash40::new("top"), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false);
+        EFFECT_FOLLOW(fighter, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0.0, 8.0, 0.0, -45.0, 0.0, 0.0, 1.2, true);
+        for (id, ang, t) in [(0u64, 69u64, 6.0f32), (1, 80, 9.0)] {
+            ATTACK(fighter, id, 0, Hash40::new("top"), 14.0, ang, 100, 168, 0, t * ECHELLE, 0.0, 0.0, 0.0, None, None, None, 0.3, 1.0,
                    *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, false, false, false, false, true,
                    *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
-                   Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_BOMB);
+                   Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_PUNCH, *ATTACK_REGION_BOMB);
         }
-        46 => {
-            AttackModule::clear_all(boma);
-            fx_w(boma, "sys_bomb_a", cx, cy + 22.0, 2.0, (1.0, 1.0, 1.0));
+    }
+    if g == G_DECOLLE + 4 {
+        AttackModule::clear_all(boma);
+    }
+    // jets sous les pieds pendant la montée (flammes orange puis bleues, vidéo)
+    if g >= G_DECOLLE && g < G_DECOLLE + G_VOL + 10 && g % 4 == 0 {
+        let c = if g < G_DECOLLE + 20 { ORANGE } else { (0.4, 0.9, 1.0) };
+        for os in ["footl", "footr"] {
+            fx_os(boma, "sys_hit_fire", os, 0.0, 0.45, c);
         }
-        50 | 56 | 62 => {
-            fx_w(boma, "sys_dash_smoke", cx + (k - 56) as f32 * 2.0, cy + 8.0, 2.5, (0.35, 0.35, 0.35));
-        }
-        80 => {
-            EFFECT_OFF_KIND(fighter, Hash40::new("sys_final_aura"), false, false);
-        }
-        _ => {}
+    }
+    // cible rouge sur le point visé
+    if g >= G_CIBLE && g < G_BOUM && (g - G_CIBLE) % 4 == 0 {
+        fx_w(boma, "sys_smash_flash_s", s.cible.0, s.cible.1 + 3.0, 1.6, ROUGE);
+    }
+    if g == G_TIR {
+        // tir de la grenade (REX : son 58)
+        PLAY_SE(fighter, Hash40::new("se_snake_final02"));
+        fx_os(boma, "sys_muzzleflash", "haver", 8.0, 1.6, BLANC);
+        fx_os(boma, "sys_hit_fire", "haver", 8.0, 0.8, BLANC);
+        fx_os(boma, "sys_dash_smoke", "haver", -16.0, 1.0, (0.85, 0.85, 0.85));
+        QUAKE(fighter, *CAMERA_QUAKE_KIND_S);
+        let mut p = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+        ModelModule::joint_global_position(boma, Hash40::new("haver"), &mut p, true);
+        ST[e].dep = (p.x, p.y);
+    }
+    // grenade en vol : traînée blanche jusqu'à la cible
+    if g > G_TIR && g < G_BOUM {
+        let a = (g - G_TIR) as f32 / (G_BOUM - G_TIR) as f32;
+        let x = s.dep.0 + (s.cible.0 - s.dep.0) * a;
+        let y = s.dep.1 + (s.cible.1 + 4.0 - s.dep.1) * a;
+        fx_w(boma, "sys_smash_flash_s", x, y, 0.7, BLANC);
+        fx_w(boma, "sys_dash_smoke", x, y, 0.35, (0.9, 0.9, 0.9));
+    }
+    if g == G_BOUM {
+        // explosion sur la cible (REX : 46 %, angle 48, base 255, taille 45 ; son 59)
+        let (cx, cy) = s.cible;
+        PLAY_SE(fighter, Hash40::new("se_snake_final03"));
+        PLAY_SE(fighter, Hash40::new("se_common_bomb_l"));
+        fx_w(boma, "sys_smash_flash", cx, cy + 12.0, 3.4, (1.0, 0.95, 0.7));
+        fx_w(boma, "sys_bomb_a", cx, cy + 10.0, 3.8, BLANC);
+        fx_w(boma, "sys_bomb_a", cx - 14.0, cy + 6.0, 2.2, BLANC);
+        fx_w(boma, "sys_bomb_a", cx + 14.0, cy + 6.0, 2.2, BLANC);
+        QUAKE(fighter, *CAMERA_QUAKE_KIND_XL);
+        AttackModule::clear_all(boma);
+        let p = *PostureModule::pos(boma);
+        let dz = (cx - p.x) * s.lr;
+        let dy = cy + 10.0 - p.y;
+        ATTACK(fighter, 0, 0, Hash40::new("top"), 46.0, 48, 100, 0, 255, 45.0 * ECHELLE, 0.0, dy, dz, None, None, None, 2.0, 1.0,
+               *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, false, false, false, false, true,
+               *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
+               Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_BOMB);
+    }
+    if g == G_BOUM + 3 {
+        AttackModule::clear_all(boma);
+    }
+    // boule de feu orange puis fumée noire (vidéo)
+    if g == G_BOUM + 6 || g == G_BOUM + 12 {
+        fx_w(boma, "sys_bomb_a", s.cible.0 + (g - G_BOUM - 9) as f32, s.cible.1 + 14.0, 2.6, ORANGE);
+    }
+    if g >= G_BOUM + 16 && g <= G_BOUM + 40 && (g - G_BOUM) % 8 == 0 {
+        fx_w(boma, "sys_dash_smoke", s.cible.0, s.cible.1 + 10.0, 2.4, (0.25, 0.25, 0.25));
+    }
+    if g == G_BOUM + 20 {
+        EFFECT_OFF_KIND(fighter, Hash40::new("sys_final_aura"), false, false);
+        ST[e].aura = 0;
     }
 }
 
@@ -193,6 +251,7 @@ unsafe extern "C" fn final_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     AttackModule::clear_all(boma);
     EFFECT_OFF_KIND(fighter, Hash40::new("sys_final_aura"), false, false);
     COL_NORMAL(fighter);
+    ST[slot(boma)].aura = 0;
     smashline::original_status(End, fighter, *FIGHTER_STATUS_KIND_FINAL)(fighter)
 }
 

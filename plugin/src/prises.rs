@@ -63,8 +63,11 @@ unsafe extern "C" fn game_catchattack(agent: &mut L2CAgentBase) {
     frame(agent.lua_state_agent, 4.0);
     if is_excute(agent) {
         AttackModule::set_damage_shake_scale(agent.module_accessor, 0.1);
+        // v28 (vidéos v25 à v27 : après le coup pendant la prise, l'adversaire tenu tournait le dos à Chief) : coup
+        // « direct » comme celui de Snake (dernier booléen à true ; à false, le jeu le traite comme un projectile et
+        // tourne l'adversaire vers le coup, placé devant lui), ni renvoyable ni absorbable
         ATTACK(agent, 0, 0, Hash40::new("top"), 3.0, 361, 100, 40, 0, 4.1 * ECHELLE, 0.0, 12.0, 8.0, None, None, None, 2.1,
-               1.0, *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, true, true, false, false, false,
+               1.0, *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, false, false, false, false, true,
                *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
                Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_PUNCH, *ATTACK_REGION_PUNCH);
         AttackModule::set_catch_only_all(agent.module_accessor, true, false);
