@@ -470,7 +470,9 @@ unsafe fn vol_effets(boma: *mut BattleObjectModuleAccessor, e: usize, vx: f32, v
         VOL_FX[e][0] = match dir {
             // v12c (demandé) : en montant comme en descendant, l'aura est sous ses pieds (avant : au-dessus de la tête
             // en montant, autour de la taille en descendant)
-            1 | 3 => vol_fx(boma, "sys_score_aura", (0.0, -3.0, 0.0), (180.0, 0.0, 0.0), 1.1, true),
+            // v12d (demandé, dessin du joueur) : retournée : en coupe (U) autour de ses pieds, ouverte vers le haut,
+            // comme l'éclat au pied de la vidéo de REX
+            1 | 3 => vol_fx(boma, "sys_score_aura", (0.0, -1.0, 0.0), (0.0, 0.0, 0.0), 1.1, true),
             2 => vol_fx(boma, "sys_score_aura", (0.0, 6.0, 9.0), (-90.0, 0.0, 0.0), 1.0, true),
             _ => 0,
         };
