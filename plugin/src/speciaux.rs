@@ -500,11 +500,9 @@ unsafe fn vol_effets(boma: *mut BattleObjectModuleAccessor, e: usize, vx: f32, v
 unsafe extern "C" fn hi_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
     let e = slot(boma);
-    if VOL_FAIT[e] && StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR {
-        // une fois par saut : rien ne se passe
-        fighter.change_status(FIGHTER_STATUS_KIND_FALL.into(), false.into());
-        return 0.into();
-    }
+    // v12b (crash au 2e haut B) : le ressort de Sonic (article GIMMICKJUMP) n'est jamais créé ; s'il en reste un, il
+    // est retiré avant le vol
+    ArticleModule::remove_exist(boma, *FIGHTER_SONIC_GENERATE_ARTICLE_GIMMICKJUMP, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
     let sol = StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND;
     VOL_FAIT[e] = true;
     VOL_T[e] = 0;
@@ -595,6 +593,10 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     0.into()
 }
 
+unsafe extern "C" fn hi_rien(_fighter: &mut L2CFighterCommon) -> L2CValue {
+    0.into()
+}
+
 unsafe extern "C" fn hi_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
     let e = slot(boma);
@@ -610,6 +612,11 @@ unsafe extern "C" fn hi_end(fighter: &mut L2CFighterCommon) -> L2CValue {
 pub unsafe fn frame_hi(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let st = StatusModule::status_kind(boma);
+    // v12b : une fois par saut : le haut B est bloqué avant d'entrer dans le statut (avant : le statut démarrait puis
+    // repartait aussitôt en chute, ce qui faisait planter le jeu au 2e haut B)
+    if VOL_FAIT[slot(boma)] && StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR && st != *FIGHTER_STATUS_KIND_SPECIAL_HI {
+        WorkModule::unable_transition_term(boma, *FIGHTER_STATUS_TRANSITION_TERM_ID_CONT_SPECIAL_HI);
+    }
     if StatusModule::situation_kind(boma) != *SITUATION_KIND_AIR
         || st == *FIGHTER_STATUS_KIND_CLIFF_CATCH
         || st == *FIGHTER_STATUS_KIND_DAMAGE_FLY
@@ -661,5 +668,8 @@ pub fn install(a: &mut Agent) {
     a.acmd("sound_specialhi", s_vol, Priority::Low);
     a.acmd("expression_specialhi", rien, Priority::Low);
     a.status(Main, *FIGHTER_STATUS_KIND_SPECIAL_HI, hi_main);
+    // v12b : statuts de Sonic qui posent le ressort et le gèrent : remplacés par rien (le vol est tout dans hi_main)
+    a.status(Init, *FIGHTER_STATUS_KIND_SPECIAL_HI, hi_rien);
+    a.status(Exec, *FIGHTER_STATUS_KIND_SPECIAL_HI, hi_rien);
     a.status(End, *FIGHTER_STATUS_KIND_SPECIAL_HI, hi_end);
 }
