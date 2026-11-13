@@ -53,6 +53,40 @@ jobs:
           SCALE=1 NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitMetalSonic00.pac $D/FitMetalSonicMotionEtc.pac /tmp/out /tmp/out/motion/c00 shadow_base rex/tools/dolly_motions.txt > /tmp/out/animations.txt 2>&1 || true
           SCALE=1 NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitMetalSonic00.pac $D/FitMetalSonicMotionEtc.pac /tmp/out /tmp/out/motion/c00 shadow_coups >> /tmp/out/animations.txt 2>&1 || true
           echo "animations : $(ls /tmp/out/motion/c00/*.nuanmb 2>/dev/null | wc -l)"
+      - name: Cache outils (cargo-skyline, toolchain Switch)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-skyline
+            ~/.cargo/skyline
+            ~/.rustup/toolchains/*skyline*
+            ~/.cargo/registry
+            ~/.cargo/git
+            rex/metalsonic/target
+          key: metal-v1-${{ hashFiles('rex/metalsonic/Cargo.toml') }}
+          restore-keys: |
+            metal-
+            chief-
+      - name: Compiler le plugin
+        working-directory: rex/metalsonic
+        timeout-minutes: 40
+        run: |
+          cp /tmp/out/generated.rs src/generated.rs
+          command -v cargo-skyline >/dev/null || cargo install cargo-skyline
+          if ! (rustup toolchain list | grep -qi skyline && [ -d ~/.cargo/skyline/toolchain ]); then for i in 1 2 3 4 5; do cargo skyline update-std && break; sleep 20; done; fi
+          set +o pipefail; yes | cargo skyline build --release > /tmp/out/compilation.txt 2>&1; set -o pipefail
+          grep -E "^error" /tmp/out/compilation.txt | head -20 || true
+          rm -f src/generated.rs
+          test -f target/aarch64-skyline-switch/release/libmetal_sonic.nro
+      - name: Dossier du mod (skin sur les 8 costumes de Sonic + animations + plugin) et zip
+        run: |
+          V=$(dirname $(dirname $(dirname $(dirname $(dirname $(cat /tmp/skin_dir.txt))))))
+          M="/tmp/zip/(Moveset) Metal Sonic"; mkdir -p "$M"
+          cp -r "$V"/. "$M"/
+          MO="$M/fighter/sonic/motion/body/c00"; mkdir -p "$MO"; cp /tmp/out/motion/c00/*.nuanmb "$MO/"
+          cp rex/metalsonic/target/aarch64-skyline-switch/release/libmetal_sonic.nro "$M/plugin.nro"
+          cd /tmp/zip && zip -qr /tmp/out/metal_sonic.zip . && echo "zip : $(du -h /tmp/out/metal_sonic.zip | cut -f1), fichiers : $(find /tmp/zip -type f | wc -l)"
+          find /tmp/zip -type f | sed 's#^/tmp/zip/##' > /tmp/out/contenu_zip.txt
       - name: Chiffrer (cle du depot + cle de la session) et publier
         if: always()
         env:
