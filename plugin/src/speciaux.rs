@@ -442,6 +442,34 @@ unsafe fn c4_poser(fighter: &mut L2CFighterCommon, x: f32, y: f32) {
 
 /// chaque image tant qu'il est posé : libérée de la main, au point de pose, effets / sons de C4 coupés.
 /// Renvoie la position où le modèle est vraiment dessiné (lue sur son os), si on peut la lire
+/// vidéos v13 à v18 : ascenseur toujours debout, même remis à plat par set_rot. Le modèle a 6 copies de son maillage
+/// (objets_ult.py), le haut de l'ascenseur sur chacun des 6 axes du modèle (+Y, -Y, +X, -X, +Z, -Z), et 3 os repères
+/// à 10 le long de ses axes. Ici : on mesure dans le monde quel axe du modèle pointe le plus vers le haut et on
+/// n'affiche que la copie dont le haut est sur cet axe : l'ascenseur est à plat quelle que soit la rotation du jeu
+unsafe fn lift_a_plat(cb: *mut BattleObjectModuleAccessor) {
+    let lire = |n: &str| {
+        let mut v = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+        ModelModule::joint_global_position(cb, Hash40::new(n), &mut v, true);
+        v
+    };
+    let o = lire("ChiefRoot");
+    let mut meilleur = ("_py", 0.0f32);
+    for (axe, pos, neg) in [("axe_x", "_px", "_nx"), ("axe_y", "_py", "_ny"), ("axe_z", "_pz", "_nz")] {
+        let dy = lire(axe).y - o.y;
+        if dy.abs() > meilleur.1.abs() {
+            meilleur = (if dy > 0.0 { pos } else { neg }, dy);
+        }
+    }
+    if meilleur.1.abs() < 1.0 {
+        // repères illisibles : on garde le modèle tel quel
+        meilleur.0 = "_py";
+    }
+    for v in ["_py", "_ny", "_px", "_nx", "_pz", "_nz"] {
+        let n = format!("lift_0{}", v);
+        ModelModule::set_mesh_visibility(cb, Hash40::new(&n), v == meilleur.0);
+    }
+}
+
 unsafe fn c4_tenir(fighter: &mut L2CFighterCommon, x: f32, y: f32) -> Option<(f32, f32)> {
     let boma = fighter.module_accessor;
     let e = slot(boma);
@@ -466,6 +494,7 @@ unsafe fn c4_tenir(fighter: &mut L2CFighterCommon, x: f32, y: f32) -> Option<(f3
         // une fois libérée ; remise à plat (le modèle de REX est à plat dans son repère) et tournée vers la droite
         PostureModule::set_rot(cb, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 0);
         PostureModule::set_lr(cb, 1.0);
+        lift_a_plat(cb);
         EffectModule::kill_all(cb, 0, true, false);
         SoundModule::stop_all_sound(cb);
         // os « ChiefRoot » (aucune animation de la C4 ne le connaît) ; il est C4_RACINE_Y sous l'origine du modèle

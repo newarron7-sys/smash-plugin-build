@@ -36,6 +36,9 @@ const VISEE_MAX: f32 = 151.0;
 const CANON_Y: f32 = 13.6;
 const CANON_Z: f32 = 4.0;
 const PORTEE_FUSIL: f32 = 150.0;
+/// bout du canon devant la main (vidéo v15 : fusil ~4 devant la main droite ; magnum ~2,5)
+const LONG_FUSIL: f32 = 4.0;
+const LONG_MAGNUM: f32 = 2.5;
 /// tailles de REX × 0,82 (même échelle que ses autres coups, gen_rex.py)
 const ECHELLE: f32 = 0.82;
 
@@ -150,6 +153,20 @@ unsafe fn tir(fighter: &mut L2CFighterCommon, id: u64, dmg: f32, kbg: i32, fkb: 
            Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_PUNCH, *ATTACK_REGION_OBJECT);
 }
 
+/// position de la main qui tient l'arme, par rapport aux pieds (y = haut, z = devant) : v16, « les effets de feu ne
+/// suivent même pas le canon » (position fixe calculée) ; maintenant lue sur l'os de la main (REX : fusil sur RHaveN
+/// = « haver », magnum sur LHaveN = « havel »)
+unsafe fn main_arme(boma: *mut BattleObjectModuleAccessor, os: &str) -> (f32, f32) {
+    let p = PostureModule::pos(boma);
+    let lr = PostureModule::lr(boma);
+    let mut v = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    ModelModule::joint_global_position(boma, Hash40::new(os), &mut v, true);
+    if v.x == 0.0 && v.y == 0.0 {
+        return (CANON_Y, CANON_Z);
+    }
+    (v.y - (*p).y, (v.x - (*p).x) * lr)
+}
+
 /// tir au bout du canon (position monde) ; demandé (v13) : « rajoute les explosions comme sur les smash » : mêmes
 /// effets que canon() d'effets.rs (éclair de bouche, flamme, éclat jaune), plus `cone` flammes devant pour le magnum
 /// (comme le smash avant)
@@ -229,9 +246,10 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
                 // une balle (REX : sous-programme 0x28964 ; 1 %, croissance 25, base 8, taille 1,85)
                 FUSIL[e] -= 1;
                 AttackModule::clear_all(boma);
-                tir(fighter, 0, 1.0, 25, 0, 8, 1.85, CANON_Y, CANON_Z, deg, 2.0, PORTEE_FUSIL, 0.5);
+                let (my, mz) = main_arme(boma, "haver");
+                tir(fighter, 0, 1.0, 25, 0, 8, 1.85, my, mz, deg, 2.0, PORTEE_FUSIL, 0.5);
                 EFFACER[e] = 3;
-                eclair(boma, 11.8, CANON_Z, deg, 2.5, 0.7, 0);
+                eclair(boma, my, mz, deg, LONG_FUSIL, 0.7, 0);
                 // geste de tir : c'est l'animation « tenir » du jeu elle-même (SpecialNGunShoot en boucle) : v13 / v14,
                 // jambes figées en marchant quand le plugin changeait le haut du corps à chaque balle
                 if !RAFALE[e] {
@@ -330,11 +348,12 @@ unsafe extern "C" fn lancer_boucle(fighter: &mut L2CFighterCommon) -> L2CValue {
                 MAGNUM[e] -= 1;
                 PLAY_SE(fighter, Hash40::new("se_snake_special_n02"));
                 AttackModule::clear_all(boma);
-                tir(fighter, 0, 4.0, 76, 20, 75, 5.4, 15.2, 11.7, 0.0, 0.0, 4.0, 1.0);
-                tir(fighter, 1, 3.0, 60, 20, 56, 2.5, 15.2, 11.7, 0.0, 0.0, 44.0, 1.0);
-                tir(fighter, 2, 1.0, 0, 0, 7, 1.0, 15.2, 11.7, 0.0, 0.0, 136.0, 1.0);
+                let (my, mz) = main_arme(boma, "havel");
+                tir(fighter, 0, 4.0, 76, 20, 75, 5.4, my, mz, 0.0, 0.0, 4.0, 1.0);
+                tir(fighter, 1, 3.0, 60, 20, 56, 2.5, my, mz, 0.0, 0.0, 44.0, 1.0);
+                tir(fighter, 2, 1.0, 0, 0, 7, 1.0, my, mz, 0.0, 0.0, 136.0, 1.0);
                 EFFACER[e] = 3;
-                eclair(boma, 15.2, 11.7, 0.0, 1.0, 1.6, 2);
+                eclair(boma, my, mz, 0.0, LONG_MAGNUM, 1.6, 2);
             }
             if f >= 30.0 && f < 40.0 && MAGNUM[e] > 0
                 && ControlModule::check_button_trigger(boma, *CONTROL_PAD_BUTTON_SPECIAL) {
