@@ -10,8 +10,8 @@ use smash::lua2cpp::*;
 use smash::phx::{Hash40, Vector3f};
 use smash_script::*;
 
-const TOUTES: [&str; 13] = [
-    "chief_rifle", "chief_rifledos", "chief_sword", "chief_swordb", "chief_smg", "chief_smgl", "chief_sniper",
+const TOUTES: [&str; 14] = [
+    "chief_lanceur", "chief_rifle", "chief_rifledos", "chief_sword", "chief_swordb", "chief_smg", "chief_smgl", "chief_sniper",
     "chief_shotgun", "chief_battle", "chief_plasmar", "chief_plasmarl", "chief_magnum", "chief_plasmap",
 ];
 
@@ -30,6 +30,8 @@ fn armes_de(motion: u64) -> &'static [&'static str] {
         // B neutre tapé : magnum (REX : effet 0x1FB0012 sur LHaveN, fusil rangé dans le dos) et son rechargement
         m if m == hash40("special_n_throw_m") || m == hash40("special_air_n_throw_m")
             || m == hash40("special_lw_squat_start") || m == hash40("special_air_lw_wall") => &["chief_magnum", "chief_rifledos"],
+        // Final Smash : lance-roquettes de REX (FitChiefFinal.pac, effet 0xE00007 sur RHaveN)
+        m if m == hash40("final_start") || m == hash40("final_air_start") => &["chief_lanceur", "chief_rifledos"],
         _ => &["chief_rifle"],
     }
 }

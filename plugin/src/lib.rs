@@ -234,6 +234,7 @@ mod galerie;
 mod prises;
 mod neutre;
 mod lancers;
+mod finale;
 
 unsafe extern "C" fn mc_frame(fighter: &mut L2CFighterCommon) {
     armes::visibilite(fighter);
@@ -257,6 +258,7 @@ macro_rules! scripts {
             neutre::install(&mut a);
             prises::install(&mut a);
             lancers::install(&mut a);
+            finale::install(&mut a);
             a.on_line(Main, mc_frame);
             a.install();
         }
