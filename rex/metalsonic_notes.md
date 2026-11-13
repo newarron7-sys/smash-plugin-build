@@ -30,5 +30,19 @@ Procédure suivie : rex/PROCEDURE.md (dépôt final-zoom, branche combo-wip), co
 - Effets et sons de Sonic encore joués sur ses coups (Super Sonic v1 les remplaçait déjà) : à faire (étape 1b).
 - Fichier d'effets du skin retiré au lieu d'être mis en ef_sonic_c00.eff avant reslotter : à refaire.
 
+## Demandes du joueur (13/11, vidéos de REX + ses essais)
+- Ne plus livrer chara_7 (il en a déjà un).
+- Course : flamme violette dans le dos (REX : effet n° 28 sur TopN) ; plus les nuages bleus de la course de Sonic.
+- Arrière aérien « Jet Thrust » : feu qui sort du dos (REX : effet n° 73 sur BlasterM, image 6) qui le pousse vers
+  l'avant (REX : pas d'avancée dans TransN : poussée faite par le plugin, POUSSEES dans lib.rs).
+- Aérien neutre « Body Spark » : il gardait la boule de Sonic (expression / visibilité de Sonic) : étincelles
+  électriques, corps normal forcé pendant tous les coups (effets::corps_normal).
+
+## Corrections faites (v1b)
+- effets.rs : scripts effect_ de Sonic vides ou remplacés (déplacements comme Super Sonic, coups), expression et son
+  de l'aérien neutre vides ; flamme de course = sys_rocketbelt_jet violet sur « top » (0, 7, -2,5), tourné vers
+  l'arrière (rotation x 1,5708 rad) ; back air = sys_flame + sys_rocketbelt_jet sur « top », poussée 1,6 / 0,4.
+- Fichier d'effets du skin remis en ef_sonic_c00.eff avant reslotter -> ef_sonic_c08.eff déclaré.
+
 ## VALIDÉ PAR LE JOUEUR / CORRECTIONS (ne pas casser)
 - (rien de validé en jeu pour l'instant)
