@@ -1,4 +1,4 @@
-name: Metal Sonic (REX) sur Sonic c07 - modele, coups, animations (chiffre)
+name: Metal Sonic (REX) sur Sonic c08-c15 - modele, coups, animations (chiffre)
 on:
   push:
     branches: [ main ]

@@ -1,7 +1,7 @@
 #![feature(proc_macro_hygiene)]
 #![allow(unused, non_snake_case, non_upper_case_globals, static_mut_refs, unused_unsafe, unused_must_use)]
 
-//! Metal Sonic (Super Smash Bros REX) sur Sonic, à la place des costumes c00 à c07 (pas de nouvelle case) : usage perso.
+//! Metal Sonic (Super Smash Bros REX) sur Sonic, case Metal Sonic existante (costumes c08 à c15) : usage perso.
 //! Même procédure que Super Shadow (rex/PROCEDURE.md). Étape 1 : coups normaux, smashs et aériens de REX
 //! (generated.rs, créé à la compilation par rex/tools/gen_rex.py, jamais dans le dépôt) sur ses animations de REX ;
 //! modèle = skin GameBanana « Metal Sonic (Smash Ultimate Style) » (squelette de Sonic).
@@ -97,8 +97,8 @@ include!("generated.rs");
 /// perso de base (nom interne) : Sonic
 pub const BASE: &str = "sonic";
 
-/// demandé : pas de nouvelle case (plus de place sur l'écran de sélection) : il remplace les 8 costumes de Sonic
-pub const SS_COSTUMES: [usize; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
+/// demandé : sur la case Metal Sonic déjà présente à la sélection (ui_chara_msonic : costumes c08 à c15 de Sonic)
+pub const SS_COSTUMES: [usize; 8] = [8, 9, 10, 11, 12, 13, 14, 15];
 
 pub(crate) fn find(script: &str) -> Option<&'static Mv> {
     MOVES.iter().find(|m| m.script == script)
