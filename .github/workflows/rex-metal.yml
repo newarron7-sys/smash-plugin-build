@@ -40,7 +40,7 @@ jobs:
           7z l -ba -slt sd.raw | awk '/^Path = /{p=substr($0,8)} /^Size = /{print $3"\t"p}' > /tmp/x/out/liste_sd.txt
           sed -n 's#^[0-9]*\trex_/pf/[Ff]ighter/\([^/]*\)$#\1#p' /tmp/x/out/liste_sd.txt | sort -u > /tmp/x/out/persos_rex.txt
           grep -i metal /tmp/x/out/liste_sd.txt > /tmp/x/out/fichiers_metal.txt || true
-          P=$(grep -i metal /tmp/x/out/persos_rex.txt | head -1)
+          P=$(grep -ix metalsonic /tmp/x/out/persos_rex.txt | head -1)
           echo "dossiers de persos : $(wc -l < /tmp/x/out/persos_rex.txt), Metal trouve : $([ -n "$P" ] && echo oui || echo non)"
           echo "$P" > /tmp/x/out/dossier.txt
           if [ -n "$P" ]; then
@@ -51,7 +51,7 @@ jobs:
             cut -f2 /tmp/x/out/fichiers_metal.txt > /tmp/x/l.txt
             7z x -y sd.raw @/tmp/x/l.txt -o/tmp/x >/dev/null || true
             rel=$(ls /tmp/x/rex_/pf/module/ft_*.rel 2>/dev/null | head -1)
-            python3 rex/tools/analyse_rex.py "/tmp/x/$F" "$rel" "MetalSonic" > /tmp/x/out/analyse_metal.txt 2>&1 || true
+            python3 "$GITHUB_WORKSPACE/rex/tools/analyse_rex.py" "/tmp/x/$F" "$rel" "MetalSonic" > /tmp/x/out/analyse_metal.txt 2>&1 || true
           fi
           rm -f sd.raw /tmp/x/l.txt
           echo "fichiers : $(find /tmp/x -type f | wc -l), taille : $(du -sh /tmp/x | cut -f1)"
