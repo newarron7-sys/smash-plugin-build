@@ -5,6 +5,7 @@
 //! - provocations : ses animations ; les scripts de Snake (boîte en carton) remplacés. Sons de REX (19316 / 19317) sur
 //!   les étiquettes de la boîte (se_snake_cardboard_in / out).
 
+use smash::app::sv_animcmd::{frame, wait};
 use smash::app::lua_bind::*;
 use smash::lib::lua_const::*;
 use smash::lua2cpp::*;
