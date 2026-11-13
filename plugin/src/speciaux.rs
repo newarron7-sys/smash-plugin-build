@@ -307,7 +307,8 @@ const L_VOL: i32 = 14;              // lancé : images jusqu'au sol
 const L_DEVANT: f32 = 11.0;         // vidéo de REX : posé ~0,6 fois sa taille devant lui
 const L_LARGE: f32 = 5.0;           // demi-largeur de la colonne (vidéo : ~ la moitié de sa taille)
 const L_HAUT: f32 = 110.0;          // zone où il est « dans la colonne » (vidéo de REX : jusqu'en haut de l'écran)
-const L_JET_HAUT: f32 = 7.0;        // étirement du jet (v13 : 2,6 = ~7 de haut ; vidéo de l'autre Chief : ~25)
+const L_JET_HAUT: f32 = 3.5;        // étirement du jet (v14 : 7 = plus de 2 fois sa taille ; vidéo de l'autre Chief : ~1,3 fois)
+const L_JET_ROT: f32 = 126.0;
 const L_ELAN: f32 = 3.4;            // vidéo de REX : ~5 fois sa taille ; 3,9 l'envoyait hors de l'écran (vidéo v9)
 static mut L_ETAT: [u8; 8] = [0; 8];    // 0 rien, 1 en vol, 2 posé
 static mut L_POS: [(f32, f32); 8] = [(0.0, 0.0); 8];
@@ -524,10 +525,11 @@ unsafe fn ascenseur(fighter: &mut L2CFighterCommon) {
             if (L_FAISCEAU[e] == 0 || !EffectModule::is_exist_effect(boma, L_FAISCEAU[e])) && L_FAISCEAU_T[e] >= 6 {
                 L_FAISCEAU_T[e] = 0;
                 let p = Vector3f { x: bx, y: by + 0.5, z: 0.0 };
-                let r = Vector3f { x: 0.0, y: 0.0, z: 180.0 };
+                // v14 (z 180°) : jet en diagonale, à 144° (vers le haut et l'arrière) au lieu de 90° : 54° de moins
+                let r = Vector3f { x: 0.0, y: 0.0, z: L_JET_ROT };
                 L_FAISCEAU[e] = EffectModule::req(boma, Hash40::new(crate::armes::JET), &p, &r, 1.0, 0, 0, false, 0) as u32;
                 if L_FAISCEAU[e] != 0 {
-                    EffectModule::set_scale(boma, L_FAISCEAU[e], &Vector3f { x: 1.0, y: L_JET_HAUT, z: 1.0 });
+                    EffectModule::set_scale(boma, L_FAISCEAU[e], &Vector3f { x: 0.6, y: L_JET_HAUT, z: 0.6 });
                 }
             }
             // Chief entre dans la colonne au sol (en marchant, en courant...) : accroupi puis propulsé (vidéo de REX)

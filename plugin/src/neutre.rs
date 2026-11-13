@@ -231,8 +231,9 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
                 AttackModule::clear_all(boma);
                 tir(fighter, 0, 1.0, 25, 0, 8, 1.85, CANON_Y, CANON_Z, deg, 2.0, PORTEE_FUSIL, 0.5);
                 EFFACER[e] = 3;
-                eclair(boma, CANON_Y, CANON_Z, deg, 12.0, 0.7, 0);
-                haut(boma, e, "special_air_n_throw_lw", true);
+                eclair(boma, 11.8, CANON_Z, deg, 2.5, 0.7, 0);
+                // geste de tir : c'est l'animation « tenir » du jeu elle-même (SpecialNGunShoot en boucle) : v13 / v14,
+                // jambes figées en marchant quand le plugin changeait le haut du corps à chaque balle
                 if !RAFALE[e] {
                     SoundModule::play_se(boma, Hash40::new("se_snake_special_n03"), true, false, false, false, enSEType(0));
                     RAFALE[e] = true;
@@ -242,7 +243,6 @@ pub unsafe fn chaque_image(fighter: &mut L2CFighterCommon) {
         H_VIDE => {
             if t == 0 {
                 PLAY_SE(fighter, Hash40::new("se_snake_special_n05"));
-                haut(boma, e, "special_air_n_throw_hi", true);
             }
         }
         H_CROSSE => {
@@ -334,7 +334,7 @@ unsafe extern "C" fn lancer_boucle(fighter: &mut L2CFighterCommon) -> L2CValue {
                 tir(fighter, 1, 3.0, 60, 20, 56, 2.5, 15.2, 11.7, 0.0, 0.0, 44.0, 1.0);
                 tir(fighter, 2, 1.0, 0, 0, 7, 1.0, 15.2, 11.7, 0.0, 0.0, 136.0, 1.0);
                 EFFACER[e] = 3;
-                eclair(boma, 15.2, 11.7, 0.0, 3.0, 1.6, 2);
+                eclair(boma, 15.2, 11.7, 0.0, 1.0, 1.6, 2);
             }
             if f >= 30.0 && f < 40.0 && MAGNUM[e] > 0
                 && ControlModule::check_button_trigger(boma, *CONTROL_PAD_BUTTON_SPECIAL) {
