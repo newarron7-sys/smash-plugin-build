@@ -52,6 +52,7 @@ jobs:
           D=/tmp/w/rex_/pf/Fighter/metalsonic
           SCALE=1 NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitMetalSonic00.pac $D/FitMetalSonicMotionEtc.pac /tmp/out /tmp/out/motion/c00 shadow_base rex/tools/dolly_motions.txt > /tmp/out/animations.txt 2>&1 || true
           SCALE=1 NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitMetalSonic00.pac $D/FitMetalSonicMotionEtc.pac /tmp/out /tmp/out/motion/c00 shadow_coups >> /tmp/out/animations.txt 2>&1 || true
+          SCALE=1 NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitMetalSonic00.pac $D/FitMetalSonicMotionEtc.pac /tmp/out /tmp/out/motion/c00 metal_speciaux >> /tmp/out/animations.txt 2>&1 || true
           echo "animations : $(ls /tmp/out/motion/c00/*.nuanmb 2>/dev/null | wc -l)"
       - name: Cache outils (cargo-skyline, toolchain Switch)
         uses: actions/cache@v4

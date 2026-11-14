@@ -291,6 +291,22 @@ GROUPES = {
         'b00justshieldoff': ['GuardOff'],
         'b01guarddamage': ['GuardDamage'],
     },
+    # Metal Sonic (REX, sur Sonic c08) : spéciaux d'après la vidéo du showcase REX (14/11) ; tout sur place, le
+    # déplacement est fait par le plugin. Parties mises bout à bout (positions dans rex/metalsonic/src/speciaux.rs)
+    'metal_speciaux': {
+        # B neutre « Ring Spark Field » : charge (SpecialNShot) puis décharge (SpecialN)
+        'd00specialnstart': ['SpecialNShot'], 'd00specialairnstart': ['SpecialNShot'],
+        'd00specialnspin': ['SpecialN'],
+        # side B « V.Maximum Overdrive » : départ (16), ruée (14), fin au sol / en l'air (41)
+        'd01specialshold': ['SpecialSStart', 'SpecialS', 'SpecialSEnd'],
+        'd01specialairsendloop': ['SpecialSStart', 'SpecialS', 'SpecialAirSEnd'],
+        # haut B « Jet Boost » : charge (10), envol (22), chute (20)
+        'd02specialhi': ['SpecialHiHold', 'SpecialHi', 'SpecialHiFall'],
+        # bas B « Black Shield » : départ, maintien, riposte
+        'd03speciallwstart': ['SpecialLwStart'], 'd03speciallwhold': ['SpecialLwLoop'], 'd03speciallwend': ['SpecialLwEnd'],
+        'd03specialairlwstart': ['SpecialAirLwStart'], 'd03specialairlwhold': ['SpecialLwLoop'],
+        'd03specialairlwend': ['SpecialAirLwEnd'],
+    },
     'base': {
         # attente
         'a00wait1': ['Wait1'], 'a00wait2': ['Wait2'], 'a00wait3': ['Wait1'], 'a00waititem': ['Wait1'],
@@ -660,6 +676,9 @@ if GROUPE == 'chief_speciaux':
 if GROUPE == 'chief_prises':
     # sur place sauf la prise en courant (le jeu la fait glisser avec l'avancée de l'animation)
     IN_PLACE = {k for k in GROUPES['chief_prises'] if k != 'e00catchdash'}
+    KEEP_Y = set()
+if GROUPE == 'metal_speciaux':
+    IN_PLACE = set(GROUPES['metal_speciaux'])
     KEEP_Y = set()
 if GROUPE == 'chief_final':
     IN_PLACE = set(GROUPES['chief_final'])
