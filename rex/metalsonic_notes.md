@@ -47,5 +47,13 @@ Procédure suivie : rex/PROCEDURE.md (dépôt final-zoom, branche combo-wip), co
   smashline load_fighter_effects -> nn::util::BinaryBlockHeader::GetBlockSize). Le ef_sonic.eff de ce skin ne se
   charge pas comme fichier d'effets par costume : ne plus le livrer (la version sans lui, 12/11 16:51, ne plantait pas).
 
+## Corrections v1c (14/11, photo + vidéos du joueur)
+- Jet du dos : collé à « top », il partait vers le bas (la rotation de req_follow n'a pas joué) et sa fumée était
+  violette. Maintenant : sys_rocketbelt_burner (flammes) violet, créé avec EffectModule::req puis replacé à chaque
+  image en coordonnées monde entre bust et waist, 1,8 derrière, tourné vers l'arrière (z = -lr x 1,5708 rad), comme
+  les jets du down air de Chief. Même jet pour le back air (images 6 à 20) + gerbe sys_flame sur bust.
+- Sauts : il se mettait en boule (boule de Sonic) : corps normal forcé dans tous les statuts communs sauf spéciaux et
+  Final Smash ; expressions des sauts de Sonic vides.
+
 ## VALIDÉ PAR LE JOUEUR / CORRECTIONS (ne pas casser)
 - (rien de validé en jeu pour l'instant)
