@@ -104,6 +104,11 @@ pub fn install(a: &mut Agent) {
     a.acmd("effect_jumpbackmini", saut, Priority::Low);
     a.acmd("effect_jumpaerialfront", vide, Priority::Low);
     a.acmd("effect_jumpaerialback", vide, Priority::Low);
+    // sauts : plus la boule de Sonic (expressions de ses sauts : boule et traînée)
+    for n in ["expression_jumpfront", "expression_jumpback", "expression_jumpfrontmini", "expression_jumpbackmini",
+              "expression_jumpaerialfront", "expression_jumpaerialback"] {
+        a.acmd(n, vide, Priority::Low);
+    }
     // coups normaux : plus les effets de Sonic (traînées bleues, boule) ; ceux de REX à part
     for n in ["effect_attack11", "effect_attack12", "effect_attack13", "effect_attack100", "effect_attack100end",
               "effect_attackdash", "effect_attacks3", "effect_attacks3hi", "effect_attacks3lw", "effect_attackhi3",
@@ -178,17 +183,13 @@ pub unsafe fn flamme_course(fighter: &mut L2CFighterCommon) {
     }
 }
 
-/// jamais la boule de Sonic pendant ses coups (Metal Sonic n'en a pas dans REX)
+/// jamais la boule de Sonic (Metal Sonic n'en a pas dans REX) : coups, sauts (demandé, vidéo du 14/11 : il se mettait
+/// en boule à chaque saut), chutes, atterrissages... tous les statuts communs sauf les spéciaux (encore ceux de Sonic,
+/// boule comprise) et le Final Smash
 pub unsafe fn corps_normal(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let st = StatusModule::status_kind(boma);
-    let coups = [*FIGHTER_STATUS_KIND_ATTACK, *FIGHTER_STATUS_KIND_ATTACK_DASH, *FIGHTER_STATUS_KIND_ATTACK_S3,
-        *FIGHTER_STATUS_KIND_ATTACK_HI3, *FIGHTER_STATUS_KIND_ATTACK_LW3, *FIGHTER_STATUS_KIND_ATTACK_S4_START,
-        *FIGHTER_STATUS_KIND_ATTACK_S4_HOLD, *FIGHTER_STATUS_KIND_ATTACK_S4, *FIGHTER_STATUS_KIND_ATTACK_HI4_START,
-        *FIGHTER_STATUS_KIND_ATTACK_HI4_HOLD, *FIGHTER_STATUS_KIND_ATTACK_HI4, *FIGHTER_STATUS_KIND_ATTACK_LW4_START,
-        *FIGHTER_STATUS_KIND_ATTACK_LW4_HOLD, *FIGHTER_STATUS_KIND_ATTACK_LW4, *FIGHTER_STATUS_KIND_ATTACK_AIR,
-        *FIGHTER_STATUS_KIND_LANDING_ATTACK_AIR];
-    if coups.contains(&st) {
+    if st < *FIGHTER_STATUS_KIND_SPECIAL_N && st != *FIGHTER_STATUS_KIND_FINAL {
         VisibilityModule::set_int64(boma, hash40("body"), hash40("body_normal"));
     }
 }
