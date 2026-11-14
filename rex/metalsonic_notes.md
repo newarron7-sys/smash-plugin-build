@@ -43,6 +43,9 @@ Procédure suivie : rex/PROCEDURE.md (dépôt final-zoom, branche combo-wip), co
   de l'aérien neutre vides ; flamme de course = sys_rocketbelt_jet violet sur « top » (0, 7, -2,5), tourné vers
   l'arrière (rotation x 1,5708 rad) ; back air = sys_flame + sys_rocketbelt_jet sur « top », poussée 1,6 / 0,4.
 - Fichier d'effets du skin remis en ef_sonic_c00.eff avant reslotter -> ef_sonic_c08.eff déclaré.
+  -> RETIRÉ (14/11) : plantage au chargement du combat (rapport Atmosphère 2168-0002, Data Abort, pile :
+  smashline load_fighter_effects -> nn::util::BinaryBlockHeader::GetBlockSize). Le ef_sonic.eff de ce skin ne se
+  charge pas comme fichier d'effets par costume : ne plus le livrer (la version sans lui, 12/11 16:51, ne plantait pas).
 
 ## VALIDÉ PAR LE JOUEUR / CORRECTIONS (ne pas casser)
 - (rien de validé en jeu pour l'instant)
