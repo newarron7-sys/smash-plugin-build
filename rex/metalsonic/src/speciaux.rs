@@ -107,6 +107,13 @@ unsafe fn coup(agent: &mut L2CAgentBase, id: u64, os: &str, dmg: f32, ang: u64, 
            Hash40::new(attr), *ATTACK_SOUND_LEVEL_L, son, *ATTACK_REGION_BODY);
 }
 
+/// fin de l'animation en cours : certaines animations de Sonic sont en boucle dans son motion_list (special_n_spin,
+/// special_s_hold, special_lw_hold...) : is_end n'arrive jamais (piège de PROCEDURE.md, vidéo du 14/11 : la décharge du
+/// B neutre se rejouait en boucle) -> on regarde l'image
+unsafe fn fini(boma: *mut BattleObjectModuleAccessor) -> bool {
+    MotionModule::frame(boma) >= MotionModule::end_frame(boma) - 1.0
+}
+
 unsafe extern "C" fn rien_acmd(_agent: &mut L2CAgentBase) {}
 unsafe extern "C" fn rien(_fighter: &mut L2CFighterCommon) -> L2CValue {
     0.into()
@@ -168,7 +175,7 @@ unsafe extern "C" fn n_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         if t == N_CHARGE_MAX {
             fx(boma, "sys_smash_flash", "top", (0.0, 8.0, 0.0), 1.3, Some(ROSE));
         }
-        if MotionModule::is_end(boma) {
+        if fini(boma) {
             MotionModule::set_frame(boma, 0.0, false);
         }
         if !tenu || t >= N_CHARGE_MAX {
@@ -177,7 +184,7 @@ unsafe extern "C" fn n_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         }
         return 0.into();
     }
-    if MotionModule::is_end(boma) {
+    if fini(boma) {
         finir(fighter, false);
         return 1.into();
     }
@@ -269,7 +276,7 @@ unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     } else {
         vitesse(fighter, v, if f < S_FIN { 0.0 } else { -0.6 });
     }
-    if MotionModule::is_end(boma) || f >= MotionModule::end_frame(boma) - 1.0 {
+    if fini(boma) {
         finir(fighter, S_AIR[slot(boma)] && !sol);
         return 1.into();
     }
@@ -543,8 +550,13 @@ unsafe extern "C" fn lw_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
                 LW_FX[e] = fx(boma, "sys_shield", "top", (0.0, 7.0, 0.0), 1.15, Some(CRISTAL));
             }
             let mot_hold = if sol { "special_lw_hold" } else { "special_air_lw_hold" };
-            if MotionModule::is_end(boma) {
-                MotionModule::change_motion(boma, Hash40::new(mot_hold), 0.0, 1.0, false, 0.0, false, false);
+            let en_hold = MotionModule::motion_kind(boma) == hash40(mot_hold);
+            if fini(boma) {
+                if en_hold {
+                    MotionModule::set_frame(boma, 0.0, false);
+                } else {
+                    MotionModule::change_motion(boma, Hash40::new(mot_hold), 0.0, 1.0, false, 0.0, false, false);
+                }
             }
             // touché pendant le bouclier : il ne prend rien et riposte
             if t > LW_DEBUT && StopModule::is_damage(boma) {
@@ -569,7 +581,7 @@ unsafe extern "C" fn lw_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
             if LW_PHASE[e] == 1 && MotionModule::frame(boma) > 6.0 {
                 lw_bouclier(boma, false);
             }
-            if MotionModule::is_end(boma) {
+            if fini(boma) {
                 finir(fighter, false);
                 return 1.into();
             }
