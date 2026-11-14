@@ -1,7 +1,7 @@
 //! Metal Sonic : effets (étape 1b, même procédure que Super Sonic / Super Shadow).
 //! - Plus aucun effet de Sonic sur ses déplacements ni sur ses coups (demandé : nuages bleus de la course de Sonic) :
 //!   seulement la poussière normale du jeu.
-//! - Course (demandé, vidéo de REX) : flamme violette qui sort de son dos (réacteur), tant qu'il court.
+//! - Course (demandé, vidéo de REX) : flammes violettes qui sortent de la tuyère de son dos, vers l'arrière.
 //! - Arrière aérien « Jet Thrust » (demandé) : feu qui sort de son dos à l'image 6 de REX (effet n° 73 sur son os
 //!   BlasterM, le réacteur) ; la poussée vers l'avant est dans lib.rs (POUSSEES).
 //! - Aérien neutre « Body Spark » (demandé : il gardait la boule de Sonic) : étincelles électriques sur le corps, et
@@ -62,12 +62,8 @@ unsafe extern "C" fn e_attackairb(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
     frame(lua, 6.0);
     if is_excute(agent) {
-        EFFECT_FOLLOW(agent, Hash40::new("sys_flame"), Hash40::new("top"), 0, 7.0, -3.0, 90, 0, 0, 0.8, true);
-        EFFECT_FOLLOW(agent, Hash40::new("sys_rocketbelt_jet"), Hash40::new("top"), 0, 7.0, -2.5, 90, 0, 0, 0.7, true);
-    }
-    frame(lua, 20.0);
-    if is_excute(agent) {
-        EFFECT_OFF_KIND(agent, Hash40::new("sys_rocketbelt_jet"), false, true);
+        // gerbe de feu au départ ; le jet de la tuyère (images 6 à 20) est fait par flamme_course
+        EFFECT_FOLLOW(agent, Hash40::new("sys_flame"), Hash40::new("bust"), 0, 0, 0, 0, 0, 0, 0.8, true);
     }
 }
 
@@ -126,31 +122,55 @@ pub fn install(a: &mut Agent) {
     a.acmd("sound_attackairn", vide, Priority::Low);
 }
 
-// ------------------------------------------------------------------ flamme violette de la course (réacteur du dos)
+// ------------------------------------------------------------------ réacteur du dos (course, arrière aérien)
+// demandé (photo, 14/11) : le jet doit sortir de la tuyère jaune au milieu de son dos et partir vers l'arrière (v1b :
+// collé à « top », il partait vers le bas) ; flammes à la place de la fumée violette. Comme les jets du down air de
+// Master Chief : créé une fois puis replacé à chaque image en coordonnées monde (entre les os bust et waist, un peu
+// derrière), tourné vers l'arrière (rotation autour de z, en radians comme EffectModule::req).
+const TUYERE_RECUL: f32 = 1.8;
+const FLAMME_TAILLE: f32 = 0.6;
 static mut FLAMME: [u32; 8] = [0; 8];
+static mut FLAMME_T: [i32; 8] = [4; 8];
 
 unsafe fn court(st: i32) -> bool {
     st == *FIGHTER_STATUS_KIND_DASH || st == *FIGHTER_STATUS_KIND_RUN || st == *FIGHTER_STATUS_KIND_TURN_RUN
         || st == *FIGHTER_STATUS_KIND_TURN_DASH
 }
 
+unsafe fn jet_back_air(boma: *mut BattleObjectModuleAccessor) -> bool {
+    StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_ATTACK_AIR
+        && MotionModule::motion_kind(boma) == hash40("attack_air_b")
+        && (6.0..20.0).contains(&MotionModule::frame(boma))
+}
+
 pub unsafe fn flamme_course(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let id = (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7);
     let h = FLAMME[id];
-    if !court(StatusModule::status_kind(boma)) {
-        if h != 0 && EffectModule::is_exist_effect(boma, h) {
-            EffectModule::kill(boma, h, false, false);
+    let actif = court(StatusModule::status_kind(boma)) || jet_back_air(boma);
+    if !actif {
+        if h != 0 {
+            EffectModule::kill(boma, h, false, true);
+            FLAMME[id] = 0;
         }
-        FLAMME[id] = 0;
+        FLAMME_T[id] = 4;
         return;
     }
-    if h == 0 || !EffectModule::is_exist_effect(boma, h) {
-        // derrière le dos, à hauteur du réacteur ; jet tourné vers l'arrière (rotations en radians)
-        let pos = Vector3f { x: 0.0, y: 7.0, z: -2.5 };
-        let rot = Vector3f { x: 1.5708, y: 0.0, z: 0.0 };
-        let n = EffectModule::req_follow(boma, Hash40::new("sys_rocketbelt_jet"), Hash40::new("top"), &pos, &rot, 0.55,
-            false, 0, 0, 0, 0, 0, false, false) as u32;
+    let lr = PostureModule::lr(boma);
+    let mut a = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let mut b = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    ModelModule::joint_global_position(boma, Hash40::new("bust"), &mut a, true);
+    ModelModule::joint_global_position(boma, Hash40::new("waist"), &mut b, true);
+    let pos = Vector3f { x: (a.x + b.x) * 0.5 - lr * TUYERE_RECUL, y: (a.y + b.y) * 0.5, z: (a.z + b.z) * 0.5 };
+    // l'effet part vers le bas par défaut : quart de tour autour de z pour qu'il parte derrière lui
+    let rot = Vector3f { x: 0.0, y: 0.0, z: -lr * 1.5708 };
+    FLAMME_T[id] += 1;
+    if h != 0 && EffectModule::is_exist_effect(boma, h) {
+        EffectModule::set_pos(boma, h, &pos);
+        EffectModule::set_rot(boma, h, &rot);
+    } else if FLAMME_T[id] >= 4 {
+        FLAMME_T[id] = 0;
+        let n = EffectModule::req(boma, Hash40::new("sys_rocketbelt_burner"), &pos, &rot, FLAMME_TAILLE, 0, 0, false, 0) as u32;
         if n != 0 {
             EffectModule::set_rgb(boma, n, VIOLET.0, VIOLET.1, VIOLET.2);
         }
