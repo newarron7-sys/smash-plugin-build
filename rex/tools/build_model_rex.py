@@ -389,7 +389,9 @@ def geometry(oi):
 
 
 def kind_of(mname, transparent):
-    if transparent:
+    # Knuckle Joe : yeux / bouche = textures à trous (alpha) sur un maillage devant le visage, dessinés opaques dans
+    # le fichier de REX : sinon les parties transparentes sortent noires
+    if transparent or mname in os.environ.get('ALPHA_MATS', '').split(','):
         return 'alpha'
     return 'opaque'
 
