@@ -89,14 +89,14 @@ unsafe fn lacher(agent: &mut L2CAgentBase) {
     let target = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_OBJECT);
     let group = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_GROUP);
     let no = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_NO);
-    ATK_HIT_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, Hash40::new("throw"), target, group, no);
+    smash_script::macros::ATK_HIT_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, Hash40::new("throw"), target, group, no);
 }
 
 /// réglages du lancer (id 0) et de la prise cassée (id 1), comme les 060E1100 de REX
 unsafe fn lancer_abs(agent: &mut L2CAgentBase, dmg: f32, ang: u64, kbg: i32, bkb: i32, attr: &str, c: (f32, u64, i32, i32)) {
-    ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, 0, dmg, ang, kbg, 0, bkb, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+    smash_script::macros::ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, 0, dmg, ang, kbg, 0, bkb, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
                Hash40::new(attr), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
-    ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, c.0, c.1, c.2, 0, c.3, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+    smash_script::macros::ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, c.0, c.1, c.2, 0, c.3, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
                Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
 }
 
@@ -129,7 +129,7 @@ unsafe extern "C" fn g_throwf(agent: &mut L2CAgentBase) {
     FT_MOTION_RATE(agent, 1.0);
     frame(lua, 18.0);
     if is_excute(agent) {
-        CHECK_FINISH_CAMERA(agent, 9, 6);
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, 9, 6);
         lacher(agent);
     }
 }
@@ -156,7 +156,7 @@ unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
     }
     frame(lua, 23.0);
     if is_excute(agent) {
-        CHECK_FINISH_CAMERA(agent, 1, 20);
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, 1, 20);
         lacher(agent);
     }
 }
@@ -185,7 +185,7 @@ unsafe extern "C" fn g_throwlw(agent: &mut L2CAgentBase) {
     }
     frame(lua, 25.0);
     if is_excute(agent) {
-        CHECK_FINISH_CAMERA(agent, 2, 0);
+        smash_script::macros::CHECK_FINISH_CAMERA(agent, 2, 0);
         lacher(agent);
     }
     // REX : vitesse 1,35 après le lâcher
