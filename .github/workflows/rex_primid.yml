@@ -18,7 +18,10 @@ jobs:
       - name: Modele de reference de Mario (skins GameBanana, squelette le plus courant)
         env:
           MAJORITE: '6'
-        run: python3 outils/primid/ref_fighter.py mario "Mario" /tmp/ref > /tmp/ref_log.txt 2>&1; grep -cE "CANDIDAT" /tmp/ref_log.txt; test -f /tmp/ref/ref/model.nusktb && echo reference ok
+        run: |
+          python3 outils/primid/ref_fighter.py mario "Mario" /tmp/ref > /tmp/ref_log.txt 2>&1 || true
+          tail -40 /tmp/ref_log.txt
+          test -f /tmp/ref/ref/model.nusktb && echo reference ok
       - name: Chiffrer et publier (branche sortie_primid_ref)
         run: |
           mkdir -p /tmp/pub && cp /tmp/ref_log.txt /tmp/ref/
