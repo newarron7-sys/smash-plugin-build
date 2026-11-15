@@ -20,7 +20,7 @@ jobs:
           printf '%s' "$CLE" > "$RUNNER_TEMP/k"
           mkdir -p "$RUNNER_TEMP/rex" "$RUNNER_TEMP/x" "$RUNNER_TEMP/out"
           git fetch -q --depth 1 origin rex_metalsonic:refs/remotes/origin/rex_metalsonic
-          for f in $(git ls-tree --name-only origin/rex_metalsonic | grep '^metal.tgz.enc'); do git show origin/rex_metalsonic:$f; done | openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"$RUNNER_TEMP/k" | tar xz -C "$RUNNER_TEMP/x"
+          for f in $(git ls-tree --name-only origin/rex_metalsonic | grep '^metal.tgz.enc'); do git show origin/rex_metalsonic:$f; done | openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"$RUNNER_TEMP/k" | tar xz --force-local -C "$(cygpath -u "$RUNNER_TEMP")/x"
           cp "$RUNNER_TEMP"/x/rex_/pf/sfx/*.sawnd "$RUNNER_TEMP/rex/"
           cp "$RUNNER_TEMP"/x/rex_/pf/BrawlEx/*/*7D.dat "$RUNNER_TEMP/out/" || true
           echo "banques : $(ls "$RUNNER_TEMP/rex" | wc -l)"
