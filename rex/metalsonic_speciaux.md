@@ -53,3 +53,8 @@ comme pour Master Chief, avant d'écrire les statuts.
   traînée de fumée rose (sys_rocketbelt_jet teinté, sur hip) pendant l'envol, d'après une vidéo de référence du
   joueur (effets d'un autre perso : indisponibles pour Sonic, refaits avec les effets communs). Corps tourné dans le
   sens du vol (os rot, comme le Flight de Super Sonic) : l'animation SpecialHi de REX est couchée vers l'avant.
+- v2f (15/11) : script de REX relu avec les bonnes unités (paramètres « scalar » = entier / 60000 ; les lectures
+  d'avant en flottant donnaient 0 ou NaN). SpecialNShot : vitesse 1,15 jusqu'à l'image 12 puis image 13 reposée en
+  boucle = pose de charge figée (v2c figeait l'image 0). La pose est reposée à chaque image (pieds immobiles).
+  À voir : SpecialN monte de 0,16 par image (0E080400) avec des seuils de charge 21 / 45 ; SpecialNShot (sous-action
+  59) déplace de ±0,2 selon le stick pendant la charge.
