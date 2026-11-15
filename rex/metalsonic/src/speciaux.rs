@@ -380,9 +380,10 @@ const HI_VITESSE: f32 = 3.2;
 static mut HI_T: [i32; 8] = [0; 8];
 static mut HI_V: [(f32, f32); 8] = [(0.0, 0.0); 8];
 static mut HI_FAIT: [bool; 8] = [false; 8];
-/// traînée rose de l'envol (sys_rocketbelt_jet : sa fumée, teintée rose, forme la traînée de la vidéo)
+/// traînée de l'envol (sys_rocketbelt_jet : sa fumée forme la traînée) ; demandé (15/11) : couleur de fumée normale,
+/// grise (plus de rose)
 static mut HI_FX: [u32; 8] = [0; 8];
-const TRAINEE_ROSE: (f32, f32, f32) = (1.0, 0.55, 0.7);
+const TRAINEE_ROSE: (f32, f32, f32) = (0.6, 0.6, 0.6);
 
 unsafe fn hi_fx_off(boma: *mut BattleObjectModuleAccessor, e: usize) {
     if HI_FX[e] != 0 && EffectModule::is_exist_effect(boma, HI_FX[e]) {
@@ -438,7 +439,7 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         let n = (sx * sx + sy * sy).sqrt().max(0.01);
         HI_V[e] = (HI_VITESSE * sx / n, HI_VITESSE * sy / n);
         // demandé (vidéo de référence du 15/11) : éclat blanc + explosion de feu et fumée là où il était (posés au sol,
-        // ils ne le suivent pas), puis une traînée de fumée rose derrière lui pendant tout l'envol
+        // ils ne le suivent pas), puis une traînée de fumée grise derrière lui pendant tout l'envol
         let mut p = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
         ModelModule::joint_global_position(boma, Hash40::new("top"), &mut p, true);
         let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
