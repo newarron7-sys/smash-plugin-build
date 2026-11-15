@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "cherche:Chun-Li|Chun Li|ChunLi|Chun-li Ken|Chun Li Street Fighter"
+      MOD: "667379"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
