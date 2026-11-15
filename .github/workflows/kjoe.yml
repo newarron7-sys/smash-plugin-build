@@ -1,0 +1,73 @@
+name: Knuckle Joe (REX) sur Ness - modele de REX, coups, animations (chiffre)
+on:
+  push:
+    branches: [ knucklejoe ]
+    paths: [ '.github/workflows/kjoe.yml', 'rex/kjoe/**', 'rex/tools/**' ]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: kjoe
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Outils
+        run: pip install ssbh_data_py numpy pillow scipy >/dev/null; mkdir -p /tmp/out /tmp/w
+      - name: Fichiers REX (branche chiffree, rien n'est affiche)
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          printf '%s' "$CLE" > /tmp/k
+          git fetch -q --depth 1 origin rex_kjoe:refs/remotes/origin/rex_kjoe
+          for f in $(git ls-tree --name-only origin/rex_kjoe | grep '^kjoe.tgz.enc'); do git show origin/rex_kjoe:$f; done | openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/k | tar xz -C /tmp/w
+          rm -f /tmp/k; ls /tmp/w/rex_/pf/Fighter/kjoe | wc -l
+      - name: Modele de reference de Ness (skin GameBanana, squelette du jeu)
+        timeout-minutes: 30
+        run: |
+          python3 rex/tools/ref_fighter.py ness "Ness" /tmp/ref > /tmp/out/reference.txt 2>&1 || true
+          grep -E "CANDIDAT|REFERENCE" /tmp/out/reference.txt | head -5 || true; test -f /tmp/ref/ref/model.nusktb
+      - name: Modele de Knuckle Joe (REX) sur le squelette de Ness (methode de Rock / Zero)
+        run: |
+          D=/tmp/w/rex_/pf/Fighter/kjoe
+          EXO=1 DROP_VIS=OutlineM python3 rex/tools/build_model_rex.py $D/FitKJoe00.pac /tmp/ref/ref /tmp/out kjoe > /tmp/out/build.txt 2>&1; tail -3 /tmp/out/build.txt | grep -oE '^[A-Za-z]*Error.*' || true; test -f /tmp/out/model.json
+          python3 rex/tools/deexo.py /tmp/out/model /tmp/out/model.json /tmp/out/direct > /tmp/out/direct.txt 2>&1 || true
+      - name: Coups (generated.rs)
+        run: |
+          D=/tmp/w/rex_/pf/Fighter/kjoe
+          python3 rex/tools/hit_keys.py /tmp/out /tmp/out/hit_keys.json > /tmp/out/hit_keys.txt 2>&1
+          HIT_KEYS=/tmp/out/hit_keys.json RATE=1 BODY=1 SUIVRE=1 python3 rex/tools/gen_rex.py $D/FitKJoe.pac $D/FitKJoeMotionEtc.pac $D/FitKJoe00.pac /tmp/out/generated.rs > /tmp/out/generation.txt 2>&1; wc -l /tmp/out/generated.rs
+      - name: Animations (base + coups, squelette de Ness)
+        run: |
+          D=/tmp/w/rex_/pf/Fighter/kjoe
+          NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitKJoe00.pac $D/FitKJoeMotionEtc.pac /tmp/out /tmp/out/motion/c00 base rex/tools/ness_motions.txt > /tmp/out/animations.txt 2>&1 || true
+          echo "animations : $(ls /tmp/out/motion/c00/*.nuanmb 2>/dev/null | wc -l)"
+      - name: Apercus (modele, os, poses)
+        continue-on-error: true
+        run: |
+          python3 rex/tools/apercu_modele.py /tmp/out/model /tmp/out/png /tmp/out/apercu_kjoe.png "Knuckle Joe (REX) sur Ness" > /tmp/out/apercu.txt 2>&1 || true
+          python3 rex/tools/apercu_exo.py /tmp/out/model /tmp/out/model.json /tmp/out/apercu_exo.png >> /tmp/out/apercu.txt 2>&1 || true
+          mkdir -p /tmp/apskin && cp /tmp/out/direct/model.numshb /tmp/out/direct/model.nusktb /tmp/apskin/ && echo '{"exo": {"paires": {}}}' > /tmp/apskin/info.json
+          python3 rex/tools/apercu_anims_exo.py /tmp/apskin /tmp/apskin/info.json /tmp/out/motion/c00 /tmp/out/apercu_base.png a00wait1.nuanmb a01walkmiddle.nuanmb a02run.nuanmb a03jumpf.nuanmb a05squatwait.nuanmb c00attack11.nuanmb c00attackdash.nuanmb c01attacks3.nuanmb c02attackhi3.nuanmb c02attacklw3.nuanmb c03attacks4s.nuanmb c04attackhi4.nuanmb c04attacklw4.nuanmb c05attackairn.nuanmb c05attackairf.nuanmb c05attackairb.nuanmb c05attackairhi.nuanmb c05attackairlw.nuanmb >> /tmp/out/apercu.txt 2>&1 || true
+      - name: Chiffrer (cle du depot + cle de la session) et publier
+        if: always()
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          printf '%s' "$CLE" > /tmp/k; openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -in /tmp/o.tgz | split -b 90m - /tmp/pub/kjoe_out.tgz.enc.; rm -f /tmp/k
+          openssl rand 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_kjoe && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "knuckle joe sortie chiffree"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" sortie_kjoe
