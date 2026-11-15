@@ -6,7 +6,7 @@
 //! Cymul (arrière) et Boobas (bas) : modèles prêts, comportement à la version suivante.
 //!
 //! Les ennemis sont les modèles de REX mis sur des objets de Mario que Primid n'utilise pas :
-//! - Mite -> cape de Mario (mantle, v0.9 ; le tuyau d'entrée n'est pas recréé pendant le match) : voir mite_loop ;
+//! - Mite -> cape de Mario (mantle, v0.9 ; le tuyau d'entrée n'est pas recréé pendant le match) : mené depuis Primid (mite_pas, v0.11) ;
 //! - Botron -> J.E.T. (pump, statut WAIT) : vole au-dessus du terrain en portant son pot ;
 //! - le pot de Botron : dans le modèle de Botron ; lâché au-dessus de l'adversaire, il est caché sur Botron et un pot
 //!   (v0.9) : son os HachiN descend, il explose en feu au sol (plus d'objet à part : pumpwater plantait, Cappy refusé).
@@ -538,8 +538,13 @@ unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) {
         }
     }
     M[e] = [x, y, vx, vy, lr, ph, t, att];
-    // la cape : libérée de Mario (contrainte puis lien), placée, face à la caméra, visible, image de son animation
-    liberer(w, lr);
+    // la cape : libérée de Mario (contrainte puis lien, seulement si elle est encore tenue : méthode de Chief),
+    // placée, face à la caméra, visible, image de son animation
+    if LinkModule::is_model_constraint(w) {
+        LinkModule::remove_model_constraint(w, true);
+        LinkModule::unlink_all(w);
+    }
+    orienter(w, lr);
     placer(w, x, y);
     visible(w);
     if MotionModule::motion_kind(w) != smash::hash40("special_s") {
