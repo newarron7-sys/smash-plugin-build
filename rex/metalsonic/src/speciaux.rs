@@ -177,6 +177,7 @@ unsafe fn n_decharge(fighter: &mut L2CFighterCommon, niveau: f32) {
     N_PHASE[e] = 1;
     N_NIVEAU[e] = niveau;
     n_couleur(fighter, false);
+    SoundModule::stop_se(boma, Hash40::new(crate::sons::N_CHARGE), 0);
     MotionModule::change_motion(boma, Hash40::new("special_n_spin"), 0.0, 1.0, false, 0.0, false, false);
     MotionModule::set_rate(boma, 1.0);
 }
@@ -203,6 +204,9 @@ unsafe extern "C" fn n_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
             }
             vitesse(fighter, 0.0, N_MONTEE);
             n_couleur(fighter, (t / 3) % 2 == 0);
+            if t == N_APPUI + 1 {
+                SoundModule::play_se(boma, Hash40::new(crate::sons::N_CHARGE), true, false, false, false, enSEType(0));
+            }
         } else if air {
             vitesse(fighter, 0.0, 0.0);
         }
@@ -238,6 +242,7 @@ unsafe extern "C" fn n_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     N_PHASE[slot(boma)] = 0;
     N_ROUGE[slot(boma)] = true;
     n_couleur(fighter, false);
+    SoundModule::stop_se(boma, Hash40::new(crate::sons::N_CHARGE), 0);
     MotionModule::set_rate(boma, 1.0);
     KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
     0.into()
@@ -276,9 +281,12 @@ unsafe extern "C" fn e_decharge(agent: &mut L2CAgentBase) {
 }
 
 unsafe extern "C" fn s_decharge(agent: &mut L2CAgentBase) {
+    // REX : sa voix et la décharge (n° 93 chargée, n° 83 sans charge)
     frame(agent.lua_state_agent, 6.0);
     if is_excute(agent) {
-        PLAY_SE(agent, Hash40::new("se_common_electric_hit_l"));
+        let k = N_NIVEAU[slot(agent.module_accessor)];
+        PLAY_SE(agent, Hash40::new(crate::sons::V_CHARGE));
+        PLAY_SE(agent, Hash40::new(if k > 0.0 { crate::sons::N_DECHARGE } else { crate::sons::N_PETITE }));
     }
 }
 
@@ -375,9 +383,15 @@ unsafe extern "C" fn e_ruee(agent: &mut L2CAgentBase) {
 }
 
 unsafe extern "C" fn s_ruee(agent: &mut L2CAgentBase) {
+    // REX : SpecialSStart image 1 (n° 97), puis sa voix et le réacteur (n° 98) au départ de la ruée
+    frame(agent.lua_state_agent, 1.0);
+    if is_excute(agent) {
+        PLAY_SE(agent, Hash40::new(crate::sons::S_DEPART));
+    }
     frame(agent.lua_state_agent, S_RUEE);
     if is_excute(agent) {
-        PLAY_SE(agent, Hash40::new("se_sonic_dash_start"));
+        PLAY_SE(agent, Hash40::new(crate::sons::V_RUEE));
+        PLAY_SE(agent, Hash40::new(crate::sons::REACTEUR));
     }
 }
 
@@ -536,9 +550,16 @@ unsafe extern "C" fn g_envol(agent: &mut L2CAgentBase) {
 unsafe extern "C" fn e_envol(_agent: &mut L2CAgentBase) {}
 
 unsafe extern "C" fn s_envol(agent: &mut L2CAgentBase) {
+    // REX : charge (n° 6) à l'image 1 ; à l'envol : explosion et réacteur
+    frame(agent.lua_state_agent, 1.0);
+    if is_excute(agent) {
+        PLAY_SE(agent, Hash40::new(crate::sons::HI_CHARGE));
+    }
     frame(agent.lua_state_agent, HI_ENVOL as f32);
     if is_excute(agent) {
+        STOP_SE(agent, Hash40::new(crate::sons::HI_CHARGE));
         PLAY_SE(agent, Hash40::new("se_common_bomb_m"));
+        PLAY_SE(agent, Hash40::new(crate::sons::REACTEUR));
     }
 }
 
@@ -693,14 +714,16 @@ unsafe extern "C" fn e_riposte(agent: &mut L2CAgentBase) {
 unsafe extern "C" fn s_riposte(agent: &mut L2CAgentBase) {
     frame(agent.lua_state_agent, 1.0);
     if is_excute(agent) && LW_RIPOSTE[slot(agent.module_accessor)] {
+        PLAY_SE(agent, Hash40::new(crate::sons::BOUCLIER));
         PLAY_SE(agent, Hash40::new("se_common_electric_hit_l"));
     }
 }
 
 unsafe extern "C" fn s_bouclier(agent: &mut L2CAgentBase) {
-    frame(agent.lua_state_agent, LW_DEBUT as f32);
+    // REX : n° 87 à l'image 5
+    frame(agent.lua_state_agent, LW_DEBUT as f32 + 1.0);
     if is_excute(agent) {
-        PLAY_SE(agent, Hash40::new("se_common_guardon"));
+        PLAY_SE(agent, Hash40::new(crate::sons::BOUCLIER));
     }
 }
 

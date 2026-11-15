@@ -95,6 +95,8 @@ include!("generated.rs");
 
 mod effets;
 mod speciaux;
+mod prises;
+mod sons;
 
 
 /// perso de base (nom interne) : Sonic
@@ -118,6 +120,7 @@ unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
     effets::flamme_course(fighter);
     effets::corps_normal(fighter);
     speciaux::frame_hi(fighter);
+    prises::chaque_image(fighter);
     let boma = fighter.module_accessor;
     let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
     if id < 8 && CORPS_CHANGE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_S4 {
@@ -254,6 +257,8 @@ macro_rules! scripts {
             $( if find($s).is_some() { a.acmd($s, $f, Priority::Low); } )*
             effets::install(&mut a);
             speciaux::install(&mut a);
+            prises::install(&mut a);
+            sons::install(&mut a);
             a.on_line(Main, ss_frame);
             a.install();
         }
