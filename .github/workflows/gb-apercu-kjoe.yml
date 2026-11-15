@@ -1,0 +1,35 @@
+name: GameBanana - apercus du skin Knuckle Joe (chiffre)
+on:
+  push:
+    branches: [ knucklejoe ]
+    paths: [ '.github/workflows/gb-apercu-kjoe.yml' ]
+permissions:
+  contents: write
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p /tmp/a
+          python3 - <<'PY'
+          import json, urllib.request
+          ua = {'User-Agent': 'Mozilla/5.0'}
+          g = lambda u: urllib.request.urlopen(urllib.request.Request(u, headers=ua), timeout=60).read()
+          for mid in (613417, 341125, 539393):
+              p = json.loads(g('https://gamebanana.com/apiv11/Mod/%d/ProfilePage' % mid))
+              print(mid, p.get('_sName'), '| fichiers', [(f.get('_sFile'), f.get('_sDescription')) for f in p.get('_aFiles', [])])
+              print('  desc', (p.get('_sText') or '')[:600].replace('\n', ' '))
+              for k, im in enumerate((p.get('_aPreviewMedia') or {}).get('_aImages', [])[:4]):
+                  u = im['_sBaseUrl'] + '/' + im['_sFile']
+                  open('/tmp/a/%d_%d.jpg' % (mid, k), 'wb').write(g(u))
+          PY
+          ls -la /tmp/a
+      - run: |
+          mkdir -p /tmp/pub && tar cz -C /tmp/a . > /tmp/a.tgz
+          openssl rand 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/a.tgz -out /tmp/pub/a.session.enc
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc
+          cd /tmp/pub && git init -q -b apercu_kjoe && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m apercu && git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" apercu_kjoe
