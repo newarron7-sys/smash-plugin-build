@@ -6,10 +6,10 @@
 //! Cymul (arrière) et Boobas (bas) : modèles prêts, comportement à la version suivante.
 //!
 //! Les ennemis sont les modèles de REX mis sur des objets de Mario que Primid n'utilise pas :
-//! - Mite -> tuyau d'entrée (dokan, statut DUMMY) : court au sol vers l'avant, fonce sur l'adversaire proche ;
+//! - Mite -> cape de Mario (mantle, v0.9 ; le tuyau d'entrée n'est pas recréé pendant le match) : voir mite_loop ;
 //! - Botron -> J.E.T. (pump, statut WAIT) : vole au-dessus du terrain en portant son pot ;
 //! - le pot de Botron : dans le modèle de Botron ; lâché au-dessus de l'adversaire, il est caché sur Botron et un pot
-//!   identique tombe : la casquette Cappy de Mario (cappy, statut DUMMY), qui explose en feu au sol.
+//!   (v0.9) : son os HachiN descend, il explose en feu au sol (plus d'objet à part : pumpwater plantait, Cappy refusé).
 //! v0.3 : le pot était sur l'eau du J.E.T. (pumpwater) : plantage au chargement (tests A à D du joueur) ; directions
 //!   corrigées d'après les icônes du portail de REX (haut Botron, avant Mite, arrière Boobas, bas Cymul).
 //! Leurs statuts (Main / Exec) sont remplacés pour le costume de Primid seulement, et seulement pour les objets que le
@@ -335,11 +335,14 @@ pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     }
 }
 
-// ------------------------------------------------------------------ Mite (tuyau d'entrée de Mario)
+// ------------------------------------------------------------------ Mite (cape de Mario, v0.9)
+// v0.8 (diagnostic du joueur : éclat rouge) : le jeu refuse de recréer le tuyau d'entrée (dokan) pendant le match.
+// La cape (mantle, côté B de Mario, créée pendant le match) le remplace ; son mouvement « special_s » porte les
+// animations de Mite (d01specials.nuanmb).
 
 unsafe fn mite_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
-    if ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_DOKAN) {
-        ArticleModule::remove_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_DOKAN, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
+    if ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE) {
+        ArticleModule::remove_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
     }
     let lr = PostureModule::lr(boma);
     let (x, y) = pos(boma);
@@ -347,16 +350,16 @@ unsafe fn mite_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
     M[e] = [x + 2.0 * lr, y + 24.0, 0.0, 0.0, lr, 0.0, 0.0, 0.0];
     MITE_ATTEND[e] = true;
     MITE_ID[e] = 0;
-    ArticleModule::generate_article(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_DOKAN, false, -1);
-    if let Some(w) = article_boma(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_DOKAN) {
+    ArticleModule::generate_article(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE, false, -1);
+    if let Some(w) = article_boma(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE) {
         if MITE_ATTEND[e] {
             // le statut n'a pas encore réclamé l'objet : il passe au statut DUMMY (remplacé ci-dessous)
-            StatusModule::change_status_force(w, *WEAPON_MARIO_DOKAN_STATUS_KIND_DUMMY, false);
+            StatusModule::change_status_force(w, *WEAPON_MARIO_MANTLE_STATUS_KIND_DUMMY, false);
         }
     }
     RECH[e][0] = RECH_MITE;
     // v0.8 (diagnostic, depuis Primid) : éclat VERT = le tuyau a bien été créé ; ROUGE = le jeu a refusé de le créer
-    diag(boma, M[e][0], M[e][1] + 4.0, ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_DOKAN));
+    diag(boma, M[e][0], M[e][1] + 4.0, ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE));
 }
 
 unsafe fn article_boma(boma: *mut BattleObjectModuleAccessor, kind: i32) -> Option<*mut BattleObjectModuleAccessor> {
@@ -388,22 +391,21 @@ unsafe fn est_mite(w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize>
     if MITE_ID[e] == id { Some(e) } else { None }
 }
 
-unsafe extern "C" fn dokan_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
+unsafe extern "C" fn mite_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
     let Some(e) = est_mite(w, id_of(weapon)) else {
-        // tuyau de l'entrée en scène (pas de code d'origine appelé : risque d'arrêt du plugin s'il n'existe pas) :
-        // retiré ; Primid apparaît sans tuyau
+        // cape qui n'est pas Mite (côté B de Mario, pas encore remplacé) : retirée (pas de code d'origine appelé)
         tuer(weapon);
         return 0.into();
     };
     liberer(w, M[e][4]);
     placer(w, M[e][0], M[e][1]);
     visible(w);
-    MotionModule::change_motion(w, Hash40::new("entry"), 0.0, 0.0, false, 0.0, false, false);
+    MotionModule::change_motion(w, Hash40::new("special_s"), 0.0, 0.0, false, 0.0, false, false);
     weapon.fastshift(L2CValue::Ptr(mite_loop as *const () as _))
 }
 
-unsafe extern "C" fn dokan_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
+unsafe extern "C" fn mite_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
     let _ = est_mite(w, id_of(weapon));
     0.into()
@@ -568,6 +570,7 @@ unsafe extern "C" fn pump_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
         tuer(weapon);
         return 0.into();
     };
+    P[e] = [0.0, 0.0, 0.0, 0.0];
     liberer(w, B[e][2]);
     placer(w, B[e][0], B[e][1]);
     visible(w);
@@ -583,17 +586,29 @@ unsafe extern "C" fn pump_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
     0.into()
 }
 
+/// v0.9 : le pot reste dans le modèle de Botron ; lâché, son os (HachiN, sous Hip à -6) descend (set_joint_translate)
+/// et frappe depuis cet os ; Botron reste sur place jusqu'à l'explosion. (v0.3 : pot sur l'eau du J.E.T. = plantage ;
+/// v0.4 : sur Cappy, que le jeu ne crée sans doute pas non plus pendant le match.)
+unsafe fn pot_coup(weapon: &mut L2CWeaponCommon, dmg: f32, taille: f32, kbg: i32, bkb: i32) {
+    ATTACK(weapon, 1, 0, Hash40::new("hachin"), dmg, 70, kbg, 0, bkb, taille, 0.0, -4.0, 0.0, None, None, None, 1.0, 1.0,
+           *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, true, true, false, false, false,
+           *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
+           Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_BOMB, *ATTACK_REGION_BOMB);
+}
+
+unsafe fn pot_os(w: *mut BattleObjectModuleAccessor, chute: f32) {
+    ModelModule::set_joint_translate(w, Hash40::new("hachin"), &Vector3f { x: 0.0, y: -6.0 - chute, z: 0.0 }, false, false);
+}
+
 unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
-    let Some((o, e)) = owner(w) else {
+    let Some(e) = est_botron(w, id_of(weapon)) else {
         tuer(weapon);
         return 0.into();
     };
-    if BOT_ID[e] != id_of(weapon) {
-        tuer(weapon);
-        return 0.into();
-    }
     let [mut x, mut y, lr, mut t, mut lache, mut tl] = B[e];
+    // pot : chute (sous Botron), vitesse, explosion (temps)
+    let [mut chute, mut vy, mut boum, _] = P[e];
     t += 1.0;
     let mk = MotionModule::motion_kind(w);
     if lache < 0.5 {
@@ -611,33 +626,56 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
             // il lâche son pot (REX : ShootStart + ShootFire)
             lache = 1.0;
             tl = 0.0;
+            chute = 0.0;
+            vy = 0.0;
+            boum = 0.0;
             MotionModule::change_motion(w, Hash40::new("light"), 0.0, 1.0, false, 0.0, false, false);
-            // le pot quitte Botron : caché sur lui, un pot identique (Cappy) tombe du même endroit
-            pot_porte(w, false);
-            pot_creer(o, e, x, y, lr);
         }
+        pot_os(w, 0.0);
     } else {
-        // après le lâcher : il remonte et s'en va (REX : ShootEnd)
         tl += 1.0;
         if mk == smash::hash40("light") && MotionModule::is_end(w) {
             MotionModule::change_motion(w, Hash40::new("end"), 0.0, 1.0, false, 0.0, false, false);
         }
-        if tl > 30.0 {
-            y += 1.2;
-            x += 0.6 * lr;
-        }
-        if tl > 90.0 {
-            eff(w, "sys_erace_smoke", x, y, 1.0);
-            BOT_ID[e] = 0;
-            B[e] = [x, y, lr, t, lache, tl];
-            tuer(weapon);
-            return 0.into();
+        if boum <= 0.0 {
+            // le pot tombe (Botron reste sur place) et frappe en tombant
+            vy = (vy + 0.22).min(4.5);
+            chute += vy;
+            pot_os(w, chute);
+            pot_coup(weapon, 6.0, 5.0, 60, 40);
+            let py = y - 6.0 - chute - 8.0;
+            let touche = AttackModule::is_infliction(w, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(w, *COLLISION_KIND_MASK_SHIELD);
+            if touche || sol(w, x, py + 4.0, vy.max(1.0)).is_some() || chute > 150.0 {
+                AttackModule::clear_all(w);
+                pot_coup(weapon, 13.0, 13.0, 80, 55);
+                eff(w, "sys_bomb_a", x, py + 4.0, 1.2);
+                eff(w, "sys_fireflower_shot", x, py + 6.0, 1.5);
+                PLAY_SE(weapon, Hash40::new("se_common_bomb_l"));
+                // le pot disparaît dans l'explosion
+                pot_porte(w, false);
+                boum = 1.0;
+            }
+        } else {
+            boum += 1.0;
+            pot_os(w, chute);
+            if boum > 6.0 {
+                AttackModule::clear_all(w);
+            }
+            if boum > 30.0 {
+                // il remonte et s'en va (REX : ShootEnd)
+                y += 1.2;
+                x += 0.6 * lr;
+            }
+            if boum > 90.0 {
+                eff(w, "sys_erace_smoke", x, y, 1.0);
+                BOT_ID[e] = 0;
+                tuer(weapon);
+                return 0.into();
+            }
         }
     }
     B[e] = [x, y, lr, t, lache, tl];
-    if (t as i32) % 8 == 0 {
-        eff(w, "sys_smash_flash_s", x, y - 4.0, 0.8);
-    }
+    P[e] = [chute, vy, boum, 0.0];
     placer(w, x, y);
     orienter(w, lr);
     visible(w);
@@ -649,102 +687,6 @@ unsafe fn pot_porte(w: *mut BattleObjectModuleAccessor, on: bool) {
     for m in ["polygon6", "polygon7", "polygon8", "polygon9"] {
         ModelModule::set_mesh_visibility(w, Hash40::new(m), on);
     }
-}
-
-unsafe fn pot_creer(o: *mut BattleObjectModuleAccessor, e: usize, x: f32, y: f32, lr: f32) {
-    if ArticleModule::is_exist(o, *FIGHTER_MARIO_GENERATE_ARTICLE_CAPPY) {
-        ArticleModule::remove_exist(o, *FIGHTER_MARIO_GENERATE_ARTICLE_CAPPY, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
-    }
-    P[e] = [x, y, 0.0, 0.0];
-    POT_LR[e] = lr;
-    POT_ATTEND[e] = true;
-    POT_ID[e] = 0;
-    ArticleModule::generate_article(o, *FIGHTER_MARIO_GENERATE_ARTICLE_CAPPY, false, -1);
-    if let Some(c) = article_boma(o, *FIGHTER_MARIO_GENERATE_ARTICLE_CAPPY) {
-        if POT_ATTEND[e] {
-            StatusModule::change_status_force(c, *WEAPON_MARIO_CAPPY_STATUS_KIND_DUMMY, false);
-        }
-    }
-}
-
-unsafe fn est_pot(_w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize> {
-    if let Some(e) = (0..8).find(|&k| POT_ATTEND[k]) {
-        POT_ATTEND[e] = false;
-        POT_ID[e] = id;
-        return Some(e);
-    }
-    let e = (0..8).find(|&k| POT_ID[k] == id && id != 0)?;
-    if POT_ATTEND[e] {
-        POT_ATTEND[e] = false;
-        POT_ID[e] = id;
-    }
-    if POT_ID[e] == id { Some(e) } else { None }
-}
-
-unsafe extern "C" fn cappy_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
-    let w = weapon.module_accessor;
-    let Some(e) = est_pot(w, id_of(weapon)) else {
-        tuer(weapon);
-        return 0.into();
-    };
-    liberer(w, POT_LR[e]);
-    placer(w, P[e][0], P[e][1]);
-    visible(w);
-    EffectModule::kill_all(w, 0, true, false);
-    weapon.fastshift(L2CValue::Ptr(pot_loop as *const () as _))
-}
-
-unsafe extern "C" fn cappy_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
-    let w = weapon.module_accessor;
-    let _ = est_pot(w, id_of(weapon));
-    0.into()
-}
-
-unsafe fn pot_coup(weapon: &mut L2CWeaponCommon, dmg: f32, taille: f32, kbg: i32, bkb: i32) {
-    ATTACK(weapon, 0, 0, Hash40::new("top"), dmg, 70, kbg, 0, bkb, taille, 0.0, 0.0, 0.0, None, None, None, 1.0, 1.0,
-           *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, true, true, false, false, false,
-           *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
-           Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_BOMB, *ATTACK_REGION_BOMB);
-}
-
-unsafe extern "C" fn pot_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
-    let w = weapon.module_accessor;
-    let Some(e) = est_pot(w, id_of(weapon)) else {
-        tuer(weapon);
-        return 0.into();
-    };
-    let [x, mut y, mut vy, mut boum] = P[e];
-    if boum > 0.0 {
-        // explosion de feu (REX : le pot explose en flammes), quelques images de coup puis fin
-        boum += 1.0;
-        if boum > 6.0 {
-            POT_ID[e] = 0;
-            tuer(weapon);
-            return 0.into();
-        }
-        P[e] = [x, y, vy, boum];
-        return 0.into();
-    }
-    // lâché : il tombe et frappe en tombant
-    vy = (vy - 0.22).max(-4.5);
-    y += vy;
-    placer(w, x, y);
-    orienter(w, POT_LR[e]);
-    pot_coup(weapon, 6.0, 5.0, 60, 40);
-    let touche = AttackModule::is_infliction(w, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(w, *COLLISION_KIND_MASK_SHIELD);
-    let au_sol = sol(w, x, y, (-vy).max(1.0)).is_some();
-    if touche || au_sol || y < -300.0 {
-        AttackModule::clear_all(w);
-        pot_coup(weapon, 13.0, 13.0, 80, 55);
-        eff(w, "sys_bomb_a", x, y, 1.2);
-        eff(w, "sys_fireflower_shot", x, y + 2.0, 1.5);
-        PLAY_SE(weapon, Hash40::new("se_common_bomb_l"));
-        // le pot disparaît dans l'explosion
-        ModelModule::set_visibility(w, false);
-        boum = 1.0;
-    }
-    P[e] = [x, y, vy, boum];
-    0.into()
 }
 
 unsafe extern "C" fn rien(_agent: &mut L2CAgentBase) {}
@@ -762,26 +704,28 @@ pub fn install(a: &mut Agent) {
         }
     }
 
-    let mut d = Agent::new("mario_dokan");
+    // v0.9 : Mite = cape (DUMMY et TERM : le jeu peut la faire passer de l'un à l'autre)
+    let mut d = Agent::new("mario_mantle");
     d.set_costume(PR_COSTUMES.to_vec());
-    d.status(Main, *WEAPON_MARIO_DOKAN_STATUS_KIND_DUMMY, dokan_main);
-    d.status(Exec, *WEAPON_MARIO_DOKAN_STATUS_KIND_DUMMY, dokan_exec);
+    for st in [*WEAPON_MARIO_MANTLE_STATUS_KIND_DUMMY, *WEAPON_MARIO_MANTLE_STATUS_KIND_TERM] {
+        d.status(Main, st, mite_main);
+        d.status(Exec, st, mite_exec);
+    }
     d.install();
 
+    // v0.9 : Botron = J.E.T. sur tous ses statuts (v0.8 : créé mais sa boucle ne tournait pas : sans doute passé à un
+    // autre statut par son propre code)
     let mut p = Agent::new("mario_pump");
     p.set_costume(PR_COSTUMES.to_vec());
-    p.status(Main, *WEAPON_MARIO_PUMP_STATUS_KIND_WAIT, pump_main);
-    p.status(Exec, *WEAPON_MARIO_PUMP_STATUS_KIND_WAIT, pump_exec);
+    for st in [*WEAPON_MARIO_PUMP_STATUS_KIND_WAIT, *WEAPON_MARIO_PUMP_STATUS_KIND_SHOOT, *WEAPON_MARIO_PUMP_STATUS_KIND_END,
+               *WEAPON_MARIO_PUMP_STATUS_KIND_TERM] {
+        p.status(Main, st, pump_main);
+        p.status(Exec, st, pump_exec);
+    }
     for m in ["hold", "light", "heavy", "start", "end", "wait"] {
         for k in ["game", "effect", "sound"] {
             p.acmd(&format!("{}_{}", k, m), rien, Priority::Low);
         }
     }
     p.install();
-
-    let mut c = Agent::new("mario_cappy");
-    c.set_costume(PR_COSTUMES.to_vec());
-    c.status(Main, *WEAPON_MARIO_CAPPY_STATUS_KIND_DUMMY, cappy_main);
-    c.status(Exec, *WEAPON_MARIO_CAPPY_STATUS_KIND_DUMMY, cappy_exec);
-    c.install();
 }
