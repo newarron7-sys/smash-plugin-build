@@ -4,7 +4,8 @@
 //! le déplacement est fait ici).
 //!
 //! - B neutre « Ring Spark Field » : appui = décharge électrique tout de suite (« no charge ») ; B tenu = il se charge
-//!   (éclairs, il brille) puis lâche une décharge plus grosse (« full charge »). REX : SpecialNShot (charge),
+//!   en montant (plus il charge, plus il monte), pose de charge figée, il clignote en rouge, puis décharge plus
+//!   grosse (« full charge »). REX : SpecialNShot (charge),
 //!   SpecialN (décharge : 14 % / 361° / élec, 10 % à la fin).
 //! - side B « V.Maximum Overdrive » : départ (16 images) puis ruée vers l'avant (14) dans une aura dorée et rose,
 //!   puis fin (41). REX : SpecialS 11 % / 361° (corps), SpecialSStart 15 % (tête, élec 35°). En l'air : chute
@@ -127,6 +128,24 @@ static mut N_PHASE: [u8; 8] = [0; 8];
 static mut N_T: [i32; 8] = [0; 8];
 /// niveau de charge de la décharge (0 à 1), lu par le script de la décharge
 static mut N_NIVEAU: [f32; 8] = [0.0; 8];
+/// demandé (vidéo du showcase, 15/11) : B tenu = il monte pendant la charge (plus il charge, plus il monte), en
+/// clignotant en rouge (REX : couleur rouge 240/8/8 puis 255/0/0, une image sur deux)
+const N_MONTEE: f32 = 0.5;
+static mut N_SOL: [bool; 8] = [false; 8];
+static mut N_ROUGE: [bool; 8] = [false; 8];
+
+unsafe fn n_couleur(fighter: &mut L2CFighterCommon, rouge: bool) {
+    let e = slot(fighter.module_accessor);
+    if rouge == N_ROUGE[e] {
+        return;
+    }
+    N_ROUGE[e] = rouge;
+    if rouge {
+        FLASH(fighter, 1.0, 0.05, 0.05, 0.6);
+    } else {
+        COL_NORMAL(fighter);
+    }
+}
 
 unsafe extern "C" fn n_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
@@ -135,7 +154,8 @@ unsafe extern "C" fn n_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     N_T[e] = 0;
     N_NIVEAU[e] = 0.0;
     corps_normal(boma);
-    if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
+    N_SOL[e] = StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND;
+    if N_SOL[e] {
         au_sol_stop(boma);
         MotionModule::change_motion(boma, Hash40::new("special_n_start"), 0.0, 1.0, false, 0.0, false, false);
     } else {
@@ -143,6 +163,8 @@ unsafe extern "C" fn n_main(fighter: &mut L2CFighterCommon) -> L2CValue {
         vitesse(fighter, 0.0, 0.0);
         MotionModule::change_motion(boma, Hash40::new("special_air_n_start"), 0.0, 1.0, false, 0.0, false, false);
     }
+    // REX (SpecialNShot) : vitesse d'animation 0 : il garde sa pose de charge
+    MotionModule::set_rate(boma, 0.0);
     fighter.sub_shift_status_main(L2CValue::Ptr(n_loop as *const () as _))
 }
 
@@ -151,7 +173,9 @@ unsafe fn n_decharge(fighter: &mut L2CFighterCommon, niveau: f32) {
     let e = slot(boma);
     N_PHASE[e] = 1;
     N_NIVEAU[e] = niveau;
+    n_couleur(fighter, false);
     MotionModule::change_motion(boma, Hash40::new("special_n_spin"), 0.0, 1.0, false, 0.0, false, false);
+    MotionModule::set_rate(boma, 1.0);
 }
 
 unsafe extern "C" fn n_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
@@ -159,14 +183,20 @@ unsafe extern "C" fn n_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     let e = slot(boma);
     corps_normal(boma);
     let air = StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR;
-    if air {
-        // il descend lentement pendant la charge et la décharge
-        vitesse(fighter, 0.0, -0.4);
-    }
     if N_PHASE[e] == 0 {
         N_T[e] += 1;
         let t = N_T[e];
         let tenu = ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_SPECIAL);
+        if t > N_APPUI && tenu {
+            // B tenu : il décolle et monte tant qu'il charge
+            if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
+                en_l_air(fighter);
+            }
+            vitesse(fighter, 0.0, N_MONTEE);
+            n_couleur(fighter, (t / 3) % 2 == 0);
+        } else if air {
+            vitesse(fighter, 0.0, 0.0);
+        }
         // charge : il brille et des éclairs roses courent sur lui
         if t % 6 == 0 {
             let os = ["bust", "hip", "head", "handl", "handr", "footl", "footr"];
@@ -175,14 +205,14 @@ unsafe extern "C" fn n_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         if t == N_CHARGE_MAX {
             fx(boma, "sys_smash_flash", "top", (0.0, 8.0, 0.0), 1.3, Some(ROSE));
         }
-        if fini(boma) {
-            MotionModule::set_frame(boma, 0.0, false);
-        }
         if !tenu || t >= N_CHARGE_MAX {
             let niveau = if t <= N_APPUI { 0.0 } else { (t as f32 / N_CHARGE_MAX as f32).min(1.0) };
             n_decharge(fighter, niveau);
         }
         return 0.into();
+    }
+    if StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR {
+        vitesse(fighter, 0.0, -0.3);
     }
     if fini(boma) {
         finir(fighter, false);
@@ -197,6 +227,9 @@ unsafe extern "C" fn n_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
 unsafe extern "C" fn n_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
     N_PHASE[slot(boma)] = 0;
+    N_ROUGE[slot(boma)] = true;
+    n_couleur(fighter, false);
+    MotionModule::set_rate(boma, 1.0);
     KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
     0.into()
 }
