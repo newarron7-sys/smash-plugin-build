@@ -49,6 +49,7 @@ static mut RECH: [[i32; 2]; 8] = [[0; 2]; 8];
 /// objets créés par le bas B : 1 = à réclamer (créé à l'instant), sinon n° de l'objet
 static mut MITE_ATTEND: [bool; 8] = [false; 8];
 static mut MITE_ID: [u32; 8] = [0; 8];
+static mut MITE_ACTIF: [bool; 8] = [false; 8];
 static mut BOT_ATTEND: [bool; 8] = [false; 8];
 static mut BOT_ID: [u32; 8] = [0; 8];
 static mut POT_ATTEND: [bool; 8] = [false; 8];
@@ -314,10 +315,11 @@ static mut DIAG_T: [[f32; 2]; 8] = [[0.0; 2]; 8];
 
 pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     let e = e_of(fighter.module_accessor);
+    mite_pas(fighter, e);
     let boma = fighter.module_accessor;
     let t = (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as i32 + MotionModule::frame(boma) as i32) as f32;
     let _ = t;
-    if MITE_ID[e] != 0 && M[e][6] != DIAG_T[e][0] && (M[e][6] as i32) % 8 == 4 {
+    if MITE_ACTIF[e] && M[e][6] != DIAG_T[e][0] && (M[e][6] as i32) % 8 == 4 {
         let h = EffectModule::req(boma, Hash40::new("sys_smash_flash_s"), &Vector3f { x: M[e][0], y: M[e][1] + 6.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 0.8, 0, 0, false, 0) as u32;
         let _ = h;
     }
@@ -358,6 +360,7 @@ unsafe fn mite_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
         }
     }
     RECH[e][0] = RECH_MITE;
+    MITE_ACTIF[e] = ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE);
     // v0.8 (diagnostic, depuis Primid) : éclat VERT = le tuyau a bien été créé ; ROUGE = le jeu a refusé de le créer
     diag(boma, M[e][0], M[e][1] + 4.0, ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE));
 }
@@ -402,7 +405,9 @@ unsafe extern "C" fn mite_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
     placer(w, M[e][0], M[e][1]);
     visible(w);
     MotionModule::change_motion(w, Hash40::new("special_s"), 0.0, 0.0, false, 0.0, false, false);
-    weapon.fastshift(L2CValue::Ptr(mite_loop as *const () as _))
+    // v0.11 : la cape ne fait plus rien d'elle-même ; Mite est entièrement mené depuis Primid (mite_pas, comme
+    // l'ascenseur de Chief, méthode validée) : v0.9 / v0.10 : sa boucle d'objet ne tournait jamais sur la cape
+    weapon.fastshift(L2CValue::Ptr(mite_passif as *const () as _))
 }
 
 unsafe extern "C" fn mite_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
@@ -411,35 +416,55 @@ unsafe extern "C" fn mite_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
     0.into()
 }
 
-unsafe fn mite_coup(weapon: &mut L2CWeaponCommon, dmg: f32, taille: f32) {
-    ATTACK(weapon, 0, 0, Hash40::new("top"), dmg, 50, 50, 0, 30, taille, 0.0, 3.0, 0.0, None, None, None, 0.8, 1.0,
-           *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, true, true, false, false, false,
-           *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
-           Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_KICK, *ATTACK_REGION_OBJECT);
+unsafe extern "C" fn mite_passif(_weapon: &mut L2CWeaponCommon) -> L2CValue {
+    0.into()
 }
 
 /// v0.6 (vidéo de REX du joueur) : Mite tombe du portail, court vers l'adversaire le plus proche (il se retourne), fonce
 /// sur lui (plongeon, petit coup d'environ 2 %), rebondit en arrière après le coup puis recommence, plusieurs fois,
 /// pendant une dizaine de secondes. Phases : 0 chute du portail, 1 course, 2 plongeon, 3 rebond après un coup.
+/// v0.11 : mené à chaque image depuis Primid : la cape est libérée, placée, tournée, animée ; le coup du plongeon est
+/// un coup de Primid posé à l'endroit de Mite (id 7).
 const MITE_VIE: f32 = 720.0;
 
-unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
-    let w = weapon.module_accessor;
-    // v0.10 : retrouvé par son n° d'objet (v0.9 : par son propriétaire ; la cape n'a pas ce lien -> retiré aussitôt)
-    let Some(e) = est_mite(w, id_of(weapon)) else {
-        tuer(weapon);
-        return 0.into();
+unsafe fn mite_coup(fighter: &mut L2CFighterCommon, x: f32, y: f32, dmg: f32, taille: f32) {
+    let boma = fighter.module_accessor;
+    let (px, py) = pos(boma);
+    let plr = PostureModule::lr(boma);
+    ATTACK(fighter, 7, 0, Hash40::new("top"), dmg, 50, 50, 0, 30, taille, 0.0, y - py + 3.0, (x - px) * plr, None, None, None,
+           0.8, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, true, true, false, false, false,
+           *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
+           Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_KICK, *ATTACK_REGION_OBJECT);
+}
+
+unsafe fn mite_fin(fighter: &mut L2CFighterCommon, e: usize) {
+    let boma = fighter.module_accessor;
+    eff(boma, "sys_erace_smoke", M[e][0], M[e][1] + 3.0, 0.8);
+    AttackModule::clear(boma, 7, false);
+    MITE_ID[e] = 0;
+    MITE_ACTIF[e] = false;
+    if ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE) {
+        ArticleModule::remove_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
+    }
+}
+
+unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) {
+    let boma = fighter.module_accessor;
+    if !MITE_ACTIF[e] {
+        return;
+    }
+    let Some(w) = article_boma(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE) else {
+        MITE_ACTIF[e] = false;
+        return;
     };
     let [mut x, mut y, mut vx, mut vy, mut lr, mut ph, mut t, mut att] = M[e];
     t += 1.0;
     if att > 0.0 {
         att -= 1.0;
     }
-    if t > MITE_VIE || y < -300.0 {
-        eff(w, "sys_erace_smoke", x, y + 3.0, 0.8);
-        MITE_ID[e] = 0;
-        tuer(weapon);
-        return 0.into();
+    if t > MITE_VIE || y < -300.0 || StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_DEAD {
+        mite_fin(fighter, e);
+        return;
     }
     let f;
     if ph < 0.5 {
@@ -447,7 +472,7 @@ unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
         vy = (vy - 0.15).max(-3.0);
         y += vy;
         f = MITE_PLONGE;
-        if let Some(g) = sol(w, x, y, (-vy).max(1.0)) {
+        if let Some(g) = sol(boma, x, y, (-vy).max(1.0)) {
             y = g;
             vy = 0.0;
             ph = 1.0;
@@ -461,7 +486,7 @@ unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
             }
         }
         x += 1.3 * lr;
-        match sol(w, x, y, 14.0) {
+        match sol(boma, x, y, 14.0) {
             Some(g) => { y = g; vy = 0.0; }
             None => { vy = (vy - 0.15).max(-3.0); y += vy; }
         }
@@ -471,7 +496,7 @@ unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
                 ph = 2.0;
                 vx = 2.2 * lr;
                 vy = 1.3;
-                AttackModule::clear_all(w);
+                AttackModule::clear(boma, 7, false);
             }
         }
     } else if ph < 2.5 {
@@ -480,18 +505,18 @@ unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
         vy = (vy - 0.12).max(-3.0);
         y += vy;
         f = if vy > 0.4 { MITE_ELAN } else { MITE_PLONGE };
-        mite_coup(weapon, 2.0, 3.5);
-        let touche = AttackModule::is_infliction(w, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(w, *COLLISION_KIND_MASK_SHIELD);
+        mite_coup(fighter, x, y, 2.0, 3.5);
+        let touche = AttackModule::is_infliction(boma, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(boma, *COLLISION_KIND_MASK_SHIELD);
         if touche {
             // il rebondit en arrière (vidéo : il retombe près de l'adversaire et repart)
-            AttackModule::clear_all(w);
+            AttackModule::clear(boma, 7, false);
             ph = 3.0;
             vx = -0.8 * lr;
             vy = 1.6;
             att = 45.0;
         } else if vy < 0.0 {
-            if let Some(g) = sol(w, x, y, (-vy).max(1.0)) {
-                AttackModule::clear_all(w);
+            if let Some(g) = sol(boma, x, y, (-vy).max(1.0)) {
+                AttackModule::clear(boma, 7, false);
                 y = g;
                 vy = 0.0;
                 ph = 1.0;
@@ -505,7 +530,7 @@ unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
         y += vy;
         f = MITE_PLONGE;
         if vy < 0.0 {
-            if let Some(g) = sol(w, x, y, (-vy).max(1.0)) {
+            if let Some(g) = sol(boma, x, y, (-vy).max(1.0)) {
                 y = g;
                 vy = 0.0;
                 ph = 1.0;
@@ -513,16 +538,15 @@ unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
         }
     }
     M[e] = [x, y, vx, vy, lr, ph, t, att];
-    // v0.7 (diagnostic) : petit éclat bleu à sa place toutes les 8 images : montre s'il vit et où il est, même si son
-    // modèle ne s'affiche pas
-    if (t as i32) % 8 == 0 {
-        eff(w, "sys_smash_flash_s", x, y + 4.0, 0.6);
-    }
+    // la cape : libérée de Mario (contrainte puis lien), placée, face à la caméra, visible, image de son animation
+    liberer(w, lr);
     placer(w, x, y);
-    orienter(w, lr);
     visible(w);
+    if MotionModule::motion_kind(w) != smash::hash40("special_s") {
+        MotionModule::change_motion(w, Hash40::new("special_s"), f, 0.0, false, 0.0, false, false);
+    }
     MotionModule::set_frame(w, f, true);
-    0.into()
+    EffectModule::kill_all(w, 0, true, false);
 }
 
 // ------------------------------------------------------------------ Botron (J.E.T. de Mario) et son pot (eau du J.E.T.)
