@@ -80,3 +80,6 @@ Procédure suivie : rex/PROCEDURE.md (dépôt final-zoom, branche combo-wip), co
 - Effets des coups normaux (coups.rs, demandé avec le showcase) : traits de griffe blanc-bleu (sys_attack_arc*,
   sys_attack_line) aux images et positions des effets de REX + traînée image par image sur la griffe / le pied ;
   smashs : éclat de charge, tourbillon au sol du smash bas, griffes en tourbillon du smash haut.
+- Showcase n° 2 (attaque en courant, smashs) : deux traits croisés en courant ; bulle brillante au début de la charge
+  des smashs ; smash haut : nuage de poussière au bond et bulle bleue transparente (sys_shield teinté, comme l'effet
+  n° 04 de REX) pendant qu'il tourne en l'air ; smash bas : bulle bleue au ras du sol, vent, poussière gauche / droite.

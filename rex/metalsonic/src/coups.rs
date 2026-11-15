@@ -57,15 +57,19 @@ unsafe extern "C" fn e_attack12(agent: &mut L2CAgentBase) {
     trainee(agent, &["handl"], 4.0, 6.0, 0.55, GRIFFE);
 }
 
-// ------------------------------------------------------------------ attaque en courant (griffe devant, il glisse)
+// ------------------------------------------------------------------ attaque en courant « Dual Claw Strike »
+// REX (image 5) : deux traits de griffe croisés devant lui (n° 13, ±4,5 de côté, 8,5 de haut, 9 devant, ±20°),
+// showcase (vidéo du 15/11) : traînée blanche derrière lui et poussière au sol pendant qu'il glisse
 unsafe extern "C" fn e_attackdash(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
     frame(lua, 1.0);
-    sol(agent, "sys_dash_smoke", -4.0, 0.9);
-    fx(agent, "sys_attack_speedline", "top", (0.0, 7.0, -3.0), (0.0, 0.0, 0.0), 1.0, GRIFFE);
-    frame(lua, 6.0);
-    fx(agent, "sys_attack_arc_b", "top", (0.0, 7.3, 6.0), (0.0, 0.0, -15.0), 0.9, GRIFFE);
-    trainee(agent, &["handr", "handl"], 6.0, 9.0, 0.5, GRIFFE);
+    sol(agent, "sys_dash_smoke", -4.0, 1.0);
+    fx(agent, "sys_attack_speedline", "top", (0.0, 7.0, -3.0), (0.0, 0.0, 0.0), 1.1, GRIFFE);
+    frame(lua, 5.0);
+    fx(agent, "sys_attack_arc_b", "top", (0.0, 8.5, 8.0), (0.0, -20.0, -35.0), 1.0, GRIFFE);
+    fx(agent, "sys_attack_arc_b", "top", (0.0, 8.5, 8.0), (0.0, 20.0, 35.0), 1.0, GRIFFE);
+    sol(agent, "sys_atk_smoke", 2.0, 0.8);
+    trainee(agent, &["handr", "handl"], 5.0, 9.0, 0.5, GRIFFE);
 }
 
 // ------------------------------------------------------------------ tilts
@@ -90,9 +94,27 @@ unsafe extern "C" fn e_attacklw3(agent: &mut L2CAgentBase) {
 }
 
 // ------------------------------------------------------------------ smashs
+// showcase : au début de la charge, une bulle brillante l'entoure un instant (éclat de charge de Brawl)
+unsafe fn bulle_charge(agent: &mut L2CAgentBase) {
+    fx(agent, "sys_shield", "top", (0.0, 7.0, 0.0), 1.0, (1.0, 1.0, 1.0));
+    fx(agent, "sys_smash_flash", "top", (0.0, 8.0, 0.0), 1.4, (1.0, 1.0, 1.0));
+}
+unsafe fn sans_bulle(agent: &mut L2CAgentBase) {
+    if is_excute(agent) {
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_shield"), false, false);
+    }
+}
+/// bulle bleue transparente de REX (effet n° 04 de son fichier, 2,2) autour de lui pendant qu'il tourne en boule
+unsafe fn boule(agent: &mut L2CAgentBase, y: f32, sc: f32) {
+    fx(agent, "sys_shield", "top", (0.0, y, 0.0), sc, (0.35, 0.55, 1.0));
+}
 unsafe extern "C" fn e_charge(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
-    let mut f = 1.0;
+    frame(lua, 1.0);
+    bulle_charge(agent);
+    frame(lua, 6.0);
+    sans_bulle(agent);
+    let mut f = 6.0;
     while f < 60.0 {
         frame(lua, f);
         if is_excute(agent) {
@@ -102,43 +124,81 @@ unsafe extern "C" fn e_charge(agent: &mut L2CAgentBase) {
         f += 5.0;
     }
 }
-/// avant (coup à 16 : 8 du début + REX AttackS4S 8, arc n° 07 à 11 devant, 1,1)
+/// avant « Heavy Claw » (coup à 16 : 8 du début + REX AttackS4S 8 ; REX : poussière + éclat sur la main à 8, arc n° 07
+/// à 11 devant à 11 ; showcase : bulle de charge, puis grand trait blanc bas devant lui)
 unsafe extern "C" fn e_attacks4(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
-    frame(lua, 10.0);
+    frame(lua, 4.0);
+    bulle_charge(agent);
+    frame(lua, 9.0);
+    sans_bulle(agent);
+    frame(lua, 12.0);
     fx(agent, "sys_smash_flash", "handr", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.8, GRIFFE);
     frame(lua, 15.0);
     sol(agent, "sys_dash_smoke", -4.0, 0.9);
-    fx(agent, "sys_attack_arc", "top", (0.0, 8.0, 9.0), (-10.0, 0.0, -30.0), 1.15, GRIFFE);
-    fx(agent, "sys_attack_line", "top", (0.0, 8.0, 3.0), (0.0, 0.0, 0.0), 1.1, GRIFFE);
+    fx(agent, "sys_attack_arc", "top", (0.0, 7.0, 9.0), (-10.0, 0.0, -30.0), 1.2, GRIFFE);
+    fx(agent, "sys_attack_line", "top", (0.0, 7.0, 3.0), (0.0, 0.0, 0.0), 1.1, GRIFFE);
     trainee(agent, &["handr"], 15.0, 18.0, 0.7, GRIFFE);
 }
-/// haut (REX : éclat à 20 de haut, puis griffes en tourbillon au-dessus de lui, coups 18 à 25)
+/// haut « Short Spin Jump » (REX AttackHi4, + 14 images de début : coup à 18 quand il bondit, bulle n° 04 à 21 et 26,
+/// atterrissage à 58 ; showcase : bulle de charge, gros nuage de poussière blanche au bond, il tourne dans une bulle
+/// bleue transparente en l'air, poussière à l'atterrissage)
 unsafe extern "C" fn e_attackhi4(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
-    frame(lua, 14.0);
-    fx(agent, "sys_smash_flash", "top", (0.0, 18.0, 0.0), (0.0, 0.0, 0.0), 1.0, GRIFFE);
-    for (f, rz) in [(17.0, 70.0), (20.0, 110.0), (22.0, 90.0)] {
-        frame(lua, f);
-        fx(agent, "sys_attack_arc_d", "top", (0.0, 15.0, 1.0), (0.0, 0.0, rz), 1.1, GRIFFE);
+    frame(lua, 4.0);
+    bulle_charge(agent);
+    frame(lua, 9.0);
+    sans_bulle(agent);
+    frame(lua, 17.0);
+    if is_excute(agent) {
+        LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, false);
+        LANDING_EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
     }
-    trainee(agent, &["handr", "handl"], 17.0, 24.0, 0.55, GRIFFE);
+    fx(agent, "sys_smash_flash", "top", (0.0, 18.0, 0.0), (0.0, 0.0, 0.0), 1.0, GRIFFE);
+    frame(lua, 19.0);
+    boule(agent, 13.0, 1.4);
+    fx(agent, "sys_spin_wind", "top", (0.0, 13.0, 0.0), (0.0, 0.0, 90.0), 1.1, GRIFFE);
+    frame(lua, 26.0);
+    sans_bulle(agent);
+    boule(agent, 13.0, 1.4);
+    frame(lua, 34.0);
+    sans_bulle(agent);
+    if is_excute(agent) {
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_spin_wind"), false, false);
+    }
+    frame(lua, 56.0);
+    if is_excute(agent) {
+        LANDING_EFFECT(agent, Hash40::new("sys_landing_smoke"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, false);
+    }
 }
-/// bas (REX : tourbillon au ras du sol, poussière à gauche puis à droite, coups 12 à 38)
+/// bas « Spin Around » (REX AttackLw4, + 10 images de début : bulle n° 04 au ras du sol de 10 à 38, poussière à gauche
+/// puis à droite à 15, 22, 28, 34 ; showcase : il tourne en boule dans une bulle bleue, traits de vent et poussière)
 unsafe extern "C" fn e_attacklw4(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
+    frame(lua, 3.0);
+    bulle_charge(agent);
+    frame(lua, 8.0);
+    sans_bulle(agent);
     frame(lua, 10.0);
-    fx(agent, "sys_smash_flash", "top", (0.0, 3.0, 0.0), (0.0, 0.0, 0.0), 0.9, GRIFFE);
-    let mut cote = 1.0;
-    let mut f = 12.0;
-    while f <= 36.0 {
+    boule(agent, 5.0, 1.2);
+    fx(agent, "sys_spin_wind", "top", (0.0, 4.0, 0.0), (0.0, 0.0, 0.0), 1.2, GRIFFE);
+    for (f, cote) in [(15.0, 1.0f32), (22.0, -1.0), (28.0, 1.0), (34.0, -1.0)] {
         frame(lua, f);
-        fx(agent, "sys_attack_arc_b", "top", (0.0, 2.5, 7.0 * cote), (0.0, if cote > 0.0 { 0.0 } else { 180.0 }, -5.0), 1.0, GRIFFE);
-        sol(agent, "sys_atk_smoke", 8.0 * cote, 0.6);
-        cote = -cote;
-        f += 4.0;
+        if is_excute(agent) {
+            FOOT_EFFECT(agent, Hash40::new("sys_dash_smoke"), Hash40::new("top"), 0, 0, 8.0 * cote, 0, if cote > 0.0 { 180 } else { 0 }, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
+        }
+        fx(agent, "sys_attack_speedline", "top", (0.0, 4.0, 6.0 * cote), (0.0, if cote > 0.0 { 180.0 } else { 0.0 }, 0.0), 0.8, GRIFFE);
+        if f == 22.0 {
+            sans_bulle(agent);
+            boule(agent, 5.0, 1.2);
+        }
     }
-    trainee(agent, &["footr", "footl"], 12.0, 36.0, 0.45, ACIER);
+    frame(lua, 38.0);
+    sans_bulle(agent);
+    if is_excute(agent) {
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_spin_wind"), false, false);
+        LANDING_EFFECT(agent, Hash40::new("sys_landing_smoke_s"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
+    }
 }
 
 // ------------------------------------------------------------------ aériens
