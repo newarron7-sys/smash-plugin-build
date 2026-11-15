@@ -7,6 +7,7 @@
 //! Étape 1 : jabs, attaque en courant, tilts, smashs, aériens, prises, coup pendant la prise.
 //! Étape 2 : spéciaux sur ceux de Ken (Kikoken = Hadoken, Spinning Bird Kick = Tatsumaki, haut B = Shoryuken,
 //! bas B = Focus), coups et animations de Melee.
+//! Étape 3 : lancers de Melee ; côté B avec l'avancée de Melee ; coups x 1,3.
 
 use smash::app::sv_animcmd::{frame, wait};
 use smash::app::lua_bind::*;
@@ -37,6 +38,12 @@ pub const K_JUMP: u8 = 12;
 /// drapeaux des statuts de Ken (ajoutés par le plugin) : id 1 / 2 chute du Hadoken en l'air on / off,
 /// 3 armure du Focus coupée
 pub const K_RYU: u8 = 13;
+/// lancers : ATTACK_ABS (id 0 lancer, 1 lâcher si l'adversaire se libère) et moment du lâcher
+pub const K_THROW: u8 = 14;
+pub const K_RELEASE: u8 = 15;
+
+/// taille des coups x 1,3 (demande du joueur : « élargis ses hitbox en général, elle touche pas assez bien »)
+pub const AGRANDI: f32 = 1.3;
 
 /// intangibilité posée par un spécial (haut B, bas B) : remise à la normale si le statut est quitté avant la fin
 static mut INTANGIBLE: [bool; 8] = [false; 8];
@@ -165,7 +172,7 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
         }
         // charge du smash : le jeu passe à la charge une image après le drapeau ; posé une image plus tôt que dans
         // Melee, la charge garde la pose de l'image de Melee (animation de charge = cette image)
-        let af = if e.k == K_HOLD { (e.f - 1.0).max(1.0) } else { img(e.f) };
+        let af = if e.k == K_HOLD { (e.f - 1.0).max(1.0) } else if e.k == K_THROW { 0.0 } else { img(e.f) };
         if af > cur {
             frame(lua, af);
             cur = af;
@@ -190,6 +197,23 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             }
             K_LAND_OFF => { WorkModule::off_flag(boma, *FIGHTER_STATUS_ATTACK_AIR_FLAG_ENABLE_LANDING); }
             K_IASA => { CancelModule::enable_cancel(boma); }
+            K_THROW => {
+                let kind = if e.id == 0 { *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW } else { *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH };
+                // lancer arrière : éjecté derrière elle (Melee), sans la retourner
+                let lr = if script == "game_throwb" && e.id == 0 { *ATTACK_LR_CHECK_B } else { *ATTACK_LR_CHECK_F };
+                smash_script::macros::ATTACK_ABS(agent, kind, 0, e.dmg, e.angle, e.kbg, e.fkb, e.bkb, 0.0, 1.0, lr, 0.0,
+                                                 true, Hash40::new(e.attr), *ATTACK_SOUND_LEVEL_S,
+                                                 *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
+            }
+            K_RELEASE => {
+                smash_script::macros::CHECK_FINISH_CAMERA(agent, 10, 7);
+                let target = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_OBJECT);
+                let group = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_GROUP);
+                let no = WorkModule::get_int64(boma, *FIGHTER_STATUS_THROW_WORK_INT_TARGET_HIT_NO);
+                smash_script::macros::ATK_HIT_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_THROW, Hash40::new("throw"),
+                                                  target, group, no);
+                AttackModule::clear_all(boma);
+            }
             K_SHOOT => { WorkModule::on_flag(boma, *FIGHTER_RYU_STATUS_WORK_ID_SPECIAL_N_FLAG_SHOOT); }
             K_BODY => {
                 let st = match e.id { 1 => *HIT_STATUS_INVINCIBLE, 2 => *HIT_STATUS_XLU, _ => *HIT_STATUS_NORMAL };
@@ -223,12 +247,13 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
                     landing_on = true;
                 }
                 // Melee : sens de l'éjection d'après la position de l'adversaire (ATTACK_LR_CHECK_POS)
-                ATTACK(agent, e.id, e.grp, Hash40::new(e.bone), e.dmg, e.angle, e.kbg, e.fkb, e.bkb, e.size, e.x, e.y,
+                ATTACK(agent, e.id, e.grp, Hash40::new(e.bone), e.dmg, e.angle, e.kbg, e.fkb, e.bkb, e.size * AGRANDI, e.x, e.y,
                        e.z, None, None, None, 1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, e.shield, 0.0,
                        0, false, false, false, false, true, situation(e.sit), *COLLISION_CATEGORY_MASK_ALL,
                        *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), niveau(e.lvl), son(e.snd),
                        if e.snd == 1 { *ATTACK_REGION_KICK } else { *ATTACK_REGION_PUNCH });
-                if catch_only {
+                if catch_only || mv.kind == 5 {
+                    // coup pendant la prise / le lancer : seulement sur l'adversaire tenu (comme Ken)
                     AttackModule::set_catch_only_all(boma, true, false);
                 }
             }
@@ -318,6 +343,45 @@ pub(crate) unsafe fn run_effet(agent: &mut L2CAgentBase, script: &str) {
     }
 }
 
+static mut SBK: [bool; 8] = [false; 8];
+
+fn depl(cle: &str) -> &'static [f32] {
+    DEPL_S.iter().find(|(k, _)| *k == cle).map(|(_, v)| *v).unwrap_or(&[])
+}
+
+/// côté B (Spinning Bird Kick) sur le Tatsumaki de Ken : son vol (énergie STOP du statut, plusieurs tours selon la
+/// force) l'emmenait beaucoup trop loin (vidéo du joueur). Ici : vitesse de Ken coupée, avancée de Melee image par
+/// image (départ, UN tour à la vitesse de fin du départ, fin), comme dans Melee
+unsafe fn spinning_bird_kick(boma: *mut BattleObjectModuleAccessor, st: i32) {
+    let e = entree(boma);
+    let depart = st == *FIGHTER_STATUS_KIND_SPECIAL_S || st == *FIGHTER_RYU_STATUS_KIND_SPECIAL_S_COMMAND;
+    let boucle = st == *FIGHTER_RYU_STATUS_KIND_SPECIAL_S_LOOP;
+    let fin = st == *FIGHTER_RYU_STATUS_KIND_SPECIAL_S_END;
+    if !(depart || boucle || fin) {
+        if SBK[e] {
+            KineticModule::resume_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_STOP);
+            SBK[e] = false;
+        }
+        return;
+    }
+    SBK[e] = true;
+    KineticModule::suspend_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_STOP);
+    let air = StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR;
+    let f = MotionModule::frame(boma).max(0.0) as usize;
+    let v = if boucle {
+        if MotionModule::frame(boma) >= MotionModule::end_frame(boma) - 1.0 {
+            StatusModule::change_status_request_from_script(boma, *FIGHTER_RYU_STATUS_KIND_SPECIAL_S_END, true);
+        }
+        if air { DEPL_S_BOUCLE_AIR } else { DEPL_S_BOUCLE }
+    } else {
+        let t = depl(match (depart, air) { (true, false) => "s_start", (true, true) => "s_air_start",
+                                            (false, false) => "s_end", (false, true) => "s_air_end" });
+        if t.is_empty() { 0.0 } else { t[f.min(t.len() - 1)] }
+    };
+    let lr = PostureModule::lr(boma);
+    PostureModule::add_pos(boma, &Vector3f { x: v * lr, y: 0.0, z: 0.0 });
+}
+
 /// Ken a des jabs « de près » (autres animations) : Chun-Li n'a que les siens -> jab normal
 unsafe extern "C" fn cl_frame(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
@@ -328,6 +392,7 @@ unsafe extern "C" fn cl_frame(fighter: &mut L2CFighterCommon) {
         HitModule::set_whole(boma, HitStatus(*HIT_STATUS_NORMAL), 0);
         INTANGIBLE[entree(boma)] = false;
     }
+    spinning_bird_kick(boma, st);
     if StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK {
         return;
     }
@@ -356,7 +421,7 @@ macro_rules! scripts {
                     let r = &$n[5..];
                     // spéciaux : sons et voix de Ken gardés (le skin a remplacé ses voix par celles de Chun-Li) ;
                     // effets de Ken gardés pour le Hadoken (boule de Ken), remplacés pour les autres
-                    if !r.starts_with("special") {
+                    if !r.starts_with("special") && !r.starts_with("throw") {
                         a.acmd(Box::leak(format!("sound_{}", r).into_boxed_str()), $s, Priority::Low);
                     }
                     if !(r == "specialn" || r == "specialairn") {
@@ -412,6 +477,10 @@ scripts! {
     g39, s39, e39 => "game_speciallw",
     g40, s40, e40 => "game_specialairlwstart",
     g41, s41, e41 => "game_specialairlw",
+    g42, s42, e42 => "game_throwf",
+    g43, s43, e43 => "game_throwb",
+    g44, s44, e44 => "game_throwhi",
+    g45, s45, e45 => "game_throwlw",
 }
 
 #[skyline::main(name = "chun_li_melee")]
