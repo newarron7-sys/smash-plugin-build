@@ -1,8 +1,7 @@
 #![feature(proc_macro_hygiene)]
 #![allow(unused, non_snake_case, non_upper_case_globals, static_mut_refs, unused_unsafe, unused_must_use)]
 
-//! Chun-Li (mod Melee m-ex de GameBanana) sur Ken, costume c140 (entrée « chun-li » de l'écran des persos du
-//! joueur) : usage perso. Coups du mod Melee (generated.rs, créé par chunli/tools/gen_chunli.py, jamais dans le dépôt)
+//! Chun-Li (mod Melee m-ex de GameBanana) sur Ken, 1re couleur (c00) pour l'instant : usage perso. Coups du mod Melee (generated.rs, créé par chunli/tools/gen_chunli.py, jamais dans le dépôt)
 //! sur ses animations de Melee (retarget_melee.py) ; modèle = skin Ultimate (SquidEnthusiast).
 //! Étape 1 : jabs, attaque en courant, tilts, smashs, aériens, prises, coup pendant la prise.
 
@@ -68,9 +67,9 @@ pub struct Mv {
 include!("generated.rs");
 
 pub const BASE: &str = "ken";
-/// sa propre case comme les autres persos : costume c140 de Ken (entrée « chun-li » du ui_chara_db.prc du joueur,
-/// color_start_index 140, 1 couleur)
-pub const COSTUMES: [usize; 1] = [140];
+/// étape par étape (demande du joueur) : d'abord sur la 1re couleur de Ken (c00) ; sa propre case à la fin
+/// (les cases ajoutées à Ken plantent chez lui, même Ken normal sur c70 : test du 15/11)
+pub const COSTUMES: [usize; 1] = [0];
 
 pub(crate) fn find(script: &str) -> Option<&'static Mv> {
     MOVES.iter().find(|m| m.script == script)
