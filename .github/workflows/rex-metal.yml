@@ -50,6 +50,8 @@ jobs:
             # tout ce qui porte "metal" (portraits, menus, sons de victoire...)
             cut -f2 /tmp/x/out/fichiers_metal.txt > /tmp/x/l.txt
             7z x -y sd.raw @/tmp/x/l.txt -o/tmp/x >/dev/null || true
+            # sons et voix : banque 18E (ids des scripts : 0x4000 + (banque - 0x14B) * 0xA5 + 0x4B2), fiches BrawlEx 7D
+            7z x -y sd.raw "rex_/pf/sfx/18E.sawnd" "rex_/pf/BrawlEx/FighterConfig/Fighter7D.dat" "rex_/pf/BrawlEx/SlotConfig/Slot7D.dat" "rex_/pf/BrawlEx/CosmeticConfig/Cosmetic7D.dat" -o/tmp/x >/dev/null || true
             rel=$(ls /tmp/x/rex_/pf/module/ft_$p.rel /tmp/x/rex_/pf/module/ft_$P.rel 2>/dev/null | head -1)
             python3 "$GITHUB_WORKSPACE/rex/tools/analyse_rex.py" "/tmp/x/$F" "$rel" "MetalSonic" > /tmp/x/out/analyse_metal.txt 2>&1 || true
           fi
