@@ -270,6 +270,11 @@ unsafe extern "C" fn e_decharge(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         fx(boma, "sys_smash_flash", "top", (0.0, 7.0, 0.0), 1.4 + 1.2 * k, Some(ROSE));
         fx(boma, "sys_thunder", "top", (0.0, 7.0, 0.0), 0.6 + 0.5 * k, Some(ROSE));
+        // v3b (demandé le 15/11 : « une explosion sur son neutral b ») : explosion autour de lui, plus grosse et
+        // tremblement plus fort avec la charge
+        fx(boma, "sys_bomb_a", "top", (0.0, 7.0, 0.0), 0.8 + 0.8 * k, None);
+        fx(boma, "sys_bomb_b", "top", (0.0, 7.0, 0.0), 0.7 + 0.7 * k, None);
+        QUAKE(agent, if k >= 0.6 { *CAMERA_QUAKE_KIND_L } else if k > 0.0 { *CAMERA_QUAKE_KIND_M } else { *CAMERA_QUAKE_KIND_S });
         for os in ["bust", "hip", "head", "handl", "handr", "footl", "footr"] {
             fx(boma, "sys_hit_elec", os, (0.0, 0.0, 0.0), 0.5 + 0.4 * k, Some(ROSE));
         }
@@ -287,6 +292,7 @@ unsafe extern "C" fn s_decharge(agent: &mut L2CAgentBase) {
         let k = N_NIVEAU[slot(agent.module_accessor)];
         PLAY_SE(agent, Hash40::new(crate::sons::V_CHARGE));
         PLAY_SE(agent, Hash40::new(if k > 0.0 { crate::sons::N_DECHARGE } else { crate::sons::N_PETITE }));
+        PLAY_SE(agent, Hash40::new(if k >= 0.6 { "se_common_bomb_l" } else { "se_common_bomb_m" }));
     }
 }
 

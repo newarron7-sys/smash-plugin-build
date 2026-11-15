@@ -5,10 +5,10 @@
 //! - prise en courant : son animation glisse de 20,7 dans REX ; ici elle est sur place et le plugin le fait avancer
 //!   (table TransN, avance_rex.py), comme la v11 de Super Sonic ;
 //! - coup pendant la prise : image 2, 2 %, électrique ;
-//! - lancer avant : coup de pied sur l'adversaire tenu (3 %), lâché à 18 (4 %, 50°, croissance 60, recul 90) ;
-//! - lancer haut : coup de feu sur l'adversaire (4 %) à 20, lâché à 23 (3 %, 90°, 70 / 99, feu), réacteur à 25 ;
-//! - lancer bas : il saute sur l'adversaire (avance de 13 : TransN de REX, faite par le plugin), lâché à 25
-//!   (6 %, 90°, 50 / 75) ;
+//! - lancer avant : coup de pied, lâché à 19 quand le pied le touche (4 + 3 = 7 %, 50°, croissance 60, recul 90) ;
+//! - lancer haut : lâché à 23 (4 + 3 = 7 %, 90°, 70 / 99, feu) avec explosion, réacteur à 25 ;
+//! - lancer bas : il saute sur l'adversaire (avance de 13 : TransN de REX, faite par le plugin), lâché à 26 quand
+//!   l'adversaire touche le sol (6 %, 90°, 50 / 75) ; onde de choc + tremblement à chaque lancer ;
 //! - provocations : ses animations ; scripts de Sonic remplacés ; voix de REX (sons.rs).
 
 use smash::app::lua_bind::*;
@@ -100,6 +100,7 @@ unsafe fn lancer_abs(agent: &mut L2CAgentBase, dmg: f32, ang: u64, kbg: i32, bkb
                Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
 }
 
+#[allow(dead_code)]
 /// coup sur l'adversaire tenu (os throw), quelques images avant le lâcher (piège de PROCEDURE.md : pas juste avant)
 unsafe fn coup_tenu(agent: &mut L2CAgentBase, dmg: f32, size: f32, attr: &str, son: i32) {
     ATTACK(agent, 0, 0, Hash40::new("throw"), dmg, 80, 100, 30, 0, size, 0.0, 0.0, 0.0, None, None, None, 1.0, 1.0,
@@ -109,50 +110,53 @@ unsafe fn coup_tenu(agent: &mut L2CAgentBase, dmg: f32, size: f32, attr: &str, s
     AttackModule::set_catch_only_all(agent.module_accessor, true, false);
 }
 
+/// lâcher + onde de choc et tremblement (demandé le 15/11 : « des ondes de choc et un tremblement à toutes ces throw »)
+/// p = point de l'onde (top : y haut, z devant) ; sol = anneau au sol en plus
+unsafe fn choc(agent: &mut L2CAgentBase, p: (f32, f32), sc: f32, sol: bool, quake: i32) {
+    EFFECT(agent, Hash40::new("sys_crown_collision"), Hash40::new("top"), 0, p.0, p.1, 0, 0, 0, sc, 0, 0, 0, 0, 0, 0, false);
+    if sol {
+        LANDING_EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("top"), 0, 0, p.1, 0, 0, 0, sc, 0, 0, 0, 0, 0, 0, false);
+    }
+    QUAKE(agent, quake);
+}
+
 // ------------------------------------------------------------------ lancer avant
+// v3b (vidéo du 15/11 : « il reçoit des dégâts et il est éjecté avant que le coup de pied le touche ») : animation de REX
+// relue image par image (/tmp/an/trace.py) : le pied gauche part à 17 (z 1,2) et touche à 18-19 (z 10,9 puis 12,9 ;
+// l'adversaire est à z 14,3). Le coup tenu à 14 (pied encore replié) donnait les dégâts trop tôt et son gel décalait
+// tout : retiré (PROCEDURE.md : pas de vrai coup juste avant le lâcher) ; ses 3 % s'ajoutent au lancer (4 + 3 = 7 %),
+// lâché à 19 quand le pied est vraiment sur lui.
 unsafe extern "C" fn g_throwf(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
     if is_excute(agent) {
-        lancer_abs(agent, 4.0, 50, 60, 90, "collision_attr_normal", (3.0, 45, 100, 40));
+        lancer_abs(agent, 7.0, 50, 60, 90, "collision_attr_normal", (3.0, 45, 100, 40));
     }
     // REX : vitesse 1,2 jusqu'à l'image 17
     FT_MOTION_RATE(agent, 1.0 / 1.2);
-    frame(lua, 14.0);
-    if is_excute(agent) {
-        coup_tenu(agent, 3.0, 5.0, "collision_attr_normal", *COLLISION_SOUND_ATTR_KICK);
-    }
-    frame(lua, 15.0);
-    if is_excute(agent) {
-        AttackModule::clear_all(agent.module_accessor);
-    }
     frame(lua, 17.0);
     FT_MOTION_RATE(agent, 1.0);
-    frame(lua, 18.0);
+    frame(lua, 19.0);
     if is_excute(agent) {
         smash_script::macros::CHECK_FINISH_CAMERA(agent, 9, 6);
         lacher(agent);
     }
 }
 unsafe extern "C" fn e_throwf(agent: &mut L2CAgentBase) {
-    frame(agent.lua_state_agent, 17.0);
+    frame(agent.lua_state_agent, 19.0);
     if is_excute(agent) {
-        EFFECT(agent, Hash40::new("sys_attack_impact"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("sys_attack_impact"), Hash40::new("footl"), 0, 0, 0, 0, 0, 0, 1.4, 0, 0, 0, 0, 0, 0, true);
+        choc(agent, (8.4, 13.0), 0.9, true, *CAMERA_QUAKE_KIND_M);
     }
 }
 
 // ------------------------------------------------------------------ lancer haut
+// REX : il le lève au-dessus de lui (ThrowN à 26 de haut à l'image 10), il redescend sur sa tête (11 de haut à 21),
+// coup de feu à 20, lâché à 23 vers le haut. v3b : même correction que le lancer avant (coup tenu retiré, 4 + 3 = 7 %)
+// et explosion au lâcher (demandé, vidéo du 15/11 : « Rajoute une explosion »).
 unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
     if is_excute(agent) {
-        lancer_abs(agent, 3.0, 90, 70, 99, "collision_attr_fire", (3.0, 361, 100, 44));
-    }
-    frame(lua, 20.0);
-    if is_excute(agent) {
-        coup_tenu(agent, 4.0, 4.0, "collision_attr_fire", *COLLISION_SOUND_ATTR_FIRE);
-    }
-    frame(lua, 21.0);
-    if is_excute(agent) {
-        AttackModule::clear_all(agent.module_accessor);
+        lancer_abs(agent, 7.0, 90, 70, 99, "collision_attr_fire", (3.0, 361, 100, 44));
     }
     frame(lua, 23.0);
     if is_excute(agent) {
@@ -160,30 +164,37 @@ unsafe extern "C" fn g_throwhi(agent: &mut L2CAgentBase) {
         lacher(agent);
     }
 }
-/// REX : feu du réacteur (effet n° 73, comme l'arrière aérien) à l'image 25, éclat à 27
 unsafe extern "C" fn e_throwhi(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
     frame(lua, 20.0);
     if is_excute(agent) {
         EFFECT(agent, Hash40::new("sys_flame"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.7, 0, 0, 0, 0, 0, 0, true);
     }
+    frame(lua, 23.0);
+    if is_excute(agent) {
+        // explosion sur l'adversaire (au-dessus de sa tête) au moment où il part
+        EFFECT(agent, Hash40::new("sys_bomb_a"), Hash40::new("top"), 0, 12, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, false);
+        EFFECT(agent, Hash40::new("sys_bomb_b"), Hash40::new("top"), 0, 12, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, false);
+        choc(agent, (11.0, 0.0), 1.0, true, *CAMERA_QUAKE_KIND_M);
+    }
     frame(lua, 25.0);
     if is_excute(agent) {
         EFFECT_FOLLOW(agent, Hash40::new("sys_flame"), Hash40::new("bust"), 0, 0, 0, 0, 0, 0, 0.8, true);
     }
-    frame(lua, 27.0);
-    if is_excute(agent) {
-        EFFECT(agent, Hash40::new("sys_attack_impact"), Hash40::new("top"), 0, 16, 2, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, true);
-    }
 }
 
 // ------------------------------------------------------------------ lancer bas
+// v3b (vidéo du 15/11 : « il l'a même pas vraiment balancé au sol qu'il part déjà, et l'onde de choc est même pas au
+// sol ») : REX relu image par image : il saute avec l'adversaire au-dessus de lui (ThrowN à 22 de haut à l'image 22,
+// le sommet), le jette, et l'adversaire touche le sol à 26 (ThrowN y 1,3, à 11 devant lui) ; lui atterrit à 25-26.
+// L'onde était à 22 sur l'os throw (= au sommet, en l'air) et le lâcher à 25 (encore à 10 de haut) : lâcher à 26,
+// onde de choc au sol, à l'endroit où l'adversaire s'écrase.
 unsafe extern "C" fn g_throwlw(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
     if is_excute(agent) {
         lancer_abs(agent, 6.0, 90, 50, 75, "collision_attr_normal", (3.0, 45, 100, 40));
     }
-    frame(lua, 25.0);
+    frame(lua, 26.0);
     if is_excute(agent) {
         smash_script::macros::CHECK_FINISH_CAMERA(agent, 2, 0);
         lacher(agent);
@@ -191,12 +202,12 @@ unsafe extern "C" fn g_throwlw(agent: &mut L2CAgentBase) {
     // REX : vitesse 1,35 après le lâcher
     FT_MOTION_RATE(agent, 1.0 / 1.35);
 }
-/// REX : choc au sol à l'image 22 (effet n° 9 sur TopN)
 unsafe extern "C" fn e_throwlw(agent: &mut L2CAgentBase) {
-    frame(agent.lua_state_agent, 22.0);
+    frame(agent.lua_state_agent, 26.0);
     if is_excute(agent) {
-        LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, false);
-        EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("throw"), 0, 0, 0, 0, 0, 0, 0.6, 0, 0, 0, 0, 0, 0, false);
+        LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 11, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, false);
+        EFFECT(agent, Hash40::new("sys_attack_impact"), Hash40::new("top"), 0, 1, 11, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, false);
+        choc(agent, (1.0, 11.0), 1.1, true, *CAMERA_QUAKE_KIND_L);
     }
 }
 

@@ -64,6 +64,9 @@ unsafe extern "C" fn e_attackairb(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         // gerbe de feu au départ ; le jet de la tuyère (images 6 à 20) est fait par flamme_course
         EFFECT_FOLLOW(agent, Hash40::new("sys_flame"), Hash40::new("bust"), 0, 0, 0, 0, 0, 0, 0.8, true);
+        // v3b (demandé le 15/11 : « une explosion sur son back air ») : explosion derrière lui, à la tuyère du dos
+        EFFECT(agent, Hash40::new("sys_bomb_a"), Hash40::new("top"), 0, 7, -7, 0, 0, 0, 0.7, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("sys_smash_flash_s"), Hash40::new("top"), 0, 7, -6, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, true);
     }
 }
 

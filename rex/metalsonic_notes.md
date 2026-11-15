@@ -67,3 +67,13 @@ Procédure suivie : rex/PROCEDURE.md (dépôt final-zoom, branche combo-wip), co
 
 ## VALIDÉ PAR LE JOUEUR / CORRECTIONS (ne pas casser)
 - (rien de validé en jeu pour l'instant)
+
+## v3b (15/11) — lancers corrigés, ondes de choc, explosions
+- Animations de REX relues image par image (pied, ThrowN, TransN) :
+  - lancer avant : le pied touche à 18-19. Le coup tenu à 14 (pied replié) donnait dégâts + gel trop tôt → retiré,
+    3 % ajoutés au lancer (7 %), lâché à 19 ;
+  - lancer haut : coup tenu retiré (7 %), lâché à 23 avec explosion (sys_bomb_a / b) au-dessus de lui ;
+  - lancer bas : l'adversaire touche le sol à 26 (sommet du saut à 22, où était l'onde) → lâché à 26, onde au sol à
+    11 devant lui.
+- Tous les lancers : sys_crown_collision + sys_crown au sol + QUAKE (M, M, L).
+- Arrière aérien : explosion sys_bomb_a derrière lui à l'image 6 ; B neutre : sys_bomb_a / b et QUAKE selon la charge.
