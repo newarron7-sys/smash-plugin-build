@@ -8,6 +8,7 @@
 //! Étape 2 : spéciaux sur ceux de Ken (Kikoken = Hadoken, Spinning Bird Kick = Tatsumaki, haut B = Shoryuken,
 //! bas B = Focus), coups et animations de Melee.
 //! Étape 3 : lancers de Melee ; côté B avec l'avancée de Melee ; coups x 1,3.
+//! v8 : côté B à position imposée, tour plus lent ; adversaire tenu droit, couché sur le dos au lancer bas.
 
 use smash::app::sv_animcmd::{frame, wait};
 use smash::app::lua_bind::*;
@@ -344,14 +345,20 @@ pub(crate) unsafe fn run_effet(agent: &mut L2CAgentBase, script: &str) {
 }
 
 static mut SBK: [bool; 8] = [false; 8];
+static mut SBK_X: [f32; 8] = [0.0; 8];
+static mut SBK_LR: [f32; 8] = [1.0; 8];
+static mut SBK_D: [f32; 8] = [0.0; 8];
+/// tour du Spinning Bird Kick moins rapide que la fin du départ de Melee (v7 : « beaucoup trop loin et trop vite,
+/// l'adversaire ne reste pas dans les coups »)
+pub const SBK_BOUCLE: f32 = 0.6;
 
 fn depl(cle: &str) -> &'static [f32] {
     DEPL_S.iter().find(|(k, _)| *k == cle).map(|(_, v)| *v).unwrap_or(&[])
 }
 
-/// côté B (Spinning Bird Kick) sur le Tatsumaki de Ken : son vol (énergie STOP du statut, plusieurs tours selon la
-/// force) l'emmenait beaucoup trop loin (vidéo du joueur). Ici : vitesse de Ken coupée, avancée de Melee image par
-/// image (départ, UN tour à la vitesse de fin du départ, fin), comme dans Melee
+/// côté B (Spinning Bird Kick) sur le Tatsumaki de Ken : sa position est IMPOSÉE à chaque image (départ + avancée
+/// cumulée) : la vitesse du statut de Ken ne s'ajoute plus (v7 : elle s'ajoutait, beaucoup trop loin / trop vite).
+/// Avancée de Melee image par image au départ et à la fin, UN tour à SBK_BOUCLE x la vitesse de fin du départ
 unsafe fn spinning_bird_kick(boma: *mut BattleObjectModuleAccessor, st: i32) {
     let e = entree(boma);
     let depart = st == *FIGHTER_STATUS_KIND_SPECIAL_S || st == *FIGHTER_RYU_STATUS_KIND_SPECIAL_S_COMMAND;
@@ -364,22 +371,29 @@ unsafe fn spinning_bird_kick(boma: *mut BattleObjectModuleAccessor, st: i32) {
         }
         return;
     }
-    SBK[e] = true;
+    if !SBK[e] {
+        SBK[e] = true;
+        SBK_X[e] = PostureModule::pos_x(boma);
+        SBK_LR[e] = PostureModule::lr(boma);
+        SBK_D[e] = 0.0;
+    }
     KineticModule::suspend_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_STOP);
+    KineticModule::clear_speed_energy_id(boma, *FIGHTER_KINETIC_ENERGY_ID_STOP);
     let air = StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR;
     let f = MotionModule::frame(boma).max(0.0) as usize;
     let v = if boucle {
         if MotionModule::frame(boma) >= MotionModule::end_frame(boma) - 1.0 {
             StatusModule::change_status_request_from_script(boma, *FIGHTER_RYU_STATUS_KIND_SPECIAL_S_END, true);
         }
-        if air { DEPL_S_BOUCLE_AIR } else { DEPL_S_BOUCLE }
+        SBK_BOUCLE * if air { DEPL_S_BOUCLE_AIR } else { DEPL_S_BOUCLE }
     } else {
         let t = depl(match (depart, air) { (true, false) => "s_start", (true, true) => "s_air_start",
                                             (false, false) => "s_end", (false, true) => "s_air_end" });
         if t.is_empty() { 0.0 } else { t[f.min(t.len() - 1)] }
     };
-    let lr = PostureModule::lr(boma);
-    PostureModule::add_pos(boma, &Vector3f { x: v * lr, y: 0.0, z: 0.0 });
+    SBK_D[e] += v;
+    let pos = Vector3f { x: SBK_X[e] + SBK_D[e] * SBK_LR[e], y: PostureModule::pos_y(boma), z: PostureModule::pos_z(boma) };
+    PostureModule::set_pos(boma, &pos);
 }
 
 /// Ken a des jabs « de près » (autres animations) : Chun-Li n'a que les siens -> jab normal
