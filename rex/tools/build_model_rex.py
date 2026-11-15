@@ -594,6 +594,20 @@ def blade_texture(t):
     return Image.fromarray((out * 255).astype(np.uint8), 'RGBA')
 
 
+def bleed(im):
+    """Knuckle Joe : pixels transparents (noirs) de la texture remplis avec la couleur voisine et rendus opaques :
+    sur un matériau opaque ils sortaient en traits noirs le long des coutures des UV (filtrage, compression BC7)"""
+    a = np.asarray(im.convert('RGBA'), dtype=float)
+    m = a[..., 3] >= 128
+    if m.all() or not m.any():
+        return im
+    rgb = a[..., :3].copy()
+    idx = ndimage.distance_transform_edt(~m, return_distances=False, return_indices=True)
+    rgb = rgb[idx[0], idx[1]]
+    out = np.dstack([rgb, np.full(m.shape, 255.0)])
+    return Image.fromarray(out.astype(np.uint8), 'RGBA')
+
+
 def is_emit(mname):
     return 'Emission' in mname or 'Gem' in mname
 
@@ -637,7 +651,10 @@ for mname, texs in used_mats.items():
         a[..., :3] *= env * float(os.environ.get('ENV_GAIN', '0.9'))
         col = save_png(PFX + '_' + texs[0].lower().replace(' ', '_') + '_col', up2(Image.fromarray(a.clip(0, 255).astype(np.uint8), 'RGBA')))
     else:
-        col = save_png(PFX + '_' + texs[0].lower().replace(' ', '_') + '_col', up2(TEX[texs[0]]))
+        src_ = TEX[texs[0]]
+        if os.environ.get('BLEED') == '1' and kind != 'alpha':
+            src_ = bleed(src_)
+        col = save_png(PFX + '_' + texs[0].lower().replace(' ', '_') + '_col', up2(src_))
     c = arr(Image.open(os.path.join(PNG, col + '.png')))
     nor = save_png(col.replace('_col', '_nor'), img(nor_from(c))) if kind in ('opaque', 'alpha') and c.shape[0] > 16 else PFX + '_nor'
     if nor == PFX + '_nor':

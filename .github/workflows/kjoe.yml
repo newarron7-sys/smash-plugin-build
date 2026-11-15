@@ -41,7 +41,7 @@ jobs:
       - name: Modele de Knuckle Joe (REX) sur le squelette de Ness (methode de Rock / Zero)
         run: |
           D=/tmp/w/rex_/pf/Fighter/kjoe
-          EXO=1 DROP_VIS=OutlineM,ClosedEyes,OpenMouth,Sleep,HalfEyelid,Happy,Hurt,Smile ALPHA_MATS=EyesDefault python3 rex/tools/build_model_rex.py $D/FitKJoe00.pac /tmp/ref/ref /tmp/out kjoe > /tmp/out/build.txt 2>&1; tail -3 /tmp/out/build.txt | grep -oE '^[A-Za-z]*Error.*' || true; test -f /tmp/out/model.json
+          EXO=1 DROP_VIS=OutlineM,ClosedEyes,OpenMouth,Sleep,HalfEyelid,Happy,Hurt,Smile ALPHA_MATS=EyesDefault BLEED=1 python3 rex/tools/build_model_rex.py $D/FitKJoe00.pac /tmp/ref/ref /tmp/out kjoe > /tmp/out/build.txt 2>&1; tail -3 /tmp/out/build.txt | grep -oE '^[A-Za-z]*Error.*' || true; test -f /tmp/out/model.json
           python3 rex/tools/deexo.py /tmp/out/model /tmp/out/model.json /tmp/out/direct > /tmp/out/direct.txt 2>&1 || true
       - name: Coups (generated.rs)
         run: |

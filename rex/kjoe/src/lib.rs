@@ -102,6 +102,11 @@ pub const BASE: &str = "ness";
 /// case « knucklejoe » du joueur, passée sur Ness : costume c100 (une seule couleur)
 pub const SS_COSTUMES: [usize; 1] = [100];
 
+/// taille (vidéo / remarque du 15/11 : « beaucoup trop grand et gros par rapport à Kirby ») : le modèle de REX fait
+/// 18 de haut avec ses cheveux (corps ~12) ; ramené à la taille de Kirby. Les coups de REX (tailles, décalages)
+/// suivent la même échelle.
+pub const ECHELLE: f32 = 0.6;
+
 /// poussées (script, image de REX, vitesse vers l'avant, vers le haut) : aucune pour l'instant
 pub const POUSSEES: &[(&str, f32, f32, f32)] = &[];
 
@@ -114,6 +119,7 @@ pub(crate) fn find(script: &str) -> Option<&'static Mv> {
 static mut CORPS_CHANGE: [bool; 8] = [false; 8];
 
 unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
+    ModelModule::set_scale(fighter.module_accessor, ECHELLE);
     let boma = fighter.module_accessor;
     let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
     if id < 8 && CORPS_CHANGE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_S4 {
@@ -213,9 +219,9 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_AIR_FLAG_ENABLE_LANDING);
             landing_on = true;
         }
-        let size = e.size;
+        let size = e.size * ECHELLE;
         let (angle, kbg) = (e.angle, e.kbg);
-        ATTACK(agent, e.id, 0, Hash40::new(e.bone), e.dmg, angle, kbg, e.fkb, e.bkb, size, e.x, e.y, e.z,
+        ATTACK(agent, e.id, 0, Hash40::new(e.bone), e.dmg, angle, kbg, e.fkb, e.bkb, size, e.x * ECHELLE, e.y * ECHELLE, e.z * ECHELLE,
                None, None, None, e.hitlag, e.sdi, *ATTACK_SETOFF_KIND_ON, lr_check, false, 0, e.trip, 0,
                false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL,
                *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), *ATTACK_SOUND_LEVEL_M, son(e.attr),
