@@ -407,6 +407,11 @@ for transparent, mi, oi, vb in DRAWS:
     if nv == 0:
         continue
     mname = M['mat_names'][mi]
+    if on in os.environ.get('DROP_OBJ', '').split(',') and on:
+        # Knuckle Joe : queues du bandeau (os BdnL / BdnS absents chez Ness) : sans leurs os elles pendaient en traits
+        # noirs jusqu'au sol (vidéo du 16/11)
+        print('OBJET RETIRE', on, mname, 'DROP_OBJ')
+        continue
     if vb in os.environ.get('DROP_VIS', '').split(',') and vb:
         # v0.5 : buster, yeux jaunes, sabre dans le dos retirés pour l'instant (pas de pistes de visibilité : avec,
         # Zero restait invisible en jeu) ; ils reviendront avec ses spéciaux, pilotés par le plugin

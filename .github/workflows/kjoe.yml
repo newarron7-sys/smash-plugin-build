@@ -4,7 +4,7 @@ on:
     # compilé sur la branche metalsonic : le cache des outils Switch (toolchain skyline) y est déjà ; sur une
     # nouvelle branche il n'est pas partagé et l'installation restait bloquée (40 min, 15/11)
     branches: [ knucklejoe, metalsonic ]
-    paths: [ '.github/workflows/kjoe.yml', 'rex/kjoe/**' ]
+    paths: [ '.github/workflows/kjoe.yml', 'rex/kjoe/**', 'rex/tools/**' ]
   workflow_dispatch:
 permissions:
   contents: write
@@ -41,7 +41,7 @@ jobs:
       - name: Modele de Knuckle Joe (REX) sur le squelette de Ness (methode de Rock / Zero)
         run: |
           D=/tmp/w/rex_/pf/Fighter/kjoe
-          EXO=1 DROP_VIS=OutlineM,ClosedEyes,OpenMouth,Sleep,HalfEyelid,Happy,Hurt,Smile ALPHA_MATS=EyesDefault BLEED=1 python3 rex/tools/build_model_rex.py $D/FitKJoe00.pac /tmp/ref/ref /tmp/out kjoe > /tmp/out/build.txt 2>&1; tail -3 /tmp/out/build.txt | grep -oE '^[A-Za-z]*Error.*' || true; test -f /tmp/out/model.json
+          EXO=1 DROP_VIS=OutlineM,ClosedEyes,OpenMouth,Sleep,HalfEyelid,Happy,Hurt,Smile ALPHA_MATS=EyesDefault BLEED=1 DROP_OBJ=Headband2 python3 rex/tools/build_model_rex.py $D/FitKJoe00.pac /tmp/ref/ref /tmp/out kjoe > /tmp/out/build.txt 2>&1; tail -3 /tmp/out/build.txt | grep -oE '^[A-Za-z]*Error.*' || true; test -f /tmp/out/model.json
           python3 rex/tools/deexo.py /tmp/out/model /tmp/out/model.json /tmp/out/direct > /tmp/out/direct.txt 2>&1 || true
       - name: Coups (generated.rs)
         run: |
@@ -51,7 +51,7 @@ jobs:
       - name: Animations (base + coups, squelette de Ness)
         run: |
           D=/tmp/w/rex_/pf/Fighter/kjoe
-          NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitKJoe00.pac $D/FitKJoeMotionEtc.pac /tmp/out /tmp/out/motion/c00 base rex/tools/ness_motions.txt > /tmp/out/animations.txt 2>&1 || true
+          SOL=1 NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitKJoe00.pac $D/FitKJoeMotionEtc.pac /tmp/out /tmp/out/motion/c00 base rex/tools/ness_motions.txt > /tmp/out/animations.txt 2>&1 || true
           echo "animations : $(ls /tmp/out/motion/c00/*.nuanmb 2>/dev/null | wc -l)"
       - name: Apercus (modele, os, poses)
         continue-on-error: true

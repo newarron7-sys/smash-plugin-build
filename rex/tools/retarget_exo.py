@@ -621,6 +621,21 @@ def locals_at(an, f):
 
     for i in range(len(UB)):
         world(i)
+    if os.environ.get('SOL') == '1' and 'FootL' in IDX and 'LFootJ' in BW:
+        # Knuckle Joe (vidéo du 16/11 : « ses pieds sont enfoncés dans le sol ») : jambes de REX plus courtes que
+        # celles de Ness ; mêmes angles -> les pieds de Ness passaient sous le sol. Quand un pied de REX touche le
+        # sol, les hanches sont remontées pour que le pied de Ness soit à la même hauteur (par rapport au repos)
+        lift = 0.0
+        for un_, bn_ in (('FootL', 'LFootJ'), ('FootR', 'RFootJ')):
+            ry = float(BW[bn_][1, 3]) - float(BR[bn_].world[1, 3])
+            if ry < 1.5:
+                ny = float(world(IDX[un_])[1, 3]) - float(W0[IDX[un_]][1, 3])
+                lift = max(lift, ry - ny)
+        if lift > 1e-3:
+            ih = IDX['Hip']
+            t_ = np.eye(4)
+            t_[1, 3] = lift
+            L[ih] = inv_s(world(PAR[ih])) @ (t_ @ world(ih))
     return L
 
 
