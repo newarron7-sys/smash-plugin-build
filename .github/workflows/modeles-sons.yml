@@ -1,0 +1,28 @@
+name: Metal Sonic - modeles de banque de Sonic (GameBanana, chiffre session)
+on:
+  push:
+    branches: [ metalsonic ]
+    paths: [ '.github/workflows/modeles-sons.yml', 'rex/tools/modele_sons.py' ]
+permissions:
+  contents: write
+jobs:
+  m:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Recherche (noms des mods seulement)
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
+          mkdir -p /tmp/out
+          python3 rex/tools/modele_sons.py /tmp/out/modele sonic "sonic voice,sonic voice pack,sonic sfx,sonic sound effects,sonic sounds,shadow voice,classic sonic,movie sonic,sonic frontiers,sonic moveset,shadow moveset,sonic adventure voice,ryan drummond,jason griffith,roger craig smith" > /tmp/out/modele.txt 2>&1 || true
+          grep -E "^(CANDIDATS|ESSAI|MODELE|CHOISI|AUCUN)" /tmp/out/modele.txt | cut -c1-170 || true
+          rm -rf /tmp/out/modele/dl
+      - name: Chiffrer (cle de la session) et publier
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/modeles.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin
+          cd /tmp/pub && git init -q -b modeles_sons && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "modeles chiffres" && git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" modeles_sons

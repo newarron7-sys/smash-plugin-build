@@ -307,6 +307,16 @@ GROUPES = {
         'd03specialairlwstart': ['SpecialAirLwStart'], 'd03specialairlwhold': ['SpecialLwLoop'],
         'd03specialairlwend': ['SpecialAirLwEnd'],
     },
+    # Metal Sonic : prise, coup pendant la prise, lancers avant / haut / bas (pas le lancer arrière : demandé le
+    # 15/11) et provocations de REX ; sur place (prise en courant et lancer bas : avancée faite par le plugin)
+    'metal_prises': {
+        'e00catch': ['Catch'], 'e00catchdash': ['CatchDash'], 'e00catchturn': ['CatchTurn'],
+        'e00catchwait': ['CatchWait'], 'e00catchcut': ['CatchCut'], 'e00catchattack': ['CatchAttack'],
+        'e01throwf': ['ThrowF'], 'e01throwhi': ['ThrowHi'], 'e01throwlw': ['ThrowLw'],
+        'j01appealhil': ['AppealHi'], 'j01appealhir': ['AppealHiR'],
+        'j01appealsl': ['AppealS'], 'j01appealsr': ['AppealS'],
+        'j01appeallwl': ['AppealLw'], 'j01appeallwr': ['AppealLwR'],
+    },
     'base': {
         # attente
         'a00wait1': ['Wait1'], 'a00wait2': ['Wait2'], 'a00wait3': ['Wait1'], 'a00waititem': ['Wait1'],
@@ -677,6 +687,9 @@ if GROUPE == 'chief_prises':
     # sur place sauf la prise en courant (le jeu la fait glisser avec l'avancée de l'animation)
     IN_PLACE = {k for k in GROUPES['chief_prises'] if k != 'e00catchdash'}
     KEEP_Y = set()
+if GROUPE == 'metal_prises':
+    IN_PLACE = set(GROUPES['metal_prises'])
+    KEEP_Y = {'e01throwhi'}
 if GROUPE == 'metal_speciaux':
     IN_PLACE = set(GROUPES['metal_speciaux'])
     KEEP_Y = set()

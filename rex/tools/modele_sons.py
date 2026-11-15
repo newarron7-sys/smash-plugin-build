@@ -37,7 +37,7 @@ print('CANDIDATS', len(cands))
 best = {'se': None, 'vc': None}
 vus = 0
 for model, idr, name in cands:
-    if vus >= 30 or (best['se'] and best['vc'] and best['se'][0] >= 80 and best['vc'][0] >= 40):
+    if vus >= 45 or (best['se'] and best['vc'] and best['se'][0] >= 80 and best['vc'][0] >= 40):
         break
     try:
         p = json.loads(get('https://gamebanana.com/apiv11/%s/%d/ProfilePage' % (model, idr)))
@@ -49,11 +49,20 @@ for model, idr, name in cands:
             continue
         # arborescence de l'archive (sans la télécharger) : seulement celles qui ont une banque du perso
         try:
-            tree = json.dumps(json.loads(get('https://gamebanana.com/apiv11/File/%d' % f['_idRow'])).get('_aMetadata', {}))
-        except Exception:  # noqa: BLE001
+            tree = get('https://gamebanana.com/apiv11/File/%d/RawFileList' % f['_idRow']).decode('utf-8', 'replace')
+        except Exception as e:  # noqa: BLE001
             tree = ''
-        if 'se_%s' % KIND not in tree and 'vc_%s' % KIND not in tree:
+        if not tree:
+            try:
+                tree = json.dumps(json.loads(get('https://gamebanana.com/apiv11/File/%d' % f['_idRow'])))
+            except Exception:  # noqa: BLE001
+                tree = ''
+        connu = 'nus3' in tree or '.nutexb' in tree or '.numdlb' in tree
+        if connu and 'se_%s' % KIND not in tree and 'vc_%s' % KIND not in tree:
             continue
+        if not connu and (f.get('_nFilesize', 0) > 60_000_000 or not any(w in name.lower() for w in ('voice', 'sfx', 'sound', 'moveset'))):
+            continue
+        print('ESSAI', idr, name, f.get('_nFilesize'), 'arbre connu' if connu else 'arbre inconnu')
         vus += 1
         d = os.path.join(OUT, 'dl', str(f['_idRow']))
         os.makedirs(d, exist_ok=True)
