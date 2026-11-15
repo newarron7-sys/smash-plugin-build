@@ -6,7 +6,8 @@
 //! Cymul (arrière) et Boobas (bas) : modèles prêts, comportement à la version suivante.
 //!
 //! Les ennemis sont les modèles de REX mis sur des objets de Mario que Primid n'utilise pas :
-//! - Mite -> cape de Mario (mantle, v0.9 ; le tuyau d'entrée n'est pas recréé pendant le match) : mené depuis Primid (mite_pas, v0.11) ;
+//! - Mite -> v0.12 : dans le modèle de Primid (os pr_mite déplacé, 4 exemplaires face caméra) : la cape (v0.9 à v0.11)
+//!   restait invisible en jeu ; mené depuis Primid (mite_pas) ;
 //! - Botron -> J.E.T. (pump, statut WAIT) : vole au-dessus du terrain en portant son pot ;
 //! - le pot de Botron : dans le modèle de Botron ; lâché au-dessus de l'adversaire, il est caché sur Botron et un pot
 //!   (v0.9) : son os HachiN descend, il explose en feu au sol (plus d'objet à part : pumpwater plantait, Cappy refusé).
@@ -316,19 +317,6 @@ static mut DIAG_T: [[f32; 2]; 8] = [[0.0; 2]; 8];
 pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     let e = e_of(fighter.module_accessor);
     mite_pas(fighter, e);
-    let boma = fighter.module_accessor;
-    let t = (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as i32 + MotionModule::frame(boma) as i32) as f32;
-    let _ = t;
-    if MITE_ACTIF[e] && M[e][6] != DIAG_T[e][0] && (M[e][6] as i32) % 8 == 4 {
-        let h = EffectModule::req(boma, Hash40::new("sys_smash_flash_s"), &Vector3f { x: M[e][0], y: M[e][1] + 6.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 0.8, 0, 0, false, 0) as u32;
-        let _ = h;
-    }
-    DIAG_T[e][0] = M[e][6];
-    if BOT_ID[e] != 0 && B[e][3] != DIAG_T[e][1] && (B[e][3] as i32) % 8 == 4 {
-        let h = EffectModule::req(boma, Hash40::new("sys_smash_flash_s"), &Vector3f { x: B[e][0], y: B[e][1] - 6.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 1.0, 0, 0, false, 0) as u32;
-        if h != 0 { EffectModule::set_rgb(boma, h, 1.0, 0.9, 0.1); }
-    }
-    DIAG_T[e][1] = B[e][3];
     portail_afficher(fighter.module_accessor, e);
     for k in 0..2 {
         if RECH[e][k] > 0 {
@@ -343,26 +331,14 @@ pub unsafe fn update(fighter: &mut L2CFighterCommon) {
 // animations de Mite (d01specials.nuanmb).
 
 unsafe fn mite_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
-    if ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE) {
-        ArticleModule::remove_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
-    }
     let lr = PostureModule::lr(boma);
     let (x, y) = pos(boma);
     // vidéo de REX : il tombe du portail (au-dessus de sa tête) puis court vers l'adversaire
     M[e] = [x + 2.0 * lr, y + 24.0, 0.0, 0.0, lr, 0.0, 0.0, 0.0];
-    MITE_ATTEND[e] = true;
-    MITE_ID[e] = 0;
-    ArticleModule::generate_article(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE, false, -1);
-    if let Some(w) = article_boma(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE) {
-        if MITE_ATTEND[e] {
-            // le statut n'a pas encore réclamé l'objet : il passe au statut DUMMY (remplacé ci-dessous)
-            StatusModule::change_status_force(w, *WEAPON_MARIO_MANTLE_STATUS_KIND_DUMMY, false);
-        }
-    }
     RECH[e][0] = RECH_MITE;
-    MITE_ACTIF[e] = ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE);
-    // v0.8 (diagnostic, depuis Primid) : éclat VERT = le tuyau a bien été créé ; ROUGE = le jeu a refusé de le créer
-    diag(boma, M[e][0], M[e][1] + 4.0, ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE));
+    // v0.12 : Mite est dans le modèle de Primid (os pr_mite) : plus d'objet à créer
+    MITE_ACTIF[e] = true;
+    eff(boma, "sys_erace_smoke", M[e][0], M[e][1], 0.6);
 }
 
 unsafe fn article_boma(boma: *mut BattleObjectModuleAccessor, kind: i32) -> Option<*mut BattleObjectModuleAccessor> {
@@ -441,22 +417,61 @@ unsafe fn mite_fin(fighter: &mut L2CFighterCommon, e: usize) {
     let boma = fighter.module_accessor;
     eff(boma, "sys_erace_smoke", M[e][0], M[e][1] + 3.0, 0.8);
     AttackModule::clear(boma, 7, false);
-    MITE_ID[e] = 0;
     MITE_ACTIF[e] = false;
-    if ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE) {
-        ArticleModule::remove_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
+    mite_afficher(boma, None);
+}
+
+/// v0.12 : Mite = objets pr_mite_a..d du modèle de Primid (mite_primid.py) collés à l'os pr_mite. Le jeu tourne le
+/// modèle selon le côté de Primid et Mite est plat : un exemplaire par (côté de Primid, direction de Mite), tourné face
+/// à la caméra. Mite regarde vers -x dans son modèle : il est retourné (s = -1) pour aller vers la droite.
+unsafe fn mite_afficher(boma: *mut BattleObjectModuleAccessor, quoi: Option<(f32, f32)>) {
+    let choix = quoi.map(|(plr, mlr)| {
+        let s = -mlr;
+        match (plr > 0.0, s > 0.0) {
+            (true, true) => "pr_mite_a",
+            (true, false) => "pr_mite_b",
+            (false, true) => "pr_mite_c",
+            (false, false) => "pr_mite_d",
+        }
+    });
+    for n in ["pr_mite_a", "pr_mite_b", "pr_mite_c", "pr_mite_d"] {
+        ModelModule::set_mesh_visibility(boma, Hash40::new(n), choix == Some(n));
     }
+}
+
+/// échelle du modèle (unités du jeu par unité du modèle), mesurée sur l'os pr_mite lui-même (image précédente)
+static mut MK: [f32; 8] = [0.0; 8];
+static mut ML: [[f32; 2]; 8] = [[0.0; 2]; 8];
+
+/// place l'os pr_mite (enfant de Trans) pour que Mite soit en (x, y) dans le jeu
+unsafe fn mite_placer(boma: *mut BattleObjectModuleAccessor, e: usize, x: f32, y: f32) {
+    let mut gt = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let mut gm = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    ModelModule::joint_global_position(boma, Hash40::new("trans"), &mut gt, true);
+    ModelModule::joint_global_position(boma, Hash40::new("pr_mite"), &mut gm, true);
+    let [ly, lz] = ML[e];
+    let n = (ly * ly + lz * lz).sqrt();
+    if n > 4.0 {
+        let g = ((gm.x - gt.x).powi(2) + (gm.y - gt.y).powi(2)).sqrt();
+        let k = g / n;
+        if k > 0.3 && k < 4.0 {
+            MK[e] = if MK[e] > 0.0 { MK[e] * 0.8 + k * 0.2 } else { k };
+        }
+    }
+    let k = if MK[e] > 0.0 { MK[e] } else { ModelModule::scale(boma).clamp(0.3, 3.0) };
+    let plr = PostureModule::lr(boma);
+    let (dx, dy) = (x - gt.x, y - gt.y);
+    let (ly, lz) = (dy / k, plr * dx / k);
+    ML[e] = [ly, lz];
+    ModelModule::set_joint_translate(boma, Hash40::new("pr_mite"), &Vector3f { x: 0.0, y: ly, z: lz }, false, false);
 }
 
 unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) {
     let boma = fighter.module_accessor;
     if !MITE_ACTIF[e] {
+        mite_afficher(boma, None);
         return;
     }
-    let Some(w) = article_boma(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_MANTLE) else {
-        MITE_ACTIF[e] = false;
-        return;
-    };
     let [mut x, mut y, mut vx, mut vy, mut lr, mut ph, mut t, mut att] = M[e];
     t += 1.0;
     if att > 0.0 {
@@ -538,20 +553,11 @@ unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) {
         }
     }
     M[e] = [x, y, vx, vy, lr, ph, t, att];
-    // la cape : libérée de Mario (contrainte puis lien, seulement si elle est encore tenue : méthode de Chief),
-    // placée, face à la caméra, visible, image de son animation
-    if LinkModule::is_model_constraint(w) {
-        LinkModule::remove_model_constraint(w, true);
-        LinkModule::unlink_all(w);
-    }
-    orienter(w, lr);
-    placer(w, x, y);
-    visible(w);
-    if MotionModule::motion_kind(w) != smash::hash40("special_s") {
-        MotionModule::change_motion(w, Hash40::new("special_s"), f, 0.0, false, 0.0, false, false);
-    }
-    MotionModule::set_frame(w, f, true);
-    EffectModule::kill_all(w, 0, true, false);
+    let _ = f;
+    // v0.12 : Mite dans le modèle de Primid : petits sauts pendant la course, os placé, bon exemplaire affiché
+    let saut = if ph > 0.5 && ph < 1.5 && vy == 0.0 { ((t * 0.5).sin()).abs() * 1.2 } else { 0.0 };
+    mite_placer(boma, e, x, y + saut);
+    mite_afficher(boma, Some((PostureModule::lr(boma), lr)));
 }
 
 // ------------------------------------------------------------------ Botron (J.E.T. de Mario) et son pot (eau du J.E.T.)
@@ -572,7 +578,6 @@ unsafe fn botron_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
         }
     }
     RECH[e][1] = RECH_BOTRON;
-    diag(boma, B[e][0], B[e][1], ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP));
 }
 
 unsafe fn est_botron(_w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize> {
