@@ -1,0 +1,88 @@
+name: Primid - plugin (coups generes depuis REX pendant la compilation, sortie chiffree pour la session)
+on:
+  push:
+    branches: [ primid ]
+    paths: [ 'primid/**', 'outils/primid/**', '.github/workflows/primid_plugin.yml' ]
+permissions:
+  contents: write
+concurrency:
+  group: primid-plugin
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fichiers de Primid deja recuperes (cache)
+        id: cache-primid
+        uses: actions/cache@v4
+        with:
+          path: /tmp/w/x/rex_/pf/Fighter/primid
+          key: rex-primid-fichiers-v1
+      - name: Recuperer Primid dans le build REX (Google Drive du proprietaire)
+        if: steps.cache-primid.outputs.cache-hit != 'true'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
+          mkdir -p /tmp/w && cd /tmp/w
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+          for essai in $(seq 1 25); do
+            for ID in 1EpUZCpCQTMTYAtrnQCTBgvp6KUAsLo6- 14KJsk4NLN3sRtSq-poawhJkefntOVG7C; do
+              curl -sSL -c ck.txt -A "$UA" "https://drive.google.com/uc?export=download&id=$ID" -o page.html || true
+              uuid=$(grep -oE 'name="uuid" value="[^"]+"' page.html | sed 's/.*value="//; s/"$//' || true)
+              curl -sSL -b ck.txt -A "$UA" -o rex.rar "https://drive.usercontent.google.com/download?id=$ID&export=download&confirm=t&uuid=$uuid" || true
+              if [ "$(stat -c %s rex.rar)" -gt 1000000000 ]; then echo "Google Drive OK"; break 2; fi
+              rm -f rex.rar
+            done
+            echo "quota atteint (essai $essai)"; sleep 600
+          done
+          sd=$(7z l -ba -slt rex.rar | sed -n 's/^Path = \(.*sd\.raw\)$/\1/p' | head -1)
+          7z e -y rex.rar "$sd" -o/tmp/w >/dev/null; rm -f rex.rar
+          7z x -y sd.raw "rex_/pf/Fighter/primid/*" -o/tmp/w/x >/dev/null; rm -f sd.raw
+          ls /tmp/w/x/rex_/pf/Fighter/primid | wc -l
+      - name: Sauvegarder les fichiers (cache)
+        if: steps.cache-primid.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/w/x/rex_/pf/Fighter/primid
+          key: rex-primid-fichiers-v1
+      - name: Ses coups (src/generated.rs, rien n'est affiche)
+        run: |
+          pip install numpy >/dev/null
+          D=/tmp/w/x/rex_/pf/Fighter/primid; mkdir -p /tmp/out
+          SUIVRE=1 python3 outils/primid/rex/tools/gen_rex.py $D/FitPrimid.pac $D/FitPrimidMotionEtc.pac $D/FitPrimid00.pac primid/src/generated.rs > /tmp/out/generation.txt 2>&1
+          test -s primid/src/generated.rs && echo "generated.rs ok"
+      - name: Cache outils (cargo-skyline, toolchain Switch)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-skyline
+            ~/.cargo/skyline
+            ~/.rustup/toolchains/*skyline*
+            ~/.cargo/registry
+            ~/.cargo/git
+            primid/target
+          key: primid-skyline-v1-${{ hashFiles('primid/Cargo.toml') }}
+          restore-keys: |
+            primid-skyline-v1-
+            skyline-v1-
+      - name: Compiler
+        working-directory: primid
+        timeout-minutes: 60
+        run: |
+          command -v cargo-skyline >/dev/null || cargo install cargo-skyline
+          if ! (rustup toolchain list | grep -qi skyline && [ -d ~/.cargo/skyline/toolchain ]); then for i in 1 2 3 4 5; do cargo skyline update-std && break; sleep 20; done; fi
+          rm -f target/aarch64-skyline-switch/release/*.nro
+          set +o pipefail; yes | CARGO_TERM_COLOR=never cargo skyline build --release 2>&1 | grep -E -A8 "^error" | sed '/generated.rs/,+8d' | head -80; set -o pipefail
+          N=$(ls target/aarch64-skyline-switch/release/*.nro | head -1); test -s "$N"; cp "$N" /tmp/out/plugin.nro
+          rm -f src/generated.rs
+      - name: Chiffrer et publier (branche sortie_primid_plugin)
+        run: |
+          mkdir -p /tmp/pub; openssl rand -out /tmp/k.bin 32
+          tar cz -C /tmp/out . | openssl enc -aes-256-cbc -pbkdf2 -pass file:/tmp/k.bin > /tmp/pub/out.tgz.enc
+          openssl pkeyutl -encrypt -pubin -inkey $GITHUB_WORKSPACE/cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc
+          rm -f /tmp/k.bin
+          cd /tmp/pub && git init -q -b s && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "primid plugin chiffre ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" s:sortie_primid_plugin
