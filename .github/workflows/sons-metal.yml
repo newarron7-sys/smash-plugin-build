@@ -1,0 +1,70 @@
+name: Metal Sonic - sons et voix de REX (banque 18E) + modeles de banque de Sonic (chiffre)
+on:
+  push:
+    branches: [ metalsonic ]
+    paths: [ '.github/workflows/sons-metal.yml' ]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sons:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Banque 18E (branche rex_metalsonic, dechiffree ; rien n'est affiche)
+        shell: bash
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          printf '%s' "$CLE" > "$RUNNER_TEMP/k"
+          mkdir -p "$RUNNER_TEMP/rex" "$RUNNER_TEMP/x" "$RUNNER_TEMP/out"
+          git fetch -q --depth 1 origin rex_metalsonic:refs/remotes/origin/rex_metalsonic
+          for f in $(git ls-tree --name-only origin/rex_metalsonic | grep '^metal.tgz.enc'); do git show origin/rex_metalsonic:$f; done | openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"$RUNNER_TEMP/k" | tar xz -C "$RUNNER_TEMP/x"
+          cp "$RUNNER_TEMP"/x/rex_/pf/sfx/*.sawnd "$RUNNER_TEMP/rex/"
+          cp "$RUNNER_TEMP"/x/rex_/pf/BrawlEx/*/*7D.dat "$RUNNER_TEMP/out/" || true
+          echo "banques : $(ls "$RUNNER_TEMP/rex" | wc -l)"
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Extraire (DSP -> WAV -> IDSP)
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "VGAudioCli.zip"
+          Invoke-WebRequest "https://github.com/Thealexbarney/VGAudio/releases/download/v2.2.1/VGAudioCli.zip" -OutFile $zip
+          $vg = Join-Path $env:RUNNER_TEMP "VGAudio"
+          Expand-Archive -Path $zip -DestinationPath $vg -Force
+          $vgexe = (Get-ChildItem -Path $vg -Filter "VGAudioCli.exe" -Recurse | Select-Object -First 1).FullName
+          git clone -q --depth 1 https://github.com/QuickLava/super-sawndz.git "$env:RUNNER_TEMP\super-sawndz"
+          $src = "$env:RUNNER_TEMP\super-sawndz\lavaResawndz"
+          cl /nologo /EHsc /std:c++17 /O2 /I"$src" /Fe:"$env:RUNNER_TEMP\extract_sawnd.exe" "$src\lavaBRSARLib.cpp" "$src\lavaDSP.cpp" "$src\lavaResawndz.cpp" "$src\lavaUtility.cpp" "$src\md5.cpp" "$PWD\outils\extract_sawnd.cpp" | Out-Null
+          $out = "$env:RUNNER_TEMP\out"
+          Get-ChildItem "$env:RUNNER_TEMP\rex\*.sawnd" | ForEach-Object {
+            $d = Join-Path $out $_.BaseName
+            New-Item -ItemType Directory -Force -Path $d | Out-Null
+            & "$env:RUNNER_TEMP\extract_sawnd.exe" $_.FullName $d > "$d\extraction.txt"
+            Get-ChildItem -Path $d -Filter "*.dsp" | ForEach-Object { & $vgexe -i $_.FullName -o ([System.IO.Path]::ChangeExtension($_.FullName, ".wav")) | Out-Null }
+            Remove-Item "$d\*.dsp"
+            python "$PWD\outils\normalize.py" $d | Out-Null
+            Get-ChildItem -Path $d -Filter "*.wav" | ForEach-Object { & $vgexe -i $_.FullName -o ([System.IO.Path]::ChangeExtension($_.FullName, ".idsp")) | Out-Null }
+          }
+          Write-Host "ondes : $((Get-ChildItem -Recurse "$out\*.idsp").Count)"
+      - name: Modeles de banque de Sonic (GameBanana ; noms des mods seulement)
+        shell: bash
+        continue-on-error: true
+        run: |
+          python rex/tools/modele_sons.py "$RUNNER_TEMP/out/modele" sonic "sonic voice,sonic sfx,sonic sound effects,sonic voice pack,sonic sounds,shadow voice sonic,classic sonic voice,movie sonic voice,sonic frontiers voice,sonic moveset" > "$RUNNER_TEMP/out/modele.txt" 2>&1 || true
+          grep -E "^(CANDIDATS|MODELE|CHOISI|AUCUN)" "$RUNNER_TEMP/out/modele.txt" | cut -c1-160 || true
+          rm -rf "$RUNNER_TEMP/out/modele/dl"
+      - name: Chiffrer (cle du depot + cle de la session) et publier (branche sons_metal)
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/pub"
+          cd "$RUNNER_TEMP/out" && tar czf ../sons.tgz . && cd -
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$RUNNER_TEMP/k" -in "$RUNNER_TEMP/sons.tgz" | split -b 90m - "$RUNNER_TEMP/pub/sons.tgz.enc."
+          rm -f "$RUNNER_TEMP/k"
+          openssl rand 32 > "$RUNNER_TEMP/k.bin"
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$RUNNER_TEMP/k.bin" -in "$RUNNER_TEMP/sons.tgz" | split -b 90m - "$RUNNER_TEMP/pub/sons.session.enc."
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in "$RUNNER_TEMP/k.bin" -out "$RUNNER_TEMP/pub/k.session.enc"
+          rm -f "$RUNNER_TEMP/k.bin"
+          cd "$RUNNER_TEMP/pub" && git init -q -b sons_metal && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "sons chiffres"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" sons_metal
