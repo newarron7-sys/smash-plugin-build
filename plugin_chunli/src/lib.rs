@@ -5,6 +5,8 @@
 //! joueur) : usage perso. Coups du mod Melee (generated.rs, créé par chunli/tools/gen_chunli.py, jamais dans le dépôt)
 //! sur ses animations de Melee (retarget_melee.py) ; modèle = skin Ultimate (SquidEnthusiast).
 //! Étape 1 : jabs, attaque en courant, tilts, smashs, aériens, prises, coup pendant la prise.
+//! Étape 2 : spéciaux sur ceux de Ken (Kikoken = Hadoken, Spinning Bird Kick = Tatsumaki, haut B = Shoryuken,
+//! bas B = Focus), coups et animations de Melee.
 
 use smash::app::sv_animcmd::{frame, wait};
 use smash::app::lua_bind::*;
@@ -27,6 +29,21 @@ pub const K_IASA: u8 = 6;
 pub const K_CATCH: u8 = 7;
 pub const K_SE: u8 = 8;
 pub const K_VOIX: u8 = 9;
+/// spéciaux : tir du projectile (Projectile Flag de Melee), état du corps (id 0 normal, 1 invincible, 2 intangible),
+/// passage en l'air (Set Jump State)
+pub const K_SHOOT: u8 = 10;
+pub const K_BODY: u8 = 11;
+pub const K_JUMP: u8 = 12;
+/// drapeaux des statuts de Ken (ajoutés par le plugin) : id 1 / 2 chute du Hadoken en l'air on / off,
+/// 3 armure du Focus coupée
+pub const K_RYU: u8 = 13;
+
+/// intangibilité posée par un spécial (haut B, bas B) : remise à la normale si le statut est quitté avant la fin
+static mut INTANGIBLE: [bool; 8] = [false; 8];
+
+unsafe fn entree(boma: *mut BattleObjectModuleAccessor) -> usize {
+    (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7)
+}
 
 #[derive(Clone, Copy)]
 pub struct Ev {
@@ -130,7 +147,19 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     let mut cur = 0.0f32;
     let mut landing_on = false;
     let mut rebound = false;
-    for e in mv.evs {
+    // spéciaux : drapeaux que le statut de Ken attend, aux images de Chun-Li
+    let mut liste: Vec<Ev> = mv.evs.to_vec();
+    if let Some(t) = mv.evs.iter().find(|e| e.k == K_SHOOT) {
+        // Hadoken : comme chez Ken (chute en l'air de 3 images avant le tir à 15 images après)
+        liste.push(Ev { f: (t.f - 3.0).max(1.0), k: K_RYU, id: 1, ..E });
+        liste.push(Ev { f: t.f + 15.0, k: K_RYU, id: 2, ..E });
+    }
+    if script == "game_speciallwstart" || script == "game_specialairlwstart" {
+        // Focus de Ken : pas d'armure (Chun-Li est intangible comme dans Melee)
+        liste.push(Ev { f: 1.0, k: K_RYU, id: 3, ..E });
+    }
+    liste.sort_by(|a, b| a.f.partial_cmp(&b.f).unwrap_or(core::cmp::Ordering::Equal));
+    for e in liste.iter() {
         if matches!(e.k, K_SE | K_VOIX) {
             continue;
         }
@@ -161,6 +190,25 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             }
             K_LAND_OFF => { WorkModule::off_flag(boma, *FIGHTER_STATUS_ATTACK_AIR_FLAG_ENABLE_LANDING); }
             K_IASA => { CancelModule::enable_cancel(boma); }
+            K_SHOOT => { WorkModule::on_flag(boma, *FIGHTER_RYU_STATUS_WORK_ID_SPECIAL_N_FLAG_SHOOT); }
+            K_BODY => {
+                let st = match e.id { 1 => *HIT_STATUS_INVINCIBLE, 2 => *HIT_STATUS_XLU, _ => *HIT_STATUS_NORMAL };
+                HitModule::set_whole(boma, HitStatus(st), 0);
+                INTANGIBLE[entree(boma)] = e.id != 0;
+            }
+            K_JUMP => {
+                // Shoryuken de Ken : demi-tour possible, force décidée, saut (Chun-Li quitte le sol à cette image)
+                WorkModule::on_flag(boma, *FIGHTER_RYU_STATUS_WORK_ID_SPECIAL_HI_FLAG_REVERSE_LR);
+                WorkModule::on_flag(boma, *FIGHTER_RYU_STATUS_WORK_ID_SPECIAL_HI_FLAG_DECIDE_STRENGTH);
+                WorkModule::on_flag(boma, *FIGHTER_RYU_STATUS_WORK_ID_SPECIAL_HI_FLAG_JUMP);
+            }
+            K_RYU => {
+                match e.id {
+                    1 => { WorkModule::on_flag(boma, *FIGHTER_RYU_STATUS_WORK_ID_SPECIAL_N_FLAG_SPECIAL_FALL); }
+                    2 => { WorkModule::off_flag(boma, *FIGHTER_RYU_STATUS_WORK_ID_SPECIAL_N_FLAG_SPECIAL_FALL); }
+                    _ => { WorkModule::on_flag(boma, *FIGHTER_RYU_STATUS_WORK_ID_SPECIAL_LW_FLAG_DISABLE_SUPER_ARMOR); }
+                }
+            }
             K_CATCH => {
                 if !rebound {
                     GrabModule::set_rebound(boma, true);
@@ -273,6 +321,13 @@ pub(crate) unsafe fn run_effet(agent: &mut L2CAgentBase, script: &str) {
 /// Ken a des jabs « de près » (autres animations) : Chun-Li n'a que les siens -> jab normal
 unsafe extern "C" fn cl_frame(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
+    let st = StatusModule::status_kind(boma);
+    if INTANGIBLE[entree(boma)] && st != *FIGHTER_STATUS_KIND_SPECIAL_HI && st != *FIGHTER_STATUS_KIND_SPECIAL_LW
+        && st != *FIGHTER_RYU_STATUS_KIND_SPECIAL_LW_ATTACK && st != *FIGHTER_RYU_STATUS_KIND_SPECIAL_HI_COMMAND
+        && st != *FIGHTER_RYU_STATUS_KIND_SPECIAL_HI_JUMP {
+        HitModule::set_whole(boma, HitStatus(*HIT_STATUS_NORMAL), 0);
+        INTANGIBLE[entree(boma)] = false;
+    }
     if StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK {
         return;
     }
@@ -299,8 +354,14 @@ macro_rules! scripts {
                 if find($n).is_some() {
                     a.acmd($n, $g, Priority::Low);
                     let r = &$n[5..];
-                    a.acmd(Box::leak(format!("sound_{}", r).into_boxed_str()), $s, Priority::Low);
-                    a.acmd(Box::leak(format!("effect_{}", r).into_boxed_str()), $e, Priority::Low);
+                    // spéciaux : sons et voix de Ken gardés (le skin a remplacé ses voix par celles de Chun-Li) ;
+                    // effets de Ken gardés pour le Hadoken (boule de Ken), remplacés pour les autres
+                    if !r.starts_with("special") {
+                        a.acmd(Box::leak(format!("sound_{}", r).into_boxed_str()), $s, Priority::Low);
+                    }
+                    if !(r == "specialn" || r == "specialairn") {
+                        a.acmd(Box::leak(format!("effect_{}", r).into_boxed_str()), $e, Priority::Low);
+                    }
                 }
             )*
             a.on_line(Main, cl_frame);
@@ -335,6 +396,22 @@ scripts! {
     g23, s23, e23 => "game_catchdash",
     g24, s24, e24 => "game_catchturn",
     g25, s25, e25 => "game_catchattack",
+    g26, s26, e26 => "game_specialn",
+    g27, s27, e27 => "game_specialairn",
+    g28, s28, e28 => "game_specialsstart",
+    g29, s29, e29 => "game_specialairsstart",
+    g30, s30, e30 => "game_specials",
+    g31, s31, e31 => "game_specialairs",
+    g32, s32, e32 => "game_specialsend",
+    g33, s33, e33 => "game_specialairsend",
+    g34, s34, e34 => "game_specialhi",
+    g35, s35, e35 => "game_specialhicommand",
+    g36, s36, e36 => "game_specialairhi",
+    g37, s37, e37 => "game_specialairhicommand",
+    g38, s38, e38 => "game_speciallwstart",
+    g39, s39, e39 => "game_speciallw",
+    g40, s40, e40 => "game_specialairlwstart",
+    g41, s41, e41 => "game_specialairlw",
 }
 
 #[skyline::main(name = "chun_li_melee")]
