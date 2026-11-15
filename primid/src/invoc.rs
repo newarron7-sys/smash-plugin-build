@@ -422,21 +422,26 @@ unsafe fn mite_fin(fighter: &mut L2CFighterCommon, e: usize) {
     mite_lacher(boma, e);
 }
 
-/// v0.12 : Mite = objets pr_mite_a..d du modèle de Primid (mite_primid.py) collés à l'os pr_mite. Le jeu tourne le
-/// modèle selon le côté de Primid et Mite est plat : un exemplaire par (côté de Primid, direction de Mite), tourné face
-/// à la caméra. Mite regarde vers -x dans son modèle : il est retourné (s = -1) pour aller vers la droite.
-unsafe fn mite_afficher(boma: *mut BattleObjectModuleAccessor, quoi: Option<(f32, f32)>) {
-    let choix = quoi.map(|(plr, mlr)| {
-        let s = -mlr;
-        match (plr > 0.0, s > 0.0) {
-            (true, true) => "pr_mite_a",
-            (true, false) => "pr_mite_b",
-            (false, true) => "pr_mite_c",
-            (false, false) => "pr_mite_d",
-        }
-    });
-    for n in ["pr_mite_a", "pr_mite_b", "pr_mite_c", "pr_mite_d"] {
-        ModelModule::set_mesh_visibility(boma, Hash40::new(n), choix == Some(n));
+/// v0.12 : Mite = objets du modèle de Primid (mite_primid.py) collés à un os. Le jeu tourne le modèle selon le côté
+/// de Primid et Mite est plat : un exemplaire par (côté de Primid, direction de Mite), tourné face à la caméra.
+/// v0.14 : 9 poses de son animation de REX (pr_mite<pose><a-d>) : 0-5 course (images 0, 4 ... 20), 6 plongeon (le
+/// coup de REX, image 25), 7 repli (27), 8 debout (40). Mite y regarde vers +x : s = sa direction.
+const MITE_POSES: usize = 9;
+
+unsafe fn mite_afficher(boma: *mut BattleObjectModuleAccessor, quoi: Option<(f32, f32, usize)>) {
+    let choix = quoi.map(|(plr, mlr, k)| {
+        let l = match (plr > 0.0, mlr > 0.0) {
+            (true, true) => 0,
+            (true, false) => 1,
+            (false, true) => 2,
+            (false, false) => 3,
+        };
+        (k.min(MITE_POSES - 1) * 4 + l) as i32
+    }).unwrap_or(-1);
+    // à chaque image (le jeu peut remettre la visibilité des objets, par exemple à la réapparition)
+    for i in 0..(MITE_POSES * 4) as i32 {
+        let n = format!("pr_mite{}{}", i / 4, ["a", "b", "c", "d"][(i % 4) as usize]);
+        ModelModule::set_mesh_visibility(boma, Hash40::new(&n), i == choix);
     }
 }
 
@@ -539,17 +544,18 @@ unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) {
         }
         f = t % MITE_COURSE;
         if let Some((dx, dy)) = cible {
-            if att <= 0.0 && vy == 0.0 && dx * lr > 0.0 && dx.abs() < 20.0 && dy.abs() < 14.0 {
+            if att <= 0.0 && vy == 0.0 && dx * lr > 0.0 && dx.abs() < 24.0 && dy.abs() < 14.0 {
+                // v0.14 : plongeon rasant, comme dans la vidéo de REX (corps à l'horizontale)
                 ph = 2.0;
-                vx = 2.2 * lr;
-                vy = 1.3;
+                vx = 2.5 * lr;
+                vy = 0.7;
                 AttackModule::clear(boma, 7, false);
             }
         }
     } else if ph < 2.5 {
         // plongeon (JumpTackle) : le coup n'existe que pendant le plongeon
         x += vx;
-        vy = (vy - 0.12).max(-3.0);
+        vy = (vy - 0.07).max(-3.0);
         y += vy;
         f = if vy > 0.4 { MITE_ELAN } else { MITE_PLONGE };
         mite_coup(fighter, x, y, 2.0, 3.5);
@@ -587,9 +593,17 @@ unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) {
     M[e] = [x, y, vx, vy, lr, ph, t, att];
     let _ = f;
     // v0.12 : Mite dans le modèle de Primid : petits sauts pendant la course, os placé, bon exemplaire affiché
-    let saut = if ph > 0.5 && ph < 1.5 && vy == 0.0 { ((t * 0.5).sin()).abs() * 1.2 } else { 0.0 };
+    let saut = 0.0;
+    // pose : course (une image de l'animation toutes les 4 images de jeu), plongeon, repli (chute, rebond)
+    let k = if ph > 0.5 && ph < 1.5 && vy == 0.0 {
+        ((t as i32 / 4) % 6) as usize
+    } else if ph > 1.5 && ph < 2.5 {
+        6
+    } else {
+        7
+    };
     if mite_placer(boma, e, x, y + saut) {
-        mite_afficher(boma, Some((PostureModule::lr(boma), lr)));
+        mite_afficher(boma, Some((PostureModule::lr(boma), lr, k)));
     } else {
         mite_afficher(boma, None);
     }
