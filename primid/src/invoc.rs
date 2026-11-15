@@ -125,9 +125,15 @@ unsafe fn liberer(w: *mut BattleObjectModuleAccessor, lr: f32) {
         LinkModule::remove_model_constraint(w, true);
     }
     LinkModule::unlink_all(w);
-    PostureModule::set_rot(w, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 0);
-    PostureModule::set_lr(w, lr);
-    PostureModule::update_rot_y_lr(w);
+    orienter(w, lr);
+}
+
+/// v0.5 : Mite est plat (papier, plan XY de son modèle) : tourné de 90° comme un perso, il était vu par la tranche
+/// (invisible ; son coup touchait). Les invocations sont donc montrées face à la caméra : pas de rotation (côté droit)
+/// ou demi-tour (côté gauche), refait à chaque image (le jeu ne les tourne plus selon lr)
+unsafe fn orienter(w: *mut BattleObjectModuleAccessor, lr: f32) {
+    PostureModule::set_lr(w, 1.0);
+    PostureModule::set_rot(w, &Vector3f { x: 0.0, y: if lr < 0.0 { 180.0 } else { 0.0 }, z: 0.0 }, 0);
 }
 
 /// v0.4 : Mite invisible en v0.3 (son coup touchait) : modèle et visibilité forcés à chaque image
@@ -440,6 +446,7 @@ unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     }
     M[e] = [x, y, vy, lr, ph, t];
     placer(w, x, y);
+    orienter(w, lr);
     visible(w);
     MotionModule::set_frame(w, f, true);
     // tombé du terrain
@@ -560,6 +567,7 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     }
     B[e] = [x, y, lr, t, lache, tl];
     placer(w, x, y);
+    orienter(w, lr);
     visible(w);
     0.into()
 }
@@ -649,6 +657,7 @@ unsafe extern "C" fn pot_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     vy = (vy - 0.22).max(-4.5);
     y += vy;
     placer(w, x, y);
+    orienter(w, POT_LR[e]);
     pot_coup(weapon, 6.0, 5.0, 60, 40);
     let touche = AttackModule::is_infliction(w, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(w, *COLLISION_KIND_MASK_SHIELD);
     let au_sol = sol(w, x, y, (-vy).max(1.0)).is_some();
