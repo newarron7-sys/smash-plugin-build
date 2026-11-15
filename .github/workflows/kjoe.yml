@@ -94,7 +94,7 @@ jobs:
           grep -E "^error" /tmp/out/compilation.txt | head -20 || true
           rm -f src/generated.rs
           test -f target/aarch64-skyline-switch/release/libknuckle_joe.nro
-      - name: Dossier du mod (Ness c00 : reslot en c100 ensuite) et zip
+      - name: Dossier du mod (Ness c00, reslot en c100 ensuite) et zip
         run: |
           M="/tmp/zip/(Moveset) Knuckle Joe"; B="$M/fighter/ness/model/body/c00"; mkdir -p "$B"
           for f in /tmp/out/png/*.png; do
