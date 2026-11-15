@@ -1,4 +1,4 @@
-name: REX - Primid (liste des persos + fichiers chiffres pour la session)
+name: REX - Primid (reference Mario, sortie chiffree pour la session)
 on:
   push:
     branches: [ primid ]
@@ -6,47 +6,26 @@ on:
 permissions:
   contents: write
 jobs:
-  rex:
+  ref:
     runs-on: ubuntu-latest
-    timeout-minutes: 345
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - name: Place
+      - name: Outils
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
-      - name: Build REX (Google Drive du proprietaire)
+          pip install ssbh_data_py numpy >/dev/null
+      - name: Modele de reference de Mario (skins GameBanana, squelette le plus courant)
+        env:
+          MAJORITE: '6'
+        run: python3 outils/primid/ref_fighter.py mario "Mario" /tmp/ref > /tmp/ref_log.txt 2>&1; grep -cE "CANDIDAT" /tmp/ref_log.txt; test -f /tmp/ref/ref/model.nusktb && echo reference ok
+      - name: Chiffrer et publier (branche sortie_primid_ref)
         run: |
-          mkdir -p /tmp/w && cd /tmp/w
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
-          for essai in $(seq 1 30); do
-            for ID in 1EpUZCpCQTMTYAtrnQCTBgvp6KUAsLo6- 14KJsk4NLN3sRtSq-poawhJkefntOVG7C; do
-              curl -sSL -c ck.txt -A "$UA" "https://drive.google.com/uc?export=download&id=$ID" -o page.html || true
-              uuid=$(grep -oE 'name="uuid" value="[^"]+"' page.html | sed 's/.*value="//; s/"$//' || true)
-              curl -sSL -b ck.txt -A "$UA" -o rex.rar "https://drive.usercontent.google.com/download?id=$ID&export=download&confirm=t&uuid=$uuid" || true
-              if [ "$(stat -c %s rex.rar)" -gt 1000000000 ]; then echo "Google Drive OK ($ID, essai $essai)"; break 2; fi
-              rm -f rex.rar
-            done
-            echo "quota atteint (essai $essai), nouvel essai dans 10 min"; sleep 600
-          done
-          test -f rex.rar
-          sd=$(7z l -ba -slt rex.rar | sed -n 's/^Path = \(.*sd\.raw\)$/\1/p' | head -1)
-          7z e -y rex.rar "$sd" -o/tmp/w >/dev/null; rm -f rex.rar
-      - name: Liste des persos (noms de dossiers seulement) et extraction
-        run: |
-          cd /tmp/w && mkdir -p /tmp/x /tmp/pub
-          7z l -ba -slt sd.raw | awk '/^Path = /{p=substr($0,8)} /^Size = /{print $3"\t"p}' > /tmp/x/liste_sd.txt
-          echo "=== dossiers de persos :"; sed -n 's#^[0-9]*\trex_/pf/[Ff]ighter/\([^/]*\)$#\1#p' /tmp/x/liste_sd.txt | sort -u | tr '\n' ' '; echo
-          echo "=== fichiers contenant prim :"; grep -i prim /tmp/x/liste_sd.txt | cut -f2 | tr "\n" " "; echo
-          7z x -y sd.raw "rex_/pf/Fighter/*rim*/*" "rex_/pf/Fighter/*RIM*/*" "rex_/pf/module/ft_*rim*.rel" "rex_/pf/info/portrite/*" "rex_/pf/BrawlEx/*" "rex_/pf/*/*/*rim*" "rex_/pf/*/*rim*" -o/tmp/x >/dev/null || true
-          rm -f sd.raw
-          echo "fichiers extraits : $(find /tmp/x -type f | wc -l), $(du -sh /tmp/x | cut -f1)"
+          mkdir -p /tmp/pub && cp /tmp/ref_log.txt /tmp/ref/
           openssl rand -out /tmp/k.bin 32
-          tar cz -C /tmp/x . | openssl enc -aes-256-cbc -pbkdf2 -pass file:/tmp/k.bin | split -b 90m - /tmp/pub/rex.tgz.enc.
+          tar cz -C /tmp/ref . | openssl enc -aes-256-cbc -pbkdf2 -pass file:/tmp/k.bin | split -b 90m - /tmp/pub/ref.tgz.enc.
           openssl pkeyutl -encrypt -pubin -inkey $GITHUB_WORKSPACE/cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc
-          rm -f /tmp/k.bin; ls -la /tmp/pub
-      - name: Publier (branche sortie_primid, chiffre)
-        run: |
+          rm -f /tmp/k.bin
           cd /tmp/pub && git init -q -b s && git config user.name gha && git config user.email gha@users.noreply.github.com
-          git add -A && git commit -q -m "rex primid chiffre (cle de session)"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" s:sortie_primid
+          git add -A && git commit -q -m "reference Mario chiffree"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" s:sortie_primid_ref
