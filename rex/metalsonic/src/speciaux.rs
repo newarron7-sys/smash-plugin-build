@@ -190,10 +190,10 @@ unsafe extern "C" fn n_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         N_T[e] += 1;
         let t = N_T[e];
         let tenu = ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_SPECIAL);
-        // pose de charge de REX : figée sur l'image 13 dès qu'elle est atteinte (demandé : totalement immobile, même
-        // les pieds) ; l'image est reposée à chaque image pour que rien ne bouge
-        if MotionModule::frame(boma) >= N_POSE - 1.0 {
-            MotionModule::set_rate(boma, 0.0);
+        // pose de charge de REX, exactement comme son script : à partir de l'image 12, l'image 13 est reposée puis
+        // l'animation avance d'une image (vitesse 1,15) avant d'y revenir : il bouge un tout petit peu sur place
+        // (demandé le 15/11 : dans le showcase il n'est pas totalement immobile)
+        if MotionModule::frame(boma) >= N_POSE + 1.0 {
             MotionModule::set_frame(boma, N_POSE, false);
         }
         if t > N_APPUI && tenu {
