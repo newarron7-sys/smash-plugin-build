@@ -152,14 +152,14 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
                     GrabModule::set_rebound(boma, false);
                 }
             }
-            K_COMBO => WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_FLAG_ENABLE_COMBO),
-            K_HOLD => WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_FLAG_START_SMASH_HOLD),
+            K_COMBO => { WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_FLAG_ENABLE_COMBO); }
+            K_HOLD => { WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_FLAG_START_SMASH_HOLD); }
             K_LAND_ON => {
                 WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_AIR_FLAG_ENABLE_LANDING);
                 landing_on = true;
             }
-            K_LAND_OFF => WorkModule::off_flag(boma, *FIGHTER_STATUS_ATTACK_AIR_FLAG_ENABLE_LANDING),
-            K_IASA => CancelModule::enable_cancel(boma),
+            K_LAND_OFF => { WorkModule::off_flag(boma, *FIGHTER_STATUS_ATTACK_AIR_FLAG_ENABLE_LANDING); }
+            K_IASA => { CancelModule::enable_cancel(boma); }
             K_CATCH => {
                 if !rebound {
                     GrabModule::set_rebound(boma, true);
