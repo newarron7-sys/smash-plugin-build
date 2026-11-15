@@ -83,3 +83,4 @@ Procédure suivie : rex/PROCEDURE.md (dépôt final-zoom, branche combo-wip), co
 - Showcase n° 2 (attaque en courant, smashs) : deux traits croisés en courant ; bulle brillante au début de la charge
   des smashs ; smash haut : nuage de poussière au bond et bulle bleue transparente (sys_shield teinté, comme l'effet
   n° 04 de REX) pendant qu'il tourne en l'air ; smash bas : bulle bleue au ras du sol, vent, poussière gauche / droite.
+- v3c : ondes de choc toujours au sol (y 0) ; lancer avant : seulement l'anneau au sol (celui en l'air retiré).

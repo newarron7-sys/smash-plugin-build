@@ -110,12 +110,13 @@ unsafe fn coup_tenu(agent: &mut L2CAgentBase, dmg: f32, size: f32, attr: &str, s
     AttackModule::set_catch_only_all(agent.module_accessor, true, false);
 }
 
-/// lâcher + onde de choc et tremblement (demandé le 15/11 : « des ondes de choc et un tremblement à toutes ces throw »)
-/// p = point de l'onde (top : y haut, z devant) ; sol = anneau au sol en plus
-unsafe fn choc(agent: &mut L2CAgentBase, p: (f32, f32), sc: f32, sol: bool, quake: i32) {
-    EFFECT(agent, Hash40::new("sys_crown_collision"), Hash40::new("top"), 0, p.0, p.1, 0, 0, 0, sc, 0, 0, 0, 0, 0, 0, false);
-    if sol {
-        LANDING_EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("top"), 0, 0, p.1, 0, 0, 0, sc, 0, 0, 0, 0, 0, 0, false);
+/// onde de choc + tremblement (demandé le 15/11 : « des ondes de choc et un tremblement à toutes ces throw ») ;
+/// v3c (vidéos du 15/11 : « l'onde de choc est pas au sol, il le faut ») : toujours au sol (y 0), z devant lui ;
+/// air = l'anneau de choc en plus (retiré du lancer avant : « enlève la deuxième, celle qui est en l'air »)
+unsafe fn choc(agent: &mut L2CAgentBase, z: f32, sc: f32, anneau: bool, quake: i32) {
+    LANDING_EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("top"), 0, 0, z, 0, 0, 0, sc, 0, 0, 0, 0, 0, 0, false);
+    if anneau {
+        LANDING_EFFECT(agent, Hash40::new("sys_crown_collision"), Hash40::new("top"), 0, 0, z, 0, 0, 0, sc, 0, 0, 0, 0, 0, 0, false);
     }
     QUAKE(agent, quake);
 }
@@ -145,7 +146,7 @@ unsafe extern "C" fn e_throwf(agent: &mut L2CAgentBase) {
     frame(agent.lua_state_agent, 19.0);
     if is_excute(agent) {
         EFFECT(agent, Hash40::new("sys_attack_impact"), Hash40::new("footl"), 0, 0, 0, 0, 0, 0, 1.4, 0, 0, 0, 0, 0, 0, true);
-        choc(agent, (8.4, 13.0), 0.9, true, *CAMERA_QUAKE_KIND_M);
+        choc(agent, 13.0, 0.9, false, *CAMERA_QUAKE_KIND_M);
     }
 }
 
@@ -175,7 +176,7 @@ unsafe extern "C" fn e_throwhi(agent: &mut L2CAgentBase) {
         // explosion sur l'adversaire (au-dessus de sa tête) au moment où il part
         EFFECT(agent, Hash40::new("sys_bomb_a"), Hash40::new("top"), 0, 12, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, false);
         EFFECT(agent, Hash40::new("sys_bomb_b"), Hash40::new("top"), 0, 12, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, false);
-        choc(agent, (11.0, 0.0), 1.0, true, *CAMERA_QUAKE_KIND_M);
+        choc(agent, 0.0, 1.0, true, *CAMERA_QUAKE_KIND_M);
     }
     frame(lua, 25.0);
     if is_excute(agent) {
@@ -207,7 +208,7 @@ unsafe extern "C" fn e_throwlw(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 11, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, false);
         EFFECT(agent, Hash40::new("sys_attack_impact"), Hash40::new("top"), 0, 1, 11, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, false);
-        choc(agent, (1.0, 11.0), 1.1, true, *CAMERA_QUAKE_KIND_L);
+        choc(agent, 11.0, 1.1, true, *CAMERA_QUAKE_KIND_L);
     }
 }
 
