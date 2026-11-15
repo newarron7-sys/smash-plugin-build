@@ -55,5 +55,15 @@ Procédure suivie : rex/PROCEDURE.md (dépôt final-zoom, branche combo-wip), co
 - Sauts : il se mettait en boule (boule de Sonic) : corps normal forcé dans tous les statuts communs sauf spéciaux et
   Final Smash ; expressions des sauts de Sonic vides.
 
+## v3 (15/11) : prises, lancers, provocations, voix et bruitages
+- Demandé : pummel, lancers SAUF le lancer arrière (il reste celui de Sonic), provocations, sa voix et ses sons.
+- Animations : groupe metal_prises (retarget_exo.py), sur place ; prise en courant (20,7) et lancer bas (13) : avancée
+  de REX faite par le plugin (prises.rs, tables d'avance_rex.py).
+- prises.rs : zones de prise, coup pendant la prise (2 % élec, direct), lancers avant (3 % + 4 %), haut (4 % + 3 %
+  feu), bas (6 %) aux images de REX ; coup sur l'adversaire tenu quelques images avant le lâcher.
+- Sons : voir rex/metalsonic_sons.md.
+- Livraison : les animations déjà livrées sont gardées à l'octet près (la CI les régénère avec quelques octets de
+  différence d'arrondi d'une machine à l'autre) : seuls config.json, plugin.nro et les nouveaux fichiers changent.
+
 ## VALIDÉ PAR LE JOUEUR / CORRECTIONS (ne pas casser)
 - (rien de validé en jeu pour l'instant)
