@@ -32,6 +32,8 @@ use crate::PR_COSTUMES;
 // REX : haut 256 (Botron), bas 608 (Cymul), avant 640 (Mite), arrière 592 (Boobas)
 const RECH_MITE: i32 = 640;
 const RECH_BOTRON: i32 = 256;
+const RECH_BOOBAS: i32 = 592;
+const RECH_CYMUL: i32 = 608;
 /// image de SummonGo à partir de laquelle il peut agir (REX : AllowInterrupt à 9)
 const GO_LIBRE: f32 = 9.0;
 /// B tenu au plus (images) avant qu'il range le portail tout seul
@@ -45,12 +47,14 @@ const MITE_PLONGE: f32 = 27.0;
 static mut PH: [i32; 8] = [0; 8];
 static mut T: [i32; 8] = [0; 8];
 static mut PORTAIL: [u32; 8] = [0; 8];
-static mut RECH: [[i32; 2]; 8] = [[0; 2]; 8];
+/// recharges : 0 Mite, 1 Botron, 2 Boobas, 3 Cymul
+static mut RECH: [[i32; 4]; 8] = [[0; 4]; 8];
+/// v0.16 : le stick est revenu au centre pendant le bas B (sinon le bas tenu pour faire le bas B choisirait Cymul)
+static mut NEUTRE: [bool; 8] = [false; 8];
 
 /// objets créés par le bas B : 1 = à réclamer (créé à l'instant), sinon n° de l'objet
 static mut MITE_ATTEND: [bool; 8] = [false; 8];
 static mut MITE_ID: [u32; 8] = [0; 8];
-static mut MITE_ACTIF: [bool; 8] = [false; 8];
 static mut BOT_ATTEND: [bool; 8] = [false; 8];
 static mut BOT_ID: [u32; 8] = [0; 8];
 static mut POT_ATTEND: [bool; 8] = [false; 8];
@@ -186,7 +190,7 @@ unsafe fn portail_afficher(boma: *mut BattleObjectModuleAccessor, e: usize) {
     vis("pr_portail", on);
     // (nom, pointée, prête) : haut Botron, avant Mite, arrière Boobas, bas Cymul (ces deux-là : à venir)
     for (n, pointe, pret) in [("haut", sy > 0.5, RECH[e][1] <= 0), ("avant", sx > 0.5, RECH[e][0] <= 0),
-                              ("arriere", sx < -0.5, true), ("bas", sy < -0.5, true)] {
+                              ("arriere", sx < -0.5, RECH[e][2] <= 0), ("bas", sy < -0.5, RECH[e][3] <= 0)] {
         vis(&format!("pr_ic_{}", n), on && pret && !pointe);
         vis(&format!("pr_ic_{}_g", n), on && pret && pointe);
     }
@@ -201,6 +205,7 @@ unsafe extern "C" fn lw_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     let e = e_of(boma);
     PH[e] = 0;
     T[e] = 0;
+    NEUTRE[e] = false;
     // REX : SummonStart joué à vitesse 2
     motion(fighter, "special_lw_start", "special_air_lw_start", 2.0, false);
     if StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR {
@@ -250,14 +255,26 @@ unsafe extern "C" fn lw_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
             let sx = ControlModule::get_stick_x(boma) * lr;
             let sy = ControlModule::get_stick_y(boma);
             let mut go = 0;
-            // icônes du portail de REX : haut Botron, avant Mite (arrière Boobas, bas Cymul : à venir)
+            if sx.abs() < 0.3 && sy.abs() < 0.3 {
+                NEUTRE[e] = true;
+            }
+            // icônes du portail de REX : haut Botron, avant Mite, arrière Boobas, bas Cymul
             if sy > 0.75 && RECH[e][1] <= 0 {
                 go = 2;
             } else if sx > 0.75 && RECH[e][0] <= 0 {
                 go = 1;
+            } else if sx < -0.75 && RECH[e][2] <= 0 {
+                go = 3;
+            } else if sy < -0.75 && NEUTRE[e] && RECH[e][3] <= 0 {
+                go = 4;
             }
             if go > 0 {
-                if go == 1 { mite_creer(boma, e); } else { botron_creer(boma, e); }
+                match go {
+                    1 => inv_creer(boma, e, INV_MITE),
+                    2 => botron_creer(boma, e),
+                    3 => inv_creer(boma, e, INV_BOOBAS),
+                    _ => inv_creer(boma, e, INV_CYMUL),
+                }
                 PH[e] = 2;
                 T[e] = 0;
                 MotionModule::change_motion(boma, Hash40::new(if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND { "special_lw_light" } else { "special_air_lw_light" }), 0.0, 1.0, false, 0.0, false, false);
@@ -316,9 +333,9 @@ static mut DIAG_T: [[f32; 2]; 8] = [[0.0; 2]; 8];
 
 pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     let e = e_of(fighter.module_accessor);
-    mite_pas(fighter, e);
+    inv_pas(fighter, e);
     portail_afficher(fighter.module_accessor, e);
-    for k in 0..2 {
+    for k in 0..4 {
         if RECH[e][k] > 0 {
             RECH[e][k] -= 1;
         }
@@ -329,17 +346,6 @@ pub unsafe fn update(fighter: &mut L2CFighterCommon) {
 // v0.8 (diagnostic du joueur : éclat rouge) : le jeu refuse de recréer le tuyau d'entrée (dokan) pendant le match.
 // La cape (mantle, côté B de Mario, créée pendant le match) le remplace ; son mouvement « special_s » porte les
 // animations de Mite (d01specials.nuanmb).
-
-unsafe fn mite_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
-    let lr = PostureModule::lr(boma);
-    let (x, y) = pos(boma);
-    // vidéo de REX : il tombe du portail (au-dessus de sa tête) puis court vers l'adversaire
-    M[e] = [x + 2.0 * lr, y + 24.0, 0.0, 0.0, lr, 0.0, 0.0, 0.0];
-    RECH[e][0] = RECH_MITE;
-    // v0.12 : Mite est dans le modèle de Primid (os pr_mite) : plus d'objet à créer
-    MITE_ACTIF[e] = true;
-    eff(boma, "sys_erace_smoke", M[e][0], M[e][1], 0.6);
-}
 
 unsafe fn article_boma(boma: *mut BattleObjectModuleAccessor, kind: i32) -> Option<*mut BattleObjectModuleAccessor> {
     if !ArticleModule::is_exist(boma, kind) {
@@ -394,56 +400,6 @@ unsafe extern "C" fn mite_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
 
 unsafe extern "C" fn mite_passif(_weapon: &mut L2CWeaponCommon) -> L2CValue {
     0.into()
-}
-
-/// v0.6 (vidéo de REX du joueur) : Mite tombe du portail, court vers l'adversaire le plus proche (il se retourne), fonce
-/// sur lui (plongeon, petit coup d'environ 2 %), rebondit en arrière après le coup puis recommence, plusieurs fois,
-/// pendant une dizaine de secondes. Phases : 0 chute du portail, 1 course, 2 plongeon, 3 rebond après un coup.
-/// v0.11 : mené à chaque image depuis Primid : la cape est libérée, placée, tournée, animée ; le coup du plongeon est
-/// un coup de Primid posé à l'endroit de Mite (id 7).
-const MITE_VIE: f32 = 720.0;
-
-unsafe fn mite_coup(fighter: &mut L2CFighterCommon, x: f32, y: f32, dmg: f32, taille: f32) {
-    let boma = fighter.module_accessor;
-    let (px, py) = pos(boma);
-    let plr = PostureModule::lr(boma);
-    // v0.15 (vidéo de REX : environ 1 % par coup, l'adversaire est renversé) : poussée de base plus forte
-    ATTACK(fighter, 7, 0, Hash40::new("top"), dmg, 50, 30, 0, 60, taille, 0.0, y - py + 3.0, (x - px) * plr, None, None, None,
-           0.8, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, true, true, false, false, false,
-           *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
-           Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_KICK, *ATTACK_REGION_OBJECT);
-}
-
-unsafe fn mite_fin(fighter: &mut L2CFighterCommon, e: usize) {
-    let boma = fighter.module_accessor;
-    eff(boma, "sys_erace_smoke", M[e][0], M[e][1] + 3.0, 0.8);
-    AttackModule::clear(boma, 7, false);
-    MITE_ACTIF[e] = false;
-    mite_afficher(boma, None);
-    mite_lacher(boma, e);
-}
-
-/// v0.12 : Mite = objets du modèle de Primid (mite_primid.py) collés à un os. Le jeu tourne le modèle selon le côté
-/// de Primid et Mite est plat : un exemplaire par (côté de Primid, direction de Mite), tourné face à la caméra.
-/// v0.14 : 9 poses de son animation de REX (pr_mite<pose><a-d>) : 0-5 course (images 0, 4 ... 20), 6 plongeon (le
-/// coup de REX, image 25), 7 repli (27), 8 debout (40). Mite y regarde vers +x : s = sa direction.
-const MITE_POSES: usize = 9;
-
-unsafe fn mite_afficher(boma: *mut BattleObjectModuleAccessor, quoi: Option<(f32, f32, usize)>) {
-    let choix = quoi.map(|(plr, mlr, k)| {
-        let l = match (plr > 0.0, mlr > 0.0) {
-            (true, true) => 0,
-            (true, false) => 1,
-            (false, true) => 2,
-            (false, false) => 3,
-        };
-        (k.min(MITE_POSES - 1) * 4 + l) as i32
-    }).unwrap_or(-1);
-    // à chaque image (le jeu peut remettre la visibilité des objets, par exemple à la réapparition)
-    for i in 0..(MITE_POSES * 4) as i32 {
-        let n = format!("pr_mite{}{}", i / 4, ["a", "b", "c", "d"][(i % 4) as usize]);
-        ModelModule::set_mesh_visibility(boma, Hash40::new(&n), i == choix);
-    }
 }
 
 /// v0.13 : Mite est collé à l'os Throw de Primid (v0.12 : os ajouté pr_mite, sans piste d'animation : il ne bougeait
@@ -504,63 +460,219 @@ unsafe fn mite_placer(boma: *mut BattleObjectModuleAccessor, e: usize, x: f32, y
     true
 }
 
-unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) {
+// ------------------------------------------------------------------ v0.16 : Mite, Boobas, Cymul sur l'os Throw
+// Les trois sont dessinés dans le modèle de Primid (tools/invocs_primid.py) et partagent l'os Throw (méthode validée
+// pour Mite en v0.13 / v0.14) : une seule à la fois ; en invoquer une autre fait disparaître la précédente.
+// Botron reste à part (J.E.T.).
+
+const INV_MITE: u8 = 1;
+const INV_BOOBAS: u8 = 2;
+const INV_CYMUL: u8 = 3;
+/// invocation présente (0 = aucune)
+static mut INV: [u8; 8] = [0; 8];
+/// minuteries propres à chaque invocation (Boobas : vent ; Cymul : rotation)
+static mut Q: [[f32; 4]; 8] = [[0.0; 4]; 8];
+
+/// (nom des objets, nombre de poses, symétrique)
+const INV_OBJ: [(&str, usize, bool); 3] = [("mite", 9, false), ("boobas", 6, false), ("cymul", 6, true)];
+
+unsafe fn inv_creer(boma: *mut BattleObjectModuleAccessor, e: usize, kind: u8) {
+    if INV[e] != 0 {
+        // une seule à la fois : l'ancienne disparaît
+        eff(boma, "sys_erace_smoke", M[e][0], M[e][1] + 3.0, 0.8);
+        AttackModule::clear(boma, 7, false);
+    }
+    let lr = PostureModule::lr(boma);
+    let (x, y) = pos(boma);
+    // REX : elles sortent du portail, au-dessus de sa tête
+    M[e] = [x + 2.0 * lr, y + 22.0, 0.0, 0.0, lr, 0.0, 0.0, 0.0];
+    Q[e] = [0.0; 4];
+    INV[e] = kind;
+    match kind {
+        INV_MITE => RECH[e][0] = RECH_MITE,
+        INV_BOOBAS => RECH[e][2] = RECH_BOOBAS,
+        _ => RECH[e][3] = RECH_CYMUL,
+    }
+    eff(boma, "sys_erace_smoke", M[e][0], M[e][1], 0.6);
+}
+
+unsafe fn inv_fin(fighter: &mut L2CFighterCommon, e: usize) {
     let boma = fighter.module_accessor;
-    if !MITE_ACTIF[e] {
-        mite_afficher(boma, None);
+    eff(boma, "sys_erace_smoke", M[e][0], M[e][1] + 3.0, 0.8);
+    AttackModule::clear(boma, 7, false);
+    INV[e] = 0;
+    inv_afficher(boma, None);
+    mite_lacher(boma, e);
+}
+
+/// objets pr_<nom><pose><a-d> : a (Primid à droite, s +1), b (droite, -1), c (gauche, +1), d (gauche, -1) ;
+/// s = sens de l'invocation (+1 : le +z de son animation vers la droite de l'écran)
+unsafe fn inv_afficher(boma: *mut BattleObjectModuleAccessor, quoi: Option<(u8, usize, f32, f32)>) {
+    for (k, (nom, np, sym)) in INV_OBJ.iter().enumerate() {
+        let choix = quoi.and_then(|(kind, pose, plr, s)| {
+            if kind as usize != k + 1 {
+                return None;
+            }
+            let l = if *sym {
+                if plr > 0.0 { 0 } else { 2 }
+            } else {
+                match (plr > 0.0, s > 0.0) {
+                    (true, true) => 0,
+                    (true, false) => 1,
+                    (false, true) => 2,
+                    (false, false) => 3,
+                }
+            };
+            Some((pose.min(np - 1), l))
+        });
+        // à chaque image (le jeu peut remettre la visibilité des objets, par exemple à la réapparition)
+        for p in 0..*np {
+            for (l, c) in ["a", "b", "c", "d"].iter().enumerate() {
+                if *sym && (l == 1 || l == 3) {
+                    continue;
+                }
+                let n = format!("pr_{}{}{}", nom, p, c);
+                ModelModule::set_mesh_visibility(boma, Hash40::new(&n), choix == Some((p, l)));
+            }
+        }
+    }
+}
+
+/// coup posé à l'endroit de l'invocation (coup de Primid, id 7)
+unsafe fn inv_coup(fighter: &mut L2CFighterCommon, x: f32, y: f32, dmg: f32, angle: u64, kbg: i32, bkb: i32, taille: f32, dy: f32) {
+    let boma = fighter.module_accessor;
+    let (px, py) = pos(boma);
+    let plr = PostureModule::lr(boma);
+    ATTACK(fighter, 7, 0, Hash40::new("top"), dmg, angle, kbg, 0, bkb, taille, 0.0, y - py + dy, (x - px) * plr, None, None, None,
+           0.8, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, true, true, false, false, false,
+           *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
+           Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_KICK, *ATTACK_REGION_OBJECT);
+}
+
+unsafe fn touche(boma: *mut BattleObjectModuleAccessor) -> bool {
+    AttackModule::is_infliction(boma, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(boma, *COLLISION_KIND_MASK_SHIELD)
+}
+
+/// adversaire le plus proche : (son module, dx, dy)
+unsafe fn adversaire_obj(moi: usize, x: f32, y: f32) -> Option<(*mut BattleObjectModuleAccessor, f32, f32)> {
+    let mut best: Option<(*mut BattleObjectModuleAccessor, f32, f32)> = None;
+    for n in 0..8 {
+        if n == moi {
+            continue;
+        }
+        let id = smash::app::Fighter::get_id_from_entry_id(n as i32);
+        let Some(o) = boma_of(id) else { continue };
+        if smash::app::utility::get_category(&mut *o) != *BATTLE_OBJECT_CATEGORY_FIGHTER {
+            continue;
+        }
+        let st = StatusModule::status_kind(o);
+        if st == *FIGHTER_STATUS_KIND_DEAD || st == *FIGHTER_STATUS_KIND_STANDBY {
+            continue;
+        }
+        let (ox, oy) = pos(o);
+        let (dx, dy) = (ox - x, oy - y);
+        if best.map_or(true, |(_, bx, by)| dx * dx + dy * dy < bx * bx + by * by) {
+            best = Some((o, dx, dy));
+        }
+    }
+    best
+}
+
+/// chute (gravité g), posée au sol : vrai si elle vient de toucher le sol
+unsafe fn chute(boma: *mut BattleObjectModuleAccessor, x: f32, y: &mut f32, vy: &mut f32, g: f32) -> bool {
+    *vy = (*vy - g).max(-3.0);
+    *y += *vy;
+    if *vy <= 0.0 {
+        if let Some(s) = sol(boma, x, *y, (-*vy).max(1.0)) {
+            *y = s;
+            *vy = 0.0;
+            return true;
+        }
+    }
+    false
+}
+
+const INV_VIE: f32 = 720.0;
+
+unsafe fn inv_pas(fighter: &mut L2CFighterCommon, e: usize) {
+    let boma = fighter.module_accessor;
+    if INV[e] == 0 {
+        inv_afficher(boma, None);
         return;
     }
-    let [mut x, mut y, mut vx, mut vy, mut lr, mut ph, mut t, mut att] = M[e];
-    t += 1.0;
+    M[e][6] += 1.0;
+    let (x, y, t) = (M[e][0], M[e][1], M[e][6]);
+    if t > INV_VIE || y < -300.0 || StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_DEAD {
+        inv_fin(fighter, e);
+        return;
+    }
+    let (pose, s) = match INV[e] {
+        INV_MITE => mite_pas(fighter, e),
+        INV_BOOBAS => boobas_pas(fighter, e),
+        _ => cymul_pas(fighter, e),
+    };
+    if INV[e] == 0 {
+        return;
+    }
+    if mite_placer(boma, e, M[e][0], M[e][1]) {
+        inv_afficher(boma, Some((INV[e], pose, PostureModule::lr(boma), s)));
+    } else {
+        inv_afficher(boma, None);
+    }
+}
+
+// ---------------------------------------------------------------- Mite
+/// v0.6 (vidéo de REX du joueur) : Mite tombe du portail, court vers l'adversaire le plus proche, fonce sur lui
+/// (plongeon), rebondit après le coup et recommence, pendant une douzaine de secondes.
+/// v0.16 (remarques du joueur sur la v0.14) : il courait à l'envers (son devant est le -z de son animation) et il était
+/// bien trop agressif : course plus lente, 1,5 s entre deux plongeons, il s'éloigne après un coup avant de revenir.
+/// Phases : 0 chute du portail, 1 course vers l'adversaire, 2 plongeon, 3 rebond après un coup, 4 s'éloigne.
+/// Poses : 0-5 course, 6 plongeon, 7 repli, 8 debout. Renvoie (pose, sens d'affichage).
+unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
+    let boma = fighter.module_accessor;
+    let [mut x, mut y, mut vx, mut vy, mut lr, mut ph, t, mut att] = M[e];
     if att > 0.0 {
         att -= 1.0;
     }
-    if t > MITE_VIE || y < -300.0 || StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_DEAD {
-        mite_fin(fighter, e);
-        return;
-    }
-    let f;
     if ph < 0.5 {
-        // chute du portail
-        vy = (vy - 0.15).max(-3.0);
-        y += vy;
-        f = MITE_PLONGE;
-        if let Some(g) = sol(boma, x, y, (-vy).max(1.0)) {
-            y = g;
-            vy = 0.0;
+        if chute(boma, x, &mut y, &mut vy, 0.15) {
             ph = 1.0;
         }
-    } else if ph < 1.5 {
-        // course vers l'adversaire le plus proche
+    } else if ph < 1.5 || ph > 3.5 {
         let cible = adversaire(e, x, y);
         if let Some((dx, _)) = cible {
-            if dx.abs() > 3.0 {
+            if ph > 3.5 {
+                // il s'éloigne de l'adversaire, puis fait demi-tour
+                lr = -dx.signum();
+                if att < 50.0 || dx.abs() > 45.0 {
+                    ph = 1.0;
+                }
+            } else if dx.abs() > 3.0 {
                 lr = dx.signum();
             }
         }
-        x += 1.3 * lr;
+        x += 1.0 * lr;
         match sol(boma, x, y, 14.0) {
             Some(g) => { y = g; vy = 0.0; }
             None => { vy = (vy - 0.15).max(-3.0); y += vy; }
         }
-        f = t % MITE_COURSE;
-        if let Some((dx, dy)) = cible {
-            if att <= 0.0 && vy == 0.0 && dx * lr > 0.0 && dx.abs() < 24.0 && dy.abs() < 14.0 {
-                // v0.14 : plongeon rasant, comme dans la vidéo de REX (corps à l'horizontale)
-                ph = 2.0;
-                vx = 2.5 * lr;
-                vy = 0.7;
-                AttackModule::clear(boma, 7, false);
+        if ph < 1.5 {
+            if let Some((dx, dy)) = cible {
+                if att <= 0.0 && vy == 0.0 && dx * lr > 0.0 && dx.abs() < 22.0 && dx.abs() > 8.0 && dy.abs() < 14.0 {
+                    // plongeon rasant, comme dans la vidéo de REX (corps à l'horizontale)
+                    ph = 2.0;
+                    vx = 2.4 * lr;
+                    vy = 0.7;
+                    AttackModule::clear(boma, 7, false);
+                }
             }
         }
     } else if ph < 2.5 {
-        // plongeon (JumpTackle) : le coup n'existe que pendant le plongeon
         x += vx;
         vy = (vy - 0.07).max(-3.0);
         y += vy;
-        f = if vy > 0.4 { MITE_ELAN } else { MITE_PLONGE };
-        mite_coup(fighter, x, y, 0.8, 3.5);
-        // v0.15 : traînée rouge du plongeon (vidéo de REX), posée sur l'os Throw (= Mite) ; +Z de l'os = devant Primid
+        inv_coup(fighter, x, y, 0.8, 50, 30, 60, 3.5, 3.0);
+        // traînée rouge du plongeon (vidéo de REX), posée sur l'os Throw (= Mite) ; +Z de l'os = devant Primid
         if (t as i32) % 3 == 0 {
             let plr = PostureModule::lr(boma);
             let h = EffectModule::req_on_joint(boma, Hash40::new("sys_attack_speedline"), Hash40::new("throw"),
@@ -570,54 +682,227 @@ unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) {
                 EffectModule::set_rgb(boma, h, 1.0, 0.15, 0.15);
             }
         }
-        let touche = AttackModule::is_infliction(boma, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(boma, *COLLISION_KIND_MASK_SHIELD);
-        if touche {
-            // il rebondit en arrière (vidéo : il retombe près de l'adversaire et repart)
+        if touche(boma) {
             AttackModule::clear(boma, 7, false);
             ph = 3.0;
             vx = -0.8 * lr;
             vy = 1.6;
-            att = 45.0;
+            att = 90.0;
         } else if vy < 0.0 {
             if let Some(g) = sol(boma, x, y, (-vy).max(1.0)) {
                 AttackModule::clear(boma, 7, false);
                 y = g;
                 vy = 0.0;
                 ph = 1.0;
-                att = 20.0;
+                att = 60.0;
             }
         }
     } else {
-        // rebond après un coup
+        // rebond après un coup, puis il s'éloigne
         x += vx;
-        vy = (vy - 0.14).max(-3.0);
-        y += vy;
-        f = MITE_PLONGE;
-        if vy < 0.0 {
-            if let Some(g) = sol(boma, x, y, (-vy).max(1.0)) {
-                y = g;
-                vy = 0.0;
-                ph = 1.0;
-            }
+        if chute(boma, x, &mut y, &mut vy, 0.14) {
+            ph = 4.0;
         }
     }
     M[e] = [x, y, vx, vy, lr, ph, t, att];
-    let _ = f;
-    // v0.12 : Mite dans le modèle de Primid : petits sauts pendant la course, os placé, bon exemplaire affiché
-    let saut = 0.0;
-    // pose : course (une image de l'animation toutes les 4 images de jeu), plongeon, repli (chute, rebond)
-    let k = if ph > 0.5 && ph < 1.5 && vy == 0.0 {
-        ((t as i32 / 4) % 6) as usize
+    let pose = if (ph < 1.5 && ph > 0.5 || ph > 3.5) && vy == 0.0 {
+        ((t as i32 / 5) % 6) as usize
     } else if ph > 1.5 && ph < 2.5 {
         6
     } else {
         7
     };
-    if mite_placer(boma, e, x, y + saut) {
-        mite_afficher(boma, Some((PostureModule::lr(boma), lr, k)));
-    } else {
-        mite_afficher(boma, None);
+    (pose, -lr)
+}
+
+// ---------------------------------------------------------------- Boobas
+/// REX (ItmPrimid01) : animations Jump, Fall, Landing, WindStart, Wind, WindEnd ; ennemi de l'Émissaire subspatial
+/// (SmashWiki) : il sautille ou attend, et souffle du vent quand un perso s'approche (environ trois largeurs de Donkey
+/// Kong), qui le pousse ; toucher sa tête quand il commence à souffler fait mal.
+/// Phases : 0 chute du portail, 1 sautille vers l'adversaire, 2 début du vent, 3 vent, 4 fin du vent.
+/// Poses : 0 saut, 1 chute, 2 atterrissage, 3 début du vent, 4-5 vent.
+const BOOBAS_PORTEE: f32 = 40.0;
+
+unsafe fn boobas_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
+    let boma = fighter.module_accessor;
+    let [mut x, mut y, mut vx, mut vy, mut lr, mut ph, t, mut att] = M[e];
+    // Q : 0 temps dans la phase, 1 images d'atterrissage restantes
+    Q[e][0] += 1.0;
+    let tp = Q[e][0];
+    if att > 0.0 {
+        att -= 1.0;
     }
+    let cible = adversaire_obj(e, x, y);
+    let mut pose = 2;
+    if ph < 0.5 {
+        pose = 1;
+        if chute(boma, x, &mut y, &mut vy, 0.12) {
+            ph = 1.0;
+            Q[e] = [0.0, 10.0, 0.0, 0.0];
+        }
+    } else if ph < 1.5 {
+        // sautille vers l'adversaire, souffle quand il est assez près (devant lui)
+        let au_sol = vy == 0.0 && sol(boma, x, y, 2.0).is_some();
+        if au_sol {
+            vx = 0.0;
+            if Q[e][1] > 0.0 {
+                Q[e][1] -= 1.0;
+                pose = 2;
+            } else {
+                pose = 2;
+                if let Some((_, dx, dy)) = cible {
+                    if dx.abs() > 2.0 {
+                        lr = dx.signum();
+                    }
+                    if att <= 0.0 && dx.abs() < BOOBAS_PORTEE && dy.abs() < 16.0 {
+                        ph = 2.0;
+                        Q[e][0] = 0.0;
+                    } else if tp > 40.0 {
+                        // petit saut vers lui
+                        vx = 0.9 * lr;
+                        vy = 2.0;
+                        Q[e][0] = 0.0;
+                    }
+                }
+            }
+        }
+        if ph < 1.5 && (!au_sol || vy > 0.0) {
+            x += vx;
+            pose = if vy > 0.0 { 0 } else { 1 };
+            if chute(boma, x, &mut y, &mut vy, 0.12) {
+                Q[e][1] = 8.0;
+                vx = 0.0;
+            }
+        }
+    } else if ph < 2.5 {
+        // début du vent : coup de tête (trompette) au moment où il souffle
+        pose = 3;
+        if tp > 8.0 && tp < 14.0 {
+            inv_coup(fighter, x + 7.0 * lr, y, 6.0, 45, 60, 35, 4.0, 11.0);
+        }
+        if tp == 14.0 {
+            AttackModule::clear(boma, 7, false);
+        }
+        if tp > 20.0 {
+            ph = 3.0;
+            Q[e][0] = 0.0;
+        }
+    } else if ph < 3.5 {
+        // vent : pousse l'adversaire devant lui (plus fort de près)
+        pose = 4 + ((t as i32 / 6) % 2) as usize;
+        if let Some((o, dx, dy)) = cible {
+            if dx * lr > 0.0 && dx.abs() < BOOBAS_PORTEE + 10.0 && dy.abs() < 18.0 {
+                let f = 0.35 + 0.55 * (1.0 - dx.abs() / (BOOBAS_PORTEE + 10.0));
+                PostureModule::add_pos(o, &Vector3f { x: f * lr, y: 0.0, z: 0.0 });
+            }
+        }
+        if (t as i32) % 6 == 0 {
+            // souffle (traînées blanches devant sa trompette) ; +Z de l'os Throw = devant Primid
+            let plr = PostureModule::lr(boma);
+            EffectModule::req_on_joint(boma, Hash40::new("sys_attack_speedline"), Hash40::new("throw"),
+                &Vector3f { x: 0.0, y: 10.0, z: 12.0 * lr * plr }, &Vector3f { x: 0.0, y: if lr * plr > 0.0 { 0.0 } else { 180.0 }, z: 0.0 },
+                0.8, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, false, 0, 0, 0);
+        }
+        if tp > 120.0 {
+            ph = 4.0;
+            Q[e][0] = 0.0;
+        }
+    } else {
+        pose = 3;
+        if tp > 20.0 {
+            ph = 1.0;
+            Q[e][0] = 0.0;
+            att = 90.0;
+        }
+    }
+    M[e] = [x, y, vx, vy, lr, ph, t, att];
+    (pose, lr)
+}
+
+// ---------------------------------------------------------------- Cymul
+/// REX (ItmPrimid00) : animations Start, Float, Reflector ; ennemi de l'Émissaire subspatial (SmashWiki) : il se
+/// déplace en volant ; quand un perso s'approche, il sort ses réflecteurs et tourne : petits coups répétés (toutes les
+/// 8 images, ils le gardent près de lui), puis un dernier coup qui l'envoie vers le haut.
+/// Phases : 0 sortie du portail, 1 vole vers l'adversaire, 2 tourne, 3 repos. Poses : 0-1 vol, 2-5 rotation.
+/// vitesse vers (ax, ay), lissée (il flotte)
+fn vise(x: f32, y: f32, vx: &mut f32, vy: &mut f32, ax: f32, ay: f32, v: f32) {
+    let (dx, dy) = (ax - x, ay - y);
+    let d = (dx * dx + dy * dy).sqrt().max(0.001);
+    let k = (v / d).min(1.0);
+    *vx = *vx * 0.85 + dx * k * 0.15;
+    *vy = *vy * 0.85 + dy * k * 0.15;
+}
+
+unsafe fn cymul_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
+    let boma = fighter.module_accessor;
+    let [mut x, mut y, mut vx, mut vy, lr, mut ph, t, mut att] = M[e];
+    Q[e][0] += 1.0;
+    let tp = Q[e][0];
+    if att > 0.0 {
+        att -= 1.0;
+    }
+    let cible = adversaire_obj(e, x, y);
+    let mut pose = if ((t as i32 / 20) % 2) == 0 { 0 } else { 1 };
+    if ph < 0.5 {
+        // sort du portail et descend un peu
+        vise(x, y, &mut vx, &mut vy, x, y - 8.0, 0.6);
+        if tp > 25.0 {
+            ph = 1.0;
+            Q[e][0] = 0.0;
+        }
+    } else if ph < 1.5 || ph > 2.5 {
+        if let Some((_, dx, dy)) = cible {
+            let (ax, ay) = (x + dx, y + dy + 5.0);
+            vise(x, y, &mut vx, &mut vy, ax, ay, 0.75);
+            if ph < 1.5 && att <= 0.0 && dx.abs() < 12.0 && (dy + 5.0).abs() < 12.0 {
+                ph = 2.0;
+                Q[e][0] = 0.0;
+                vx = 0.0;
+                vy = 0.0;
+                AttackModule::clear(boma, 7, false);
+            }
+        } else {
+            vise(x, y, &mut vx, &mut vy, x, y, 0.0);
+        }
+        if ph > 2.5 && tp > 70.0 {
+            ph = 1.0;
+            Q[e][0] = 0.0;
+        }
+    } else {
+        // rotation, réflecteurs sortis : coups répétés puis coup final vers le haut
+        vx *= 0.8;
+        vy *= 0.8;
+        pose = 2 + ((t as i32 / 3) % 4) as usize;
+        let ti = tp as i32;
+        if ti < 48 {
+            if ti % 8 == 1 {
+                AttackModule::clear(boma, 7, false);
+                inv_coup(fighter, x, y, 1.2, 80, 20, 25, 6.0, 4.0);
+            } else if ti % 8 == 4 {
+                AttackModule::clear(boma, 7, false);
+            }
+        } else if ti == 50 {
+            AttackModule::clear(boma, 7, false);
+            inv_coup(fighter, x, y, 2.5, 85, 110, 55, 7.0, 4.0);
+        } else if ti == 54 {
+            AttackModule::clear(boma, 7, false);
+        } else if ti > 60 {
+            ph = 3.0;
+            Q[e][0] = 0.0;
+            att = 60.0;
+        }
+    }
+    x += vx;
+    y += vy;
+    // jamais dans le sol
+    if let Some(g) = sol(boma, x, y, 3.0) {
+        if y < g + 3.0 {
+            y = g + 3.0;
+            vy = vy.max(0.0);
+        }
+    }
+    M[e] = [x, y, vx, vy, lr, ph, t, att];
+    (pose, 1.0)
 }
 
 // ------------------------------------------------------------------ Botron (J.E.T. de Mario) et son pot (eau du J.E.T.)
