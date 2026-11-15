@@ -5,6 +5,7 @@
 //! v0.1 : étapes 1 + 2 ensemble : ses coups de REX (normaux, smashs, aériens, prises et lancers) + son modèle de REX
 //!        rattaché aux os de Mario + ses animations de REX ; provocations à lui (sans les scripts de Mario).
 //!        Spéciaux : ceux de Mario pour l'instant (son B bas, les invocations, vient ensuite).
+//! v0.2 : son bas B de REX : portail de Subspace et invocations (Mite au stick haut, Botron au stick avant) : invoc.rs
 //! Les données ne sont PAS dans le dépôt : src/generated.rs est créé pendant la compilation (rex/tools/gen_rex.py)
 //! à partir du build REX du propriétaire du dépôt.
 
@@ -92,6 +93,7 @@ pub struct Mv {
 include!("generated.rs");
 
 mod prises;
+mod invoc;
 
 /// perso de base (nom interne) : Mario
 pub const BASE: &str = "mario";
@@ -175,9 +177,16 @@ macro_rules! scripts {
             a.set_costume(PR_COSTUMES.to_vec());
             $( if find($s).is_some() { a.acmd($s, $f, Priority::Low); } )*
             prises::install(&mut a);
+            invoc::install(&mut a);
+            a.on_line(Main, primid_frame);
             a.install();
         }
     };
+}
+
+/// chaque image : recharges des invocations du bas B
+unsafe extern "C" fn primid_frame(fighter: &mut L2CFighterCommon) {
+    invoc::update(fighter);
 }
 
 scripts! {
