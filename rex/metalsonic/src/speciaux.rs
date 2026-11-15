@@ -451,6 +451,14 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     }
     let (vx, vy) = HI_V[e];
     vitesse(fighter, vx, vy);
+    // demandé (vidéo du 15/11) : son animation d'envol de REX est couchée vers l'avant (faite pour filer à
+    // l'horizontale) : le corps est tourné dans le sens du vol (comme le Flight de Super Sonic, os « rot ») : debout
+    // quand il monte tout droit, penché quand il part en diagonale
+    let pente = (-vy).atan2(vx.abs().max(0.001)).to_degrees().clamp(-90.0, 60.0);
+    let r = Vector3f { x: pente, y: 0.0, z: 0.0 };
+    ModelModule::set_joint_rotate(boma, Hash40::new("rot"), &r,
+        MotionNodeRotateCompose { _address: *MOTION_NODE_ROTATE_COMPOSE_AFTER as u8 },
+        MotionNodeRotateOrder { _address: *MOTION_NODE_ROTATE_ORDER_XYZ as u8 });
     if HI_FX[e] == 0 || !EffectModule::is_exist_effect(boma, HI_FX[e]) {
         HI_FX[e] = fx(boma, "sys_rocketbelt_jet", "hip", (0.0, 0.0, 0.0), 0.7, Some(TRAINEE_ROSE));
     }
