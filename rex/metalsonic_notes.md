@@ -84,3 +84,14 @@ Procédure suivie : rex/PROCEDURE.md (dépôt final-zoom, branche combo-wip), co
   des smashs ; smash haut : nuage de poussière au bond et bulle bleue transparente (sys_shield teinté, comme l'effet
   n° 04 de REX) pendant qu'il tourne en l'air ; smash bas : bulle bleue au ras du sol, vent, poussière gauche / droite.
 - v3c : ondes de choc toujours au sol (y 0) ; lancer avant : seulement l'anneau au sol (celui en l'air retiré).
+
+## Final Smash (15/11) — Neo Metal Sonic (REX)
+- REX : FinalStart (120 images) / FinalEnd (25) + FitMetalSonicFinal.pac = Landmaster de Wolf avec le modèle
+  « Neo_Metal_Sonic » (18 os du Landmaster, tous les objets sur TopN : figé). Metal disparaît à 50, souffle à 70
+  (3 % puis 16 %, tailles 60 / 70), puis Landmaster (rouler, planer, canon, tonneau), FinalEnd : Metal revient.
+- Neo : add_neo.py (méthode du canon de Zero) : objets NeoMetal_VIS_O_OBJShape dans le modèle du skin, os NeoN sous
+  Trans, cachés par défaut ; neo_vis.py : piste de visibilité NeoMetal dans d04finalstart / airstart (à partir de 50),
+  cachée dans d04finalend / airend. Textures converties par ultimate_tex_cli.
+- finale.rs : statut FINAL remplacé (méthode de Chief) ; Metal caché en réduisant l'os Rot ; contrôles : stick =
+  rouler / demi-tour, saut tenu = planer, attaque ou spécial = rayon (18 %, élec), bouclier = tonneau (10 %),
+  coup de contact en fonçant (8 %) ; 11 s puis FinalEnd.

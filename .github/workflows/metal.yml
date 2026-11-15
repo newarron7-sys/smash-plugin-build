@@ -54,7 +54,32 @@ jobs:
           SCALE=1 NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitMetalSonic00.pac $D/FitMetalSonicMotionEtc.pac /tmp/out /tmp/out/motion/c00 shadow_coups >> /tmp/out/animations.txt 2>&1 || true
           SCALE=1 NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitMetalSonic00.pac $D/FitMetalSonicMotionEtc.pac /tmp/out /tmp/out/motion/c00 metal_speciaux >> /tmp/out/animations.txt 2>&1 || true
           SCALE=1 NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitMetalSonic00.pac $D/FitMetalSonicMotionEtc.pac /tmp/out /tmp/out/motion/c00 metal_prises >> /tmp/out/animations.txt 2>&1 || true
+          SCALE=1 NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitMetalSonic00.pac $D/FitMetalSonicMotionEtc.pac /tmp/out /tmp/out/motion/c00 metal_final >> /tmp/out/animations.txt 2>&1 || true
+          python3 rex/tools/neo_vis.py /tmp/out/motion/c00 >> /tmp/out/animations.txt 2>&1 || true
           echo "animations : $(ls /tmp/out/motion/c00/*.nuanmb 2>/dev/null | wc -l)"
+      - name: Cache ultimate_tex_cli
+        id: tex
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/ultimate_tex_cli
+          key: ultimate-tex-cli-v1
+      - name: ultimate_tex_cli
+        if: steps.tex.outputs.cache-hit != 'true'
+        env:
+          RUSTFLAGS: -C link-arg=-lstdc++
+        run: cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli
+      - name: Neo Metal Sonic (Final Smash) dans le modele du skin
+        run: |
+          D=/tmp/w/rex_/pf/Fighter/metalsonic
+          N=/tmp/out/neo/model; mkdir -p $N /tmp/out/neo/png
+          python3 rex/tools/add_neo.py $D/FitMetalSonicFinal.pac $D/FitMetalSonic00.pac /tmp/ref/ref $N /tmp/out/neo/png > /tmp/out/neo/neo.txt 2>&1 || true
+          tail -3 /tmp/out/neo/neo.txt | grep -oE '^[A-Za-z]*Error.*|^ok.*' || true
+          for f in /tmp/out/neo/png/*.png; do
+            b=$(basename "$f" .png)
+            case "$b" in *_col) fmt=BC7RgbaUnormSrgb;; *) fmt=BC7RgbaUnorm;; esac
+            ultimate_tex_cli "$f" "$N/$b.nutexb" --format $fmt >/dev/null 2>&1 || echo "echec $b" >> /tmp/out/neo/neo.txt
+          done
+          ls $N | wc -l
       - name: Cache outils (cargo-skyline, toolchain Switch)
         uses: actions/cache@v4
         with:

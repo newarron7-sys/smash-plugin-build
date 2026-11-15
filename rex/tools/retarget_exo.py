@@ -317,6 +317,12 @@ GROUPES = {
         'j01appealsl': ['AppealS'], 'j01appealsr': ['AppealS'],
         'j01appeallwl': ['AppealLw'], 'j01appeallwr': ['AppealLwR'],
     },
+    # Metal Sonic, Final Smash (REX FinalStart 120 images : pose, il disparaît à 50 et Neo Metal Sonic apparaît ;
+    # FinalEnd 25 images : il revient) ; Neo est un objet du modèle montré par une piste de visibilité (neo_vis.py)
+    'metal_final': {
+        'd04finalstart': ['FinalStart'], 'd04finalairstart': ['FinalStart'],
+        'd04finalend': ['FinalEnd'], 'd04finalairend': ['FinalEnd'],
+    },
     'base': {
         # attente
         'a00wait1': ['Wait1'], 'a00wait2': ['Wait2'], 'a00wait3': ['Wait1'], 'a00waititem': ['Wait1'],
@@ -686,6 +692,9 @@ if GROUPE == 'chief_speciaux':
 if GROUPE == 'chief_prises':
     # sur place sauf la prise en courant (le jeu la fait glisser avec l'avancée de l'animation)
     IN_PLACE = {k for k in GROUPES['chief_prises'] if k != 'e00catchdash'}
+    KEEP_Y = set()
+if GROUPE == 'metal_final':
+    IN_PLACE = set(GROUPES['metal_final'])
     KEEP_Y = set()
 if GROUPE == 'metal_prises':
     IN_PLACE = set(GROUPES['metal_prises'])

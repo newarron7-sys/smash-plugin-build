@@ -97,6 +97,7 @@ mod effets;
 mod coups;
 mod speciaux;
 mod prises;
+mod finale;
 mod sons;
 
 
@@ -122,6 +123,7 @@ unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
     effets::corps_normal(fighter);
     speciaux::frame_hi(fighter);
     prises::chaque_image(fighter);
+    finale::chaque_image(fighter);
     let boma = fighter.module_accessor;
     let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
     if id < 8 && CORPS_CHANGE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_S4 {
@@ -260,6 +262,7 @@ macro_rules! scripts {
             coups::install(&mut a);
             speciaux::install(&mut a);
             prises::install(&mut a);
+            finale::install(&mut a);
             sons::install(&mut a);
             a.on_line(Main, ss_frame);
             a.install();
