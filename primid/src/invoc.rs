@@ -301,8 +301,32 @@ unsafe extern "C" fn lw_end(fighter: &mut L2CFighterCommon) -> L2CValue {
 }
 
 /// chaque image (depuis lib.rs) : recharges
+unsafe fn diag(boma: *mut BattleObjectModuleAccessor, x: f32, y: f32, ok: bool) {
+    let h = EffectModule::req(boma, Hash40::new("sys_flash"), &Vector3f { x, y, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 1.6, 0, 0, false, 0) as u32;
+    if h != 0 {
+        if ok { EffectModule::set_rgb(boma, h, 0.1, 1.0, 0.1); } else { EffectModule::set_rgb(boma, h, 1.0, 0.0, 0.0); }
+    }
+}
+
+/// v0.8 (diagnostic) : depuis Primid, toutes les 8 images, un éclat à la position de Mite / Botron tant que leur
+/// boucle tourne (leur temps avance) : blanc pour Mite, jaune pour Botron
+static mut DIAG_T: [[f32; 2]; 8] = [[0.0; 2]; 8];
+
 pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     let e = e_of(fighter.module_accessor);
+    let boma = fighter.module_accessor;
+    let t = (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as i32 + MotionModule::frame(boma) as i32) as f32;
+    let _ = t;
+    if MITE_ID[e] != 0 && M[e][6] != DIAG_T[e][0] && (M[e][6] as i32) % 8 == 4 {
+        let h = EffectModule::req(boma, Hash40::new("sys_smash_flash_s"), &Vector3f { x: M[e][0], y: M[e][1] + 6.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 0.8, 0, 0, false, 0) as u32;
+        let _ = h;
+    }
+    DIAG_T[e][0] = M[e][6];
+    if BOT_ID[e] != 0 && B[e][3] != DIAG_T[e][1] && (B[e][3] as i32) % 8 == 4 {
+        let h = EffectModule::req(boma, Hash40::new("sys_smash_flash_s"), &Vector3f { x: B[e][0], y: B[e][1] - 6.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 1.0, 0, 0, false, 0) as u32;
+        if h != 0 { EffectModule::set_rgb(boma, h, 1.0, 0.9, 0.1); }
+    }
+    DIAG_T[e][1] = B[e][3];
     portail_afficher(fighter.module_accessor, e);
     for k in 0..2 {
         if RECH[e][k] > 0 {
@@ -331,7 +355,8 @@ unsafe fn mite_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
         }
     }
     RECH[e][0] = RECH_MITE;
-    eff(boma, "sys_flash", M[e][0], M[e][1] + 4.0, 0.8);
+    // v0.8 (diagnostic, depuis Primid) : éclat VERT = le tuyau a bien été créé ; ROUGE = le jeu a refusé de le créer
+    diag(boma, M[e][0], M[e][1] + 4.0, ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_DOKAN));
 }
 
 unsafe fn article_boma(boma: *mut BattleObjectModuleAccessor, kind: i32) -> Option<*mut BattleObjectModuleAccessor> {
@@ -519,7 +544,7 @@ unsafe fn botron_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
         }
     }
     RECH[e][1] = RECH_BOTRON;
-    eff(boma, "sys_flash", B[e][0], B[e][1], 0.8);
+    diag(boma, B[e][0], B[e][1], ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP));
 }
 
 unsafe fn est_botron(_w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize> {
