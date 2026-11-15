@@ -8,7 +8,10 @@
 //! Les ennemis sont les modèles de REX mis sur des objets de Mario que Primid n'utilise pas :
 //! - Mite -> tuyau d'entrée (dokan, statut DUMMY) : court au sol vers l'avant, fonce sur l'adversaire proche ;
 //! - Botron -> J.E.T. (pump, statut WAIT) : vole au-dessus du terrain en portant son pot ;
-//! - le pot de Botron -> eau du J.E.T. (pumpwater, statut REGULAR) : lâché au-dessus de l'adversaire, explose en feu.
+//! - le pot de Botron : dans le modèle de Botron ; lâché au-dessus de l'adversaire, il est caché sur Botron et un pot
+//!   identique tombe : la casquette Cappy de Mario (cappy, statut DUMMY), qui explose en feu au sol.
+//! v0.3 : le pot était sur l'eau du J.E.T. (pumpwater) : plantage au chargement (tests A à D du joueur) ; directions
+//!   corrigées d'après les icônes du portail de REX (haut Botron, avant Mite, arrière Boobas, bas Cymul).
 //! Leurs statuts (Main / Exec) sont remplacés pour le costume de Primid seulement, et seulement pour les objets que le
 //! bas B a créés (sinon : code d'origine, par exemple le tuyau de l'entrée en scène).
 
@@ -25,8 +28,9 @@ use smashline::*;
 use crate::PR_COSTUMES;
 
 // ------------------------------------------------------------------ réglages (REX)
-const RECH_MITE: i32 = 256;
-const RECH_BOTRON: i32 = 640;
+// REX : haut 256 (Botron), bas 608 (Cymul), avant 640 (Mite), arrière 592 (Boobas)
+const RECH_MITE: i32 = 640;
+const RECH_BOTRON: i32 = 256;
 /// image de SummonGo à partir de laquelle il peut agir (REX : AllowInterrupt à 9)
 const GO_LIBRE: f32 = 9.0;
 /// B tenu au plus (images) avant qu'il range le portail tout seul
@@ -49,11 +53,12 @@ static mut BOT_ATTEND: [bool; 8] = [false; 8];
 static mut BOT_ID: [u32; 8] = [0; 8];
 static mut POT_ATTEND: [bool; 8] = [false; 8];
 static mut POT_ID: [u32; 8] = [0; 8];
+static mut POT_LR: [f32; 8] = [1.0; 8];
 
 // état des objets (par perso)
 static mut M: [[f32; 6]; 8] = [[0.0; 6]; 8]; // x, y, vy, lr, phase (0 course, 1 plongeon), temps
 static mut B: [[f32; 6]; 8] = [[0.0; 6]; 8]; // x, y, lr, temps, lâché (0/1), temps depuis le lâcher
-static mut P: [[f32; 4]; 8] = [[0.0; 4]; 8]; // y, vy, explosé (temps), -
+static mut P: [[f32; 4]; 8] = [[0.0; 4]; 8]; // x, y, vy, explosé (temps)
 
 fn e_of(boma: *mut BattleObjectModuleAccessor) -> usize {
     unsafe { (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7) }
@@ -229,10 +234,11 @@ unsafe extern "C" fn lw_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
             let sx = ControlModule::get_stick_x(boma) * lr;
             let sy = ControlModule::get_stick_y(boma);
             let mut go = 0;
-            if sy > 0.75 && RECH[e][0] <= 0 {
-                go = 1;
-            } else if sx > 0.75 && RECH[e][1] <= 0 {
+            // icônes du portail de REX : haut Botron, avant Mite (arrière Boobas, bas Cymul : à venir)
+            if sy > 0.75 && RECH[e][1] <= 0 {
                 go = 2;
+            } else if sx > 0.75 && RECH[e][0] <= 0 {
+                go = 1;
             }
             if go > 0 {
                 if go == 1 { mite_creer(boma, e); } else { botron_creer(boma, e); }
@@ -433,7 +439,6 @@ unsafe fn botron_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
     let lr = PostureModule::lr(boma);
     let (x, y) = pos(boma);
     B[e] = [x + 6.0 * lr, y + 24.0, lr, 0.0, 0.0, 0.0];
-    P[e] = [y + 24.0, 0.0, 0.0, 0.0];
     BOT_ATTEND[e] = true;
     BOT_ID[e] = 0;
     ArticleModule::generate_article(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP, false, -1);
@@ -464,15 +469,7 @@ unsafe extern "C" fn pump_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
     placer(w, B[e][0], B[e][1]);
     MotionModule::change_motion(w, Hash40::new("start"), 0.0, 1.0, false, 0.0, false, false);
     EffectModule::kill_all(w, 0, true, false);
-    // son pot (eau du J.E.T.) : créé par le J.E.T. lui-même
-    POT_ATTEND[e] = true;
-    POT_ID[e] = 0;
-    ArticleModule::generate_article(w, *WEAPON_MARIO_PUMP_GENERATE_ARTICLE_WATER, false, -1);
-    if let Some(p) = article_boma(w, *WEAPON_MARIO_PUMP_GENERATE_ARTICLE_WATER) {
-        if POT_ATTEND[e] {
-            StatusModule::change_status_force(p, *WEAPON_MARIO_PUMP_WATER_STATUS_KIND_REGULAR, false);
-        }
-    }
+    pot_porte(w, true);
     weapon.fastshift(L2CValue::Ptr(botron_loop as *const () as _))
 }
 
@@ -486,7 +483,7 @@ unsafe extern "C" fn pump_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
 
 unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
-    let Some((_, e)) = owner(w) else {
+    let Some((o, e)) = owner(w) else {
         tuer(weapon);
         return 0.into();
     };
@@ -513,6 +510,9 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
             lache = 1.0;
             tl = 0.0;
             MotionModule::change_motion(w, Hash40::new("light"), 0.0, 1.0, false, 0.0, false, false);
+            // le pot quitte Botron : caché sur lui, un pot identique (Cappy) tombe du même endroit
+            pot_porte(w, false);
+            pot_creer(o, e, x, y, lr);
         }
     } else {
         // après le lâcher : il remonte et s'en va (REX : ShootEnd)
@@ -537,13 +537,31 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     0.into()
 }
 
-unsafe fn est_pot(w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize> {
-    // l'eau appartient au J.E.T. : son propriétaire final est Primid
-    let mut o = boma_of(WorkModule::get_int(w, *WEAPON_INSTANCE_WORK_ID_INT_LINK_OWNER) as u32)?;
-    if smash::app::utility::get_category(&mut *o) != *BATTLE_OBJECT_CATEGORY_FIGHTER {
-        o = boma_of(WorkModule::get_int(o, *WEAPON_INSTANCE_WORK_ID_INT_LINK_OWNER) as u32)?;
+/// objets du pot dans le modèle de Botron (HachiM, FireM : polygon6 à 9)
+unsafe fn pot_porte(w: *mut BattleObjectModuleAccessor, on: bool) {
+    for m in ["polygon6", "polygon7", "polygon8", "polygon9"] {
+        ModelModule::set_mesh_visibility(w, Hash40::new(m), on);
     }
-    let e = e_of(o);
+}
+
+unsafe fn pot_creer(o: *mut BattleObjectModuleAccessor, e: usize, x: f32, y: f32, lr: f32) {
+    if ArticleModule::is_exist(o, *FIGHTER_MARIO_GENERATE_ARTICLE_CAPPY) {
+        ArticleModule::remove_exist(o, *FIGHTER_MARIO_GENERATE_ARTICLE_CAPPY, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
+    }
+    P[e] = [x, y, 0.0, 0.0];
+    POT_LR[e] = lr;
+    POT_ATTEND[e] = true;
+    POT_ID[e] = 0;
+    ArticleModule::generate_article(o, *FIGHTER_MARIO_GENERATE_ARTICLE_CAPPY, false, -1);
+    if let Some(c) = article_boma(o, *FIGHTER_MARIO_GENERATE_ARTICLE_CAPPY) {
+        if POT_ATTEND[e] {
+            StatusModule::change_status_force(c, *WEAPON_MARIO_CAPPY_STATUS_KIND_DUMMY, false);
+        }
+    }
+}
+
+unsafe fn est_pot(w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize> {
+    let (_, e) = owner(w)?;
     if POT_ATTEND[e] {
         POT_ATTEND[e] = false;
         POT_ID[e] = id;
@@ -551,22 +569,21 @@ unsafe fn est_pot(w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize> 
     if POT_ID[e] == id { Some(e) } else { None }
 }
 
-unsafe extern "C" fn water_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
+unsafe extern "C" fn cappy_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
     let Some(e) = est_pot(w, id_of(weapon)) else {
-        return smashline::original_status(Main, weapon, *WEAPON_MARIO_PUMP_WATER_STATUS_KIND_REGULAR)(weapon);
+        return smashline::original_status(Main, weapon, *WEAPON_MARIO_CAPPY_STATUS_KIND_DUMMY)(weapon);
     };
-    liberer(w, B[e][2]);
-    placer(w, B[e][0], B[e][1]);
-    KineticModule::clear_speed_all(w);
+    liberer(w, POT_LR[e]);
+    placer(w, P[e][0], P[e][1]);
     EffectModule::kill_all(w, 0, true, false);
     weapon.fastshift(L2CValue::Ptr(pot_loop as *const () as _))
 }
 
-unsafe extern "C" fn water_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
+unsafe extern "C" fn cappy_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
     if est_pot(w, id_of(weapon)).is_none() {
-        return smashline::original_status(Exec, weapon, *WEAPON_MARIO_PUMP_WATER_STATUS_KIND_REGULAR)(weapon);
+        return smashline::original_status(Exec, weapon, *WEAPON_MARIO_CAPPY_STATUS_KIND_DUMMY)(weapon);
     }
     0.into()
 }
@@ -584,8 +601,7 @@ unsafe extern "C" fn pot_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
         tuer(weapon);
         return 0.into();
     };
-    let [bx, by, _lr, _t, lache, _tl] = B[e];
-    let [mut y, mut vy, mut boum, _] = P[e];
+    let [x, mut y, mut vy, mut boum] = P[e];
     if boum > 0.0 {
         // explosion de feu (REX : le pot explose en flammes), quelques images de coup puis fin
         boum += 1.0;
@@ -594,40 +610,27 @@ unsafe extern "C" fn pot_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
             tuer(weapon);
             return 0.into();
         }
-        P[e] = [y, vy, boum, 0.0];
+        P[e] = [x, y, vy, boum];
         return 0.into();
     }
-    if lache < 0.5 {
-        // porté par Botron (même origine que lui : le pot est dessiné sous son corps)
-        y = by;
-        vy = 0.0;
-        placer(w, bx, y);
-        if BOT_ID[e] == 0 {
-            POT_ID[e] = 0;
-            tuer(weapon);
-            return 0.into();
-        }
-    } else {
-        // lâché : il tombe et frappe en tombant
-        vy = (vy - 0.22).max(-4.5);
-        y += vy;
-        placer(w, PostureModule::pos_x(w), y);
-        pot_coup(weapon, 6.0, 5.0, 60, 40);
-        let touche = AttackModule::is_infliction(w, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(w, *COLLISION_KIND_MASK_SHIELD);
-        let au_sol = sol(w, PostureModule::pos_x(w), y, (-vy).max(1.0)).is_some();
-        if touche || au_sol || y < by - 150.0 {
-            let x = PostureModule::pos_x(w);
-            AttackModule::clear_all(w);
-            pot_coup(weapon, 13.0, 13.0, 80, 55);
-            eff(w, "sys_bomb_a", x, y, 1.2);
-            eff(w, "sys_fireflower_shot", x, y + 2.0, 1.5);
-            PLAY_SE(weapon, Hash40::new("se_common_bomb_l"));
-            // le pot disparaît dans l'explosion
-            ModelModule::set_visibility(w, false);
-            boum = 1.0;
-        }
+    // lâché : il tombe et frappe en tombant
+    vy = (vy - 0.22).max(-4.5);
+    y += vy;
+    placer(w, x, y);
+    pot_coup(weapon, 6.0, 5.0, 60, 40);
+    let touche = AttackModule::is_infliction(w, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(w, *COLLISION_KIND_MASK_SHIELD);
+    let au_sol = sol(w, x, y, (-vy).max(1.0)).is_some();
+    if touche || au_sol || y < -300.0 {
+        AttackModule::clear_all(w);
+        pot_coup(weapon, 13.0, 13.0, 80, 55);
+        eff(w, "sys_bomb_a", x, y, 1.2);
+        eff(w, "sys_fireflower_shot", x, y + 2.0, 1.5);
+        PLAY_SE(weapon, Hash40::new("se_common_bomb_l"));
+        // le pot disparaît dans l'explosion
+        ModelModule::set_visibility(w, false);
+        boum = 1.0;
     }
-    P[e] = [y, vy, boum, 0.0];
+    P[e] = [x, y, vy, boum];
     0.into()
 }
 
@@ -663,12 +666,9 @@ pub fn install(a: &mut Agent) {
     }
     p.install();
 
-    let mut wa = Agent::new("mario_pumpwater");
-    wa.set_costume(PR_COSTUMES.to_vec());
-    wa.status(Main, *WEAPON_MARIO_PUMP_WATER_STATUS_KIND_REGULAR, water_main);
-    wa.status(Exec, *WEAPON_MARIO_PUMP_WATER_STATUS_KIND_REGULAR, water_exec);
-    for k in ["game", "effect", "sound"] {
-        wa.acmd(&format!("{}_regular", k), rien, Priority::Low);
-    }
-    wa.install();
+    let mut c = Agent::new("mario_cappy");
+    c.set_costume(PR_COSTUMES.to_vec());
+    c.status(Main, *WEAPON_MARIO_CAPPY_STATUS_KIND_DUMMY, cappy_main);
+    c.status(Exec, *WEAPON_MARIO_CAPPY_STATUS_KIND_DUMMY, cappy_exec);
+    c.install();
 }
