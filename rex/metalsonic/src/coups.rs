@@ -96,8 +96,8 @@ unsafe extern "C" fn e_attacklw3(agent: &mut L2CAgentBase) {
 // ------------------------------------------------------------------ smashs
 // showcase : au début de la charge, une bulle brillante l'entoure un instant (éclat de charge de Brawl)
 unsafe fn bulle_charge(agent: &mut L2CAgentBase) {
-    fx(agent, "sys_shield", "top", (0.0, 7.0, 0.0), 1.0, (1.0, 1.0, 1.0));
-    fx(agent, "sys_smash_flash", "top", (0.0, 8.0, 0.0), 1.4, (1.0, 1.0, 1.0));
+    fx(agent, "sys_shield", "top", (0.0, 7.0, 0.0), (0.0, 0.0, 0.0), 1.0, (1.0, 1.0, 1.0));
+    fx(agent, "sys_smash_flash", "top", (0.0, 8.0, 0.0), (0.0, 0.0, 0.0), 1.4, (1.0, 1.0, 1.0));
 }
 unsafe fn sans_bulle(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
@@ -106,7 +106,7 @@ unsafe fn sans_bulle(agent: &mut L2CAgentBase) {
 }
 /// bulle bleue transparente de REX (effet n° 04 de son fichier, 2,2) autour de lui pendant qu'il tourne en boule
 unsafe fn boule(agent: &mut L2CAgentBase, y: f32, sc: f32) {
-    fx(agent, "sys_shield", "top", (0.0, y, 0.0), sc, (0.35, 0.55, 1.0));
+    fx(agent, "sys_shield", "top", (0.0, y, 0.0), (0.0, 0.0, 0.0), sc, (0.35, 0.55, 1.0));
 }
 unsafe extern "C" fn e_charge(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
