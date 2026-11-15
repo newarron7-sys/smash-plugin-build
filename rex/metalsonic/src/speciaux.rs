@@ -131,6 +131,8 @@ static mut N_NIVEAU: [f32; 8] = [0.0; 8];
 /// demandé (vidéo du showcase, 15/11) : B tenu = il monte pendant la charge (plus il charge, plus il monte), en
 /// clignotant en rouge (REX : couleur rouge 240/8/8 puis 255/0/0, une image sur deux)
 const N_MONTEE: f32 = 0.5;
+const N_VITESSE_ANIM: f32 = 1.15;
+const N_POSE: f32 = 13.0;
 static mut N_SOL: [bool; 8] = [false; 8];
 static mut N_ROUGE: [bool; 8] = [false; 8];
 
@@ -163,8 +165,9 @@ unsafe extern "C" fn n_main(fighter: &mut L2CFighterCommon) -> L2CValue {
         vitesse(fighter, 0.0, 0.0);
         MotionModule::change_motion(boma, Hash40::new("special_air_n_start"), 0.0, 1.0, false, 0.0, false, false);
     }
-    // REX (SpecialNShot) : vitesse d'animation 0 : il garde sa pose de charge
-    MotionModule::set_rate(boma, 0.0);
+    // REX (SpecialNShot, script lu avec les bonnes unités le 15/11) : l'animation part à la vitesse 1,15 jusqu'à
+    // l'image 12, puis reste figée sur l'image 13 (sa pose de charge) ; v2c figeait l'image 0 (mauvaise pose)
+    MotionModule::set_rate(boma, N_VITESSE_ANIM);
     fighter.sub_shift_status_main(L2CValue::Ptr(n_loop as *const () as _))
 }
 
@@ -187,6 +190,12 @@ unsafe extern "C" fn n_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         N_T[e] += 1;
         let t = N_T[e];
         let tenu = ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_SPECIAL);
+        // pose de charge de REX : figée sur l'image 13 dès qu'elle est atteinte (demandé : totalement immobile, même
+        // les pieds) ; l'image est reposée à chaque image pour que rien ne bouge
+        if MotionModule::frame(boma) >= N_POSE - 1.0 {
+            MotionModule::set_rate(boma, 0.0);
+            MotionModule::set_frame(boma, N_POSE, false);
+        }
         if t > N_APPUI && tenu {
             // B tenu : il décolle et monte tant qu'il charge
             if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
