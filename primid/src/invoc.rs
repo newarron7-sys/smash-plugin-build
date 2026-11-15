@@ -419,6 +419,7 @@ unsafe fn mite_fin(fighter: &mut L2CFighterCommon, e: usize) {
     AttackModule::clear(boma, 7, false);
     MITE_ACTIF[e] = false;
     mite_afficher(boma, None);
+    mite_lacher(boma, e);
 }
 
 /// v0.12 : Mite = objets pr_mite_a..d du modèle de Primid (mite_primid.py) collés à l'os pr_mite. Le jeu tourne le
@@ -439,31 +440,62 @@ unsafe fn mite_afficher(boma: *mut BattleObjectModuleAccessor, quoi: Option<(f32
     }
 }
 
-/// échelle du modèle (unités du jeu par unité du modèle), mesurée sur l'os pr_mite lui-même (image précédente)
-static mut MK: [f32; 8] = [0.0; 8];
-static mut ML: [[f32; 2]; 8] = [[0.0; 2]; 8];
+/// v0.13 : Mite est collé à l'os Throw de Primid (v0.12 : os ajouté pr_mite, sans piste d'animation : il ne bougeait
+/// pas, Mite restait aux pieds de Primid). Throw est animé partout et HDR le déplace par set_joint_translate (Lucario :
+/// position globale, 4e argument vrai). Throw sert aussi aux prises : pendant les prises de Primid, Mite est caché et
+/// l'os rendu au jeu.
+/// Mode 0 : position globale ; si l'os ne va pas où il faut (mesuré à l'image suivante), mode 1 : position locale.
+static mut MODE: [u8; 8] = [0; 8];
+static mut RATE: [u8; 8] = [0; 8];
+static mut CIBLE: [[f32; 2]; 8] = [[0.0; 2]; 8];
+static mut TENU: [bool; 8] = [false; 8];
 
-/// place l'os pr_mite (enfant de Trans) pour que Mite soit en (x, y) dans le jeu
-unsafe fn mite_placer(boma: *mut BattleObjectModuleAccessor, e: usize, x: f32, y: f32) {
-    let mut gt = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-    let mut gm = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-    ModelModule::joint_global_position(boma, Hash40::new("trans"), &mut gt, true);
-    ModelModule::joint_global_position(boma, Hash40::new("pr_mite"), &mut gm, true);
-    let [ly, lz] = ML[e];
-    let n = (ly * ly + lz * lz).sqrt();
-    if n > 4.0 {
-        let g = ((gm.x - gt.x).powi(2) + (gm.y - gt.y).powi(2)).sqrt();
-        let k = g / n;
-        if k > 0.3 && k < 4.0 {
-            MK[e] = if MK[e] > 0.0 { MK[e] * 0.8 + k * 0.2 } else { k };
+unsafe fn en_prise(boma: *mut BattleObjectModuleAccessor) -> bool {
+    let st = StatusModule::status_kind(boma);
+    st >= *FIGHTER_STATUS_KIND_CATCH && st <= *FIGHTER_STATUS_KIND_THROW
+}
+
+unsafe fn mite_lacher(boma: *mut BattleObjectModuleAccessor, e: usize) {
+    if TENU[e] {
+        ModelModule::clear_joint_srt(boma, Hash40::new("throw"));
+        TENU[e] = false;
+    }
+}
+
+/// place l'os Throw pour que Mite soit en (x, y) dans le jeu ; faux pendant les prises
+unsafe fn mite_placer(boma: *mut BattleObjectModuleAccessor, e: usize, x: f32, y: f32) -> bool {
+    if en_prise(boma) {
+        mite_lacher(boma, e);
+        RATE[e] = 0;
+        return false;
+    }
+    let mut g = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    ModelModule::joint_global_position(boma, Hash40::new("throw"), &mut g, true);
+    if TENU[e] && MODE[e] == 0 {
+        // l'os est-il allé à la cible de l'image précédente ?
+        let d = ((g.x - CIBLE[e][0]).powi(2) + (g.y - CIBLE[e][1]).powi(2)).sqrt();
+        if d > 6.0 {
+            RATE[e] = RATE[e].saturating_add(1);
+            if RATE[e] > 4 {
+                MODE[e] = 1;
+            }
+        } else {
+            RATE[e] = 0;
         }
     }
-    let k = if MK[e] > 0.0 { MK[e] } else { ModelModule::scale(boma).clamp(0.3, 3.0) };
-    let plr = PostureModule::lr(boma);
-    let (dx, dy) = (x - gt.x, y - gt.y);
-    let (ly, lz) = (dy / k, plr * dx / k);
-    ML[e] = [ly, lz];
-    ModelModule::set_joint_translate(boma, Hash40::new("pr_mite"), &Vector3f { x: 0.0, y: ly, z: lz }, false, false);
+    CIBLE[e] = [x, y];
+    TENU[e] = true;
+    if MODE[e] == 0 {
+        ModelModule::set_joint_translate(boma, Hash40::new("throw"), &Vector3f { x, y, z: 0.0 }, true, false);
+    } else {
+        // repère local (parent Rot, modèle tourné selon le côté de Primid : +Z = devant)
+        let mut r = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+        ModelModule::joint_global_position(boma, Hash40::new("rot"), &mut r, true);
+        let k = ModelModule::scale(boma).clamp(0.3, 3.0);
+        let plr = PostureModule::lr(boma);
+        ModelModule::set_joint_translate(boma, Hash40::new("throw"), &Vector3f { x: 0.0, y: (y - r.y) / k, z: plr * (x - r.x) / k }, false, false);
+    }
+    true
 }
 
 unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) {
@@ -556,8 +588,11 @@ unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) {
     let _ = f;
     // v0.12 : Mite dans le modèle de Primid : petits sauts pendant la course, os placé, bon exemplaire affiché
     let saut = if ph > 0.5 && ph < 1.5 && vy == 0.0 { ((t * 0.5).sin()).abs() * 1.2 } else { 0.0 };
-    mite_placer(boma, e, x, y + saut);
-    mite_afficher(boma, Some((PostureModule::lr(boma), lr)));
+    if mite_placer(boma, e, x, y + saut) {
+        mite_afficher(boma, Some((PostureModule::lr(boma), lr)));
+    } else {
+        mite_afficher(boma, None);
+    }
 }
 
 // ------------------------------------------------------------------ Botron (J.E.T. de Mario) et son pot (eau du J.E.T.)
