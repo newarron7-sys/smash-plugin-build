@@ -77,3 +77,6 @@ Procédure suivie : rex/PROCEDURE.md (dépôt final-zoom, branche combo-wip), co
     11 devant lui.
 - Tous les lancers : sys_crown_collision + sys_crown au sol + QUAKE (M, M, L).
 - Arrière aérien : explosion sys_bomb_a derrière lui à l'image 6 ; B neutre : sys_bomb_a / b et QUAKE selon la charge.
+- Effets des coups normaux (coups.rs, demandé avec le showcase) : traits de griffe blanc-bleu (sys_attack_arc*,
+  sys_attack_line) aux images et positions des effets de REX + traînée image par image sur la griffe / le pied ;
+  smashs : éclat de charge, tourbillon au sol du smash bas, griffes en tourbillon du smash haut.

@@ -112,12 +112,8 @@ pub fn install(a: &mut Agent) {
               "expression_jumpaerialfront", "expression_jumpaerialback"] {
         a.acmd(n, vide, Priority::Low);
     }
-    // coups normaux : plus les effets de Sonic (traînées bleues, boule) ; ceux de REX à part
-    for n in ["effect_attack11", "effect_attack12", "effect_attack13", "effect_attack100", "effect_attack100end",
-              "effect_attackdash", "effect_attacks3", "effect_attacks3hi", "effect_attacks3lw", "effect_attackhi3",
-              "effect_attacklw3", "effect_attacks4", "effect_attacks4hi", "effect_attacks4lw", "effect_attacks4charge",
-              "effect_attackhi4", "effect_attackhi4charge", "effect_attacklw4", "effect_attacklw4charge",
-              "effect_attackairf", "effect_attackairhi", "effect_attackairlw"] {
+    // coups normaux : plus les effets de Sonic (traînées bleues, boule) ; ceux de REX dans coups.rs
+    for n in ["effect_attack13", "effect_attack100", "effect_attack100end"] {
         a.acmd(n, vide, Priority::Low);
     }
     for n in ["effect_landingairn", "effect_landingairf", "effect_landingairb", "effect_landingairhi", "effect_landingairlw"] {

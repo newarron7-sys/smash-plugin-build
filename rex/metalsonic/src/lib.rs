@@ -94,6 +94,7 @@ pub struct Mv {
 include!("generated.rs");
 
 mod effets;
+mod coups;
 mod speciaux;
 mod prises;
 mod sons;
@@ -256,6 +257,7 @@ macro_rules! scripts {
             a.set_costume(SS_COSTUMES.to_vec());
             $( if find($s).is_some() { a.acmd($s, $f, Priority::Low); } )*
             effets::install(&mut a);
+            coups::install(&mut a);
             speciaux::install(&mut a);
             prises::install(&mut a);
             sons::install(&mut a);
