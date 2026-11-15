@@ -56,7 +56,7 @@ static mut POT_ID: [u32; 8] = [0; 8];
 static mut POT_LR: [f32; 8] = [1.0; 8];
 
 // état des objets (par perso)
-static mut M: [[f32; 6]; 8] = [[0.0; 6]; 8]; // x, y, vy, lr, phase (0 course, 1 plongeon), temps
+static mut M: [[f32; 8]; 8] = [[0.0; 8]; 8]; // x, y, vx, vy, lr, phase, temps, attente avant le prochain plongeon
 static mut B: [[f32; 6]; 8] = [[0.0; 6]; 8]; // x, y, lr, temps, lâché (0/1), temps depuis le lâcher
 static mut P: [[f32; 4]; 8] = [[0.0; 4]; 8]; // x, y, vy, explosé (temps)
 
@@ -319,7 +319,8 @@ unsafe fn mite_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
     }
     let lr = PostureModule::lr(boma);
     let (x, y) = pos(boma);
-    M[e] = [x + 10.0 * lr, y + 6.0, 0.0, lr, 0.0, 0.0];
+    // vidéo de REX : il tombe du portail (au-dessus de sa tête) puis court vers l'adversaire
+    M[e] = [x + 2.0 * lr, y + 24.0, 0.0, 0.0, lr, 0.0, 0.0, 0.0];
     MITE_ATTEND[e] = true;
     MITE_ID[e] = 0;
     ArticleModule::generate_article(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_DOKAN, false, -1);
@@ -370,7 +371,7 @@ unsafe extern "C" fn dokan_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
         tuer(weapon);
         return 0.into();
     };
-    liberer(w, M[e][3]);
+    liberer(w, M[e][4]);
     placer(w, M[e][0], M[e][1]);
     visible(w);
     MotionModule::change_motion(w, Hash40::new("entry"), 0.0, 0.0, false, 0.0, false, false);
@@ -384,11 +385,16 @@ unsafe extern "C" fn dokan_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
 }
 
 unsafe fn mite_coup(weapon: &mut L2CWeaponCommon, dmg: f32, taille: f32) {
-    ATTACK(weapon, 0, 0, Hash40::new("top"), dmg, 50, 70, 0, 45, taille, 0.0, 3.0, 0.0, None, None, None, 0.8, 1.0,
+    ATTACK(weapon, 0, 0, Hash40::new("top"), dmg, 50, 50, 0, 30, taille, 0.0, 3.0, 0.0, None, None, None, 0.8, 1.0,
            *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, true, true, false, false, false,
            *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
            Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_KICK, *ATTACK_REGION_OBJECT);
 }
+
+/// v0.6 (vidéo de REX du joueur) : Mite tombe du portail, court vers l'adversaire le plus proche (il se retourne), fonce
+/// sur lui (plongeon, petit coup d'environ 2 %), rebondit en arrière après le coup puis recommence, plusieurs fois,
+/// pendant une dizaine de secondes. Phases : 0 chute du portail, 1 course, 2 plongeon, 3 rebond après un coup.
+const MITE_VIE: f32 = 720.0;
 
 unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
@@ -400,60 +406,93 @@ unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
         tuer(weapon);
         return 0.into();
     }
-    let [mut x, mut y, mut vy, lr, phase, mut t] = M[e];
+    let [mut x, mut y, mut vx, mut vy, mut lr, mut ph, mut t, mut att] = M[e];
     t += 1.0;
-    // touché (adversaire ou bouclier) ou trop vieux : il disparaît dans un nuage
-    if t > 2.0 && (AttackModule::is_infliction(w, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(w, *COLLISION_KIND_MASK_SHIELD))
-        || t > 300.0
-    {
+    if att > 0.0 {
+        att -= 1.0;
+    }
+    if t > MITE_VIE || y < -300.0 {
         eff(w, "sys_erace_smoke", x, y + 3.0, 0.8);
         MITE_ID[e] = 0;
         tuer(weapon);
         return 0.into();
     }
-    let mut ph = phase;
     let f;
     if ph < 0.5 {
-        // course (REX EnmMiteRun) vers l'avant, collé au sol
-        x += 1.4 * lr;
+        // chute du portail
+        vy = (vy - 0.15).max(-3.0);
+        y += vy;
+        f = MITE_PLONGE;
+        if let Some(g) = sol(w, x, y, (-vy).max(1.0)) {
+            y = g;
+            vy = 0.0;
+            ph = 1.0;
+        }
+    } else if ph < 1.5 {
+        // course vers l'adversaire le plus proche
+        let cible = adversaire(e, x, y);
+        if let Some((dx, _)) = cible {
+            if dx.abs() > 3.0 {
+                lr = dx.signum();
+            }
+        }
+        x += 1.3 * lr;
         match sol(w, x, y, 14.0) {
             Some(g) => { y = g; vy = 0.0; }
             None => { vy = (vy - 0.15).max(-3.0); y += vy; }
         }
         f = t % MITE_COURSE;
-        mite_coup(weapon, 4.0, 3.5);
-        // adversaire tout près devant : il fonce (JumpTackle)
-        if let Some((dx, dy)) = adversaire(e, x, y) {
-            if dx * lr > 0.0 && dx * lr < 18.0 && dy.abs() < 14.0 && vy == 0.0 {
+        if let Some((dx, dy)) = cible {
+            if att <= 0.0 && vy == 0.0 && dx * lr > 0.0 && dx.abs() < 20.0 && dy.abs() < 14.0 {
+                ph = 2.0;
+                vx = 2.2 * lr;
+                vy = 1.3;
+                AttackModule::clear_all(w);
+            }
+        }
+    } else if ph < 2.5 {
+        // plongeon (JumpTackle) : le coup n'existe que pendant le plongeon
+        x += vx;
+        vy = (vy - 0.12).max(-3.0);
+        y += vy;
+        f = if vy > 0.4 { MITE_ELAN } else { MITE_PLONGE };
+        mite_coup(weapon, 2.0, 3.5);
+        let touche = AttackModule::is_infliction(w, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(w, *COLLISION_KIND_MASK_SHIELD);
+        if touche {
+            // il rebondit en arrière (vidéo : il retombe près de l'adversaire et repart)
+            AttackModule::clear_all(w);
+            ph = 3.0;
+            vx = -0.8 * lr;
+            vy = 1.6;
+            att = 45.0;
+        } else if vy < 0.0 {
+            if let Some(g) = sol(w, x, y, (-vy).max(1.0)) {
+                AttackModule::clear_all(w);
+                y = g;
+                vy = 0.0;
                 ph = 1.0;
-                vy = 1.9;
+                att = 20.0;
             }
         }
     } else {
-        // plongeon : élan puis vol tendu, il retombe au sol et reprend sa course
-        x += 1.9 * lr;
+        // rebond après un coup
+        x += vx;
         vy = (vy - 0.14).max(-3.0);
         y += vy;
-        f = if vy > 0.6 { MITE_ELAN } else { MITE_PLONGE };
-        mite_coup(weapon, 6.0, 4.5);
+        f = MITE_PLONGE;
         if vy < 0.0 {
-            if let Some(g) = sol(w, x, y, 2.0) {
+            if let Some(g) = sol(w, x, y, (-vy).max(1.0)) {
                 y = g;
                 vy = 0.0;
-                ph = 0.0;
+                ph = 1.0;
             }
         }
     }
-    M[e] = [x, y, vy, lr, ph, t];
+    M[e] = [x, y, vx, vy, lr, ph, t, att];
     placer(w, x, y);
     orienter(w, lr);
     visible(w);
     MotionModule::set_frame(w, f, true);
-    // tombé du terrain
-    if y < -300.0 {
-        MITE_ID[e] = 0;
-        tuer(weapon);
-    }
     0.into()
 }
 
