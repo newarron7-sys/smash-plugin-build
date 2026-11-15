@@ -407,7 +407,8 @@ unsafe fn mite_coup(fighter: &mut L2CFighterCommon, x: f32, y: f32, dmg: f32, ta
     let boma = fighter.module_accessor;
     let (px, py) = pos(boma);
     let plr = PostureModule::lr(boma);
-    ATTACK(fighter, 7, 0, Hash40::new("top"), dmg, 50, 50, 0, 30, taille, 0.0, y - py + 3.0, (x - px) * plr, None, None, None,
+    // v0.15 (vidéo de REX : environ 1 % par coup, l'adversaire est renversé) : poussée de base plus forte
+    ATTACK(fighter, 7, 0, Hash40::new("top"), dmg, 50, 30, 0, 60, taille, 0.0, y - py + 3.0, (x - px) * plr, None, None, None,
            0.8, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, true, true, false, false, false,
            *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
            Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_KICK, *ATTACK_REGION_OBJECT);
@@ -558,7 +559,17 @@ unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) {
         vy = (vy - 0.07).max(-3.0);
         y += vy;
         f = if vy > 0.4 { MITE_ELAN } else { MITE_PLONGE };
-        mite_coup(fighter, x, y, 2.0, 3.5);
+        mite_coup(fighter, x, y, 0.8, 3.5);
+        // v0.15 : traînée rouge du plongeon (vidéo de REX), posée sur l'os Throw (= Mite) ; +Z de l'os = devant Primid
+        if (t as i32) % 3 == 0 {
+            let plr = PostureModule::lr(boma);
+            let h = EffectModule::req_on_joint(boma, Hash40::new("sys_attack_speedline"), Hash40::new("throw"),
+                &Vector3f { x: 0.0, y: 4.0, z: 0.0 }, &Vector3f { x: 0.0, y: if lr * plr > 0.0 { 0.0 } else { 180.0 }, z: 0.0 },
+                0.7, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, false, 0, 0, 0) as u32;
+            if h != 0 {
+                EffectModule::set_rgb(boma, h, 1.0, 0.15, 0.15);
+            }
+        }
         let touche = AttackModule::is_infliction(boma, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(boma, *COLLISION_KIND_MASK_SHIELD);
         if touche {
             // il rebondit en arrière (vidéo : il retombe près de l'adversaire et repart)
