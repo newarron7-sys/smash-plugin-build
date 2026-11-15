@@ -425,14 +425,11 @@ const MITE_VIE: f32 = 720.0;
 
 unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
-    let Some((_, e)) = owner(w) else {
+    // v0.10 : retrouvé par son n° d'objet (v0.9 : par son propriétaire ; la cape n'a pas ce lien -> retiré aussitôt)
+    let Some(e) = est_mite(w, id_of(weapon)) else {
         tuer(weapon);
         return 0.into();
     };
-    if MITE_ID[e] != id_of(weapon) {
-        tuer(weapon);
-        return 0.into();
-    }
     let [mut x, mut y, mut vx, mut vy, mut lr, mut ph, mut t, mut att] = M[e];
     t += 1.0;
     if att > 0.0 {
@@ -536,7 +533,7 @@ unsafe fn botron_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
     }
     let lr = PostureModule::lr(boma);
     let (x, y) = pos(boma);
-    B[e] = [x + 6.0 * lr, y + 24.0, lr, 0.0, 0.0, 0.0];
+    B[e] = [x + 6.0 * lr, y + 20.0, lr, 0.0, 0.0, 0.0];
     BOT_ATTEND[e] = true;
     BOT_ID[e] = 0;
     ArticleModule::generate_article(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP, false, -1);
@@ -615,7 +612,8 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
         // vol (REX : StartFloat puis FloatFly) vers l'avant, à hauteur constante au-dessus du sol
         x += 1.1 * lr;
         if let Some(g) = sol(w, x, y, 80.0) {
-            let cible = g + 32.0;
+            // v0.10 : juste au-dessus des têtes (v0.9 : tout en haut de l'écran)
+            let cible = g + 22.0;
             y += (cible - y).clamp(-0.6, 0.6);
         }
         if MotionModule::is_end(w) || (mk != smash::hash40("start") && mk != smash::hash40("wait")) {
@@ -648,7 +646,7 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
             if touche || sol(w, x, py + 4.0, vy.max(1.0)).is_some() || chute > 150.0 {
                 AttackModule::clear_all(w);
                 pot_coup(weapon, 13.0, 13.0, 80, 55);
-                eff(w, "sys_bomb_a", x, py + 4.0, 1.2);
+                eff(w, "sys_bomb_a", x, py + 4.0, 0.9);
                 eff(w, "sys_fireflower_shot", x, py + 6.0, 1.5);
                 PLAY_SE(weapon, Hash40::new("se_common_bomb_l"));
                 // le pot disparaît dans l'explosion
