@@ -657,7 +657,13 @@ for mname, texs in used_mats.items():
         col = save_png(PFX + '_' + texs[0].lower().replace(' ', '_') + '_col', up2(Image.fromarray(a.clip(0, 255).astype(np.uint8), 'RGBA')))
     else:
         src_ = TEX[texs[0]]
-        if os.environ.get('BLEED') == '1' and kind != 'alpha':
+        if mname in os.environ.get('FILL_MATS', '').split(',') and os.environ.get('FILL_RGB'):
+            # Knuckle Joe (16/11 : visage noir en jeu, la transparence n'était pas prise) : yeux posés sur la couleur de
+            # sa peau et dessinés opaques
+            fond = Image.new('RGBA', src_.size, tuple(int(x) for x in os.environ['FILL_RGB'].split(',')) + (255,))
+            fond.alpha_composite(src_.convert('RGBA'))
+            src_ = fond
+        elif os.environ.get('BLEED') == '1' and kind != 'alpha':
             src_ = bleed(src_)
         col = save_png(PFX + '_' + texs[0].lower().replace(' ', '_') + '_col', up2(src_))
     c = arr(Image.open(os.path.join(PNG, col + '.png')))
