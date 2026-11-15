@@ -359,7 +359,7 @@ unsafe extern "C" fn e_ruee(agent: &mut L2CAgentBase) {
         if is_excute(agent) {
             EFFECT_FOLLOW(agent, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 7.0, -3.0, 0, 0, 0, 1.2, true);
             LAST_EFFECT_SET_COLOR(agent, OR.0, OR.1, OR.2);
-            fx(boma, "sys_hit_elec", "bust", (0.0, 0.0, 0.0), 0.3, Some(ROSE));
+            // demandé (15/11) : plus les éclairs violets pendant la ruée
         }
         f += 3.0;
     }
