@@ -1,8 +1,10 @@
 name: Knuckle Joe (REX) sur Ness - modele de REX, coups, animations (chiffre)
 on:
   push:
-    branches: [ knucklejoe ]
-    paths: [ '.github/workflows/kjoe.yml', 'rex/kjoe/**', 'rex/tools/**' ]
+    # compilé sur la branche metalsonic : le cache des outils Switch (toolchain skyline) y est déjà ; sur une
+    # nouvelle branche il n'est pas partagé et l'installation restait bloquée (40 min, 15/11)
+    branches: [ knucklejoe, metalsonic ]
+    paths: [ '.github/workflows/kjoe.yml', 'rex/kjoe/**' ]
   workflow_dispatch:
 permissions:
   contents: write
