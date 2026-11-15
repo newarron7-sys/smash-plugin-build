@@ -42,3 +42,10 @@ comme pour Master Chief, avant d'écrire les statuts.
   9 % feu, puis 5 % feu et 3 % ; chute spéciale ; une fois par saut.
 - bas B : bouclier des images 4 à 34 (pas de recul, 0 dégât), riposte 12 % élec 45° si touché (StopModule::is_damage) ;
   bouclier = sys_shield teinté cristal ; élan horizontal gardé (0,92 par image).
+
+## Corrections
+- v2b (14/11) : animations de Sonic en boucle (special_n_spin, special_s_hold, special_lw_hold) : fin à la dernière
+  image (fini()), la décharge du B neutre se rejouait sans fin.
+- v2c (15/11, vidéo du showcase) : B neutre tenu = il décolle et monte (0,5 par image) tant qu'il charge, pose de
+  charge figée (REX : vitesse d'animation 0 dans SpecialNShot), clignote en rouge (FLASH rouge une fois sur deux,
+  toutes les 3 images) ; décharge en l'air puis chute normale.
