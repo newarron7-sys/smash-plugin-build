@@ -58,6 +58,55 @@ jobs:
           python3 rex/tools/apercu_exo.py /tmp/out/model /tmp/out/model.json /tmp/out/apercu_exo.png >> /tmp/out/apercu.txt 2>&1 || true
           mkdir -p /tmp/apskin && cp /tmp/out/direct/model.numshb /tmp/out/direct/model.nusktb /tmp/apskin/ && echo '{"exo": {"paires": {}}}' > /tmp/apskin/info.json
           python3 rex/tools/apercu_anims_exo.py /tmp/apskin /tmp/apskin/info.json /tmp/out/motion/c00 /tmp/out/apercu_base.png a00wait1.nuanmb a01walkmiddle.nuanmb a02run.nuanmb a03jumpf.nuanmb a05squatwait.nuanmb c00attack11.nuanmb c00attackdash.nuanmb c01attacks3s.nuanmb c02attackhi3.nuanmb c02attacklw3.nuanmb c03attacks4s.nuanmb c04attackhi4.nuanmb c04attacklw4.nuanmb c05attackairn.nuanmb c05attackairf.nuanmb c05attackairb.nuanmb c05attackairhi.nuanmb c05attackairlw.nuanmb >> /tmp/out/apercu.txt 2>&1 || true
+      - name: Cache ultimate_tex_cli
+        id: tex
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/ultimate_tex_cli
+          key: ultimate-tex-cli-v1
+      - name: ultimate_tex_cli
+        if: steps.tex.outputs.cache-hit != 'true'
+        env:
+          RUSTFLAGS: -C link-arg=-lstdc++
+        run: cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli
+      - name: Cache outils (cargo-skyline, toolchain Switch)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-skyline
+            ~/.cargo/skyline
+            ~/.rustup/toolchains/*skyline*
+            ~/.cargo/registry
+            ~/.cargo/git
+            rex/kjoe/target
+          key: kjoe-v1-${{ hashFiles('rex/kjoe/Cargo.toml') }}
+          restore-keys: |
+            kjoe-
+            metal-
+      - name: Compiler le plugin
+        working-directory: rex/kjoe
+        timeout-minutes: 40
+        run: |
+          cp /tmp/out/generated.rs src/generated.rs
+          command -v cargo-skyline >/dev/null || cargo install cargo-skyline
+          if ! (rustup toolchain list | grep -qi skyline && [ -d ~/.cargo/skyline/toolchain ]); then for i in 1 2 3 4 5; do cargo skyline update-std && break; sleep 20; done; fi
+          set +o pipefail; yes | cargo skyline build --release > /tmp/out/compilation.txt 2>&1; set -o pipefail
+          grep -E "^error" /tmp/out/compilation.txt | head -20 || true
+          rm -f src/generated.rs
+          test -f target/aarch64-skyline-switch/release/libknuckle_joe.nro
+      - name: Dossier du mod (Ness c00 : reslot en c100 ensuite) et zip
+        run: |
+          M="/tmp/zip/(Moveset) Knuckle Joe"; B="$M/fighter/ness/model/body/c00"; mkdir -p "$B"
+          for f in /tmp/out/png/*.png; do
+            n=$(basename "$f" .png)
+            case "$n" in *_col) fmt=BC7RgbaUnormSrgb;; *) fmt=BC7RgbaUnorm;; esac
+            ultimate_tex_cli "$f" "$B/$n.nutexb" --format $fmt >/dev/null 2>&1 || echo "echec $n"
+          done
+          cp /tmp/out/model/* "$B/" && cp /tmp/out/direct/model.numshb /tmp/out/direct/model.nusktb /tmp/out/direct/model.nuhlpb "$B/"
+          python3 rex/tools/weld_mesh.py "$B/model.numshb" || true
+          MO="$M/fighter/ness/motion/body/c00"; mkdir -p "$MO"; cp /tmp/out/motion/c00/*.nuanmb "$MO/"
+          cp rex/kjoe/target/aarch64-skyline-switch/release/libknuckle_joe.nro "$M/plugin.nro"
+          cd /tmp/zip && zip -qr /tmp/out/knuckle_joe.zip . && echo "zip : $(du -h /tmp/out/knuckle_joe.zip | cut -f1)"
       - name: Chiffrer (cle du depot + cle de la session) et publier
         if: always()
         env:
