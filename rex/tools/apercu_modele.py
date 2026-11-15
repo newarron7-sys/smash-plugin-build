@@ -42,6 +42,8 @@ for o in mesh.objects:
             x = int((u % 1.0) * (T.shape[1] - 1))
             y = int((v % 1.0) * (T.shape[0] - 1))
             col = T[y, x, :3].astype(float)
+            if T[y, x, 3] < 128:
+                continue                    # partie transparente (yeux de Knuckle Joe) : pas dessinée
         n = np.cross(tri[1] - tri[0], tri[2] - tri[0])
         nl = np.linalg.norm(n)
         tris.append((tri, col, n / nl if nl > 1e-9 else np.array([0, 0, 1.0])))
