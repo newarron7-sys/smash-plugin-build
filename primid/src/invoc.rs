@@ -130,6 +130,12 @@ unsafe fn liberer(w: *mut BattleObjectModuleAccessor, lr: f32) {
     PostureModule::update_rot_y_lr(w);
 }
 
+/// v0.4 : Mite invisible en v0.3 (son coup touchait) : modèle et visibilité forcés à chaque image
+unsafe fn visible(w: *mut BattleObjectModuleAccessor) {
+    ModelModule::set_visibility(w, true);
+    VisibilityModule::set_whole(w, true);
+}
+
 unsafe fn placer(w: *mut BattleObjectModuleAccessor, x: f32, y: f32) {
     PostureModule::set_pos(w, &Vector3f { x, y, z: 0.0 });
 }
@@ -158,21 +164,23 @@ unsafe fn motion(fighter: &mut L2CFighterCommon, sol_: &str, air: &str, rate: f3
 }
 
 unsafe fn portail(fighter: &mut L2CFighterCommon, on: bool) {
-    let boma = fighter.module_accessor;
-    let e = e_of(boma);
-    if on {
-        if PORTAIL[e] == 0 || !EffectModule::is_exist_effect(boma, PORTAIL[e]) {
-            // portail de Subspace au-dessus de sa tête (REX : article 0, noir et violet)
-            let h = EffectModule::req_follow(boma, Hash40::new("sys_final_aura"), Hash40::new("head"),
-                &Vector3f { x: 0.0, y: 9.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 0.55, true, 0, 0, 0, 0, 0, false, false) as u32;
-            if h != 0 {
-                EffectModule::set_rgb(boma, h, 0.35, 0.0, 0.6);
-            }
-            PORTAIL[e] = h;
-        }
-    } else if PORTAIL[e] != 0 {
-        EffectModule::kill(boma, PORTAIL[e], false, true);
-        PORTAIL[e] = 0;
+    PORTAIL[e_of(fighter.module_accessor)] = on as u32;
+}
+
+/// v0.4 : portail et icônes de REX (objets pr_* du modèle de Primid), affichés seulement pendant le bas B :
+/// icône agrandie pour la direction pointée, cachée pendant sa recharge
+unsafe fn portail_afficher(boma: *mut BattleObjectModuleAccessor, e: usize) {
+    let on = PORTAIL[e] != 0 && StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_SPECIAL_LW;
+    let lr = PostureModule::lr(boma);
+    let sx = ControlModule::get_stick_x(boma) * lr;
+    let sy = ControlModule::get_stick_y(boma);
+    let vis = |n: &str, v: bool| ModelModule::set_mesh_visibility(boma, Hash40::new(n), v);
+    vis("pr_portail", on);
+    // (nom, pointée, prête) : haut Botron, avant Mite, arrière Boobas, bas Cymul (ces deux-là : à venir)
+    for (n, pointe, pret) in [("haut", sy > 0.5, RECH[e][1] <= 0), ("avant", sx > 0.5, RECH[e][0] <= 0),
+                              ("arriere", sx < -0.5, true), ("bas", sy < -0.5, true)] {
+        vis(&format!("pr_ic_{}", n), on && pret && !pointe);
+        vis(&format!("pr_ic_{}_g", n), on && pret && pointe);
     }
 }
 
@@ -289,6 +297,7 @@ unsafe extern "C" fn lw_end(fighter: &mut L2CFighterCommon) -> L2CValue {
 /// chaque image (depuis lib.rs) : recharges
 pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     let e = e_of(fighter.module_accessor);
+    portail_afficher(fighter.module_accessor, e);
     for k in 0..2 {
         if RECH[e][k] > 0 {
             RECH[e][k] -= 1;
@@ -331,6 +340,14 @@ unsafe fn article_boma(boma: *mut BattleObjectModuleAccessor, kind: i32) -> Opti
 
 /// ce tuyau est-il le Mite du bas B ? (réclamé à sa première image)
 unsafe fn est_mite(w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize> {
+    if let Some(e) = (0..8).find(|&k| MITE_ATTEND[k]) {
+        MITE_ATTEND[e] = false;
+        MITE_ID[e] = id;
+        return Some(e);
+    }
+    if let Some(e) = (0..8).find(|&k| MITE_ID[k] == id && id != 0) {
+        return Some(e);
+    }
     let (_, e) = owner(w)?;
     if MITE_ATTEND[e] {
         MITE_ATTEND[e] = false;
@@ -342,19 +359,21 @@ unsafe fn est_mite(w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize>
 unsafe extern "C" fn dokan_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
     let Some(e) = est_mite(w, id_of(weapon)) else {
-        return smashline::original_status(Main, weapon, *WEAPON_MARIO_DOKAN_STATUS_KIND_DUMMY)(weapon);
+        // tuyau de l'entrée en scène (pas de code d'origine appelé : risque d'arrêt du plugin s'il n'existe pas) :
+        // retiré ; Primid apparaît sans tuyau
+        tuer(weapon);
+        return 0.into();
     };
     liberer(w, M[e][3]);
     placer(w, M[e][0], M[e][1]);
+    visible(w);
     MotionModule::change_motion(w, Hash40::new("entry"), 0.0, 0.0, false, 0.0, false, false);
     weapon.fastshift(L2CValue::Ptr(mite_loop as *const () as _))
 }
 
 unsafe extern "C" fn dokan_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
-    if est_mite(w, id_of(weapon)).is_none() {
-        return smashline::original_status(Exec, weapon, *WEAPON_MARIO_DOKAN_STATUS_KIND_DUMMY)(weapon);
-    }
+    let _ = est_mite(w, id_of(weapon));
     0.into()
 }
 
@@ -421,6 +440,7 @@ unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     }
     M[e] = [x, y, vy, lr, ph, t];
     placer(w, x, y);
+    visible(w);
     MotionModule::set_frame(w, f, true);
     // tombé du terrain
     if y < -300.0 {
@@ -451,8 +471,13 @@ unsafe fn botron_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
     eff(boma, "sys_flash", B[e][0], B[e][1], 0.8);
 }
 
-unsafe fn est_botron(w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize> {
-    let (_, e) = owner(w)?;
+unsafe fn est_botron(_w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize> {
+    if let Some(e) = (0..8).find(|&k| BOT_ATTEND[k]) {
+        BOT_ATTEND[e] = false;
+        BOT_ID[e] = id;
+        return Some(e);
+    }
+    let e = (0..8).find(|&k| BOT_ID[k] == id && id != 0)?;
     if BOT_ATTEND[e] {
         BOT_ATTEND[e] = false;
         BOT_ID[e] = id;
@@ -463,10 +488,13 @@ unsafe fn est_botron(w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usiz
 unsafe extern "C" fn pump_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
     let Some(e) = est_botron(w, id_of(weapon)) else {
-        return smashline::original_status(Main, weapon, *WEAPON_MARIO_PUMP_STATUS_KIND_WAIT)(weapon);
+        // J.E.T. qui n'est pas Botron (Primid n'en a pas d'autre) : retiré
+        tuer(weapon);
+        return 0.into();
     };
     liberer(w, B[e][2]);
     placer(w, B[e][0], B[e][1]);
+    visible(w);
     MotionModule::change_motion(w, Hash40::new("start"), 0.0, 1.0, false, 0.0, false, false);
     EffectModule::kill_all(w, 0, true, false);
     pot_porte(w, true);
@@ -475,9 +503,7 @@ unsafe extern "C" fn pump_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
 
 unsafe extern "C" fn pump_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
-    if est_botron(w, id_of(weapon)).is_none() {
-        return smashline::original_status(Exec, weapon, *WEAPON_MARIO_PUMP_STATUS_KIND_WAIT)(weapon);
-    }
+    let _ = est_botron(w, id_of(weapon));
     0.into()
 }
 
@@ -534,6 +560,7 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     }
     B[e] = [x, y, lr, t, lache, tl];
     placer(w, x, y);
+    visible(w);
     0.into()
 }
 
@@ -560,8 +587,13 @@ unsafe fn pot_creer(o: *mut BattleObjectModuleAccessor, e: usize, x: f32, y: f32
     }
 }
 
-unsafe fn est_pot(w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize> {
-    let (_, e) = owner(w)?;
+unsafe fn est_pot(_w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize> {
+    if let Some(e) = (0..8).find(|&k| POT_ATTEND[k]) {
+        POT_ATTEND[e] = false;
+        POT_ID[e] = id;
+        return Some(e);
+    }
+    let e = (0..8).find(|&k| POT_ID[k] == id && id != 0)?;
     if POT_ATTEND[e] {
         POT_ATTEND[e] = false;
         POT_ID[e] = id;
@@ -572,19 +604,19 @@ unsafe fn est_pot(w: *mut BattleObjectModuleAccessor, id: u32) -> Option<usize> 
 unsafe extern "C" fn cappy_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
     let Some(e) = est_pot(w, id_of(weapon)) else {
-        return smashline::original_status(Main, weapon, *WEAPON_MARIO_CAPPY_STATUS_KIND_DUMMY)(weapon);
+        tuer(weapon);
+        return 0.into();
     };
     liberer(w, POT_LR[e]);
     placer(w, P[e][0], P[e][1]);
+    visible(w);
     EffectModule::kill_all(w, 0, true, false);
     weapon.fastshift(L2CValue::Ptr(pot_loop as *const () as _))
 }
 
 unsafe extern "C" fn cappy_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
-    if est_pot(w, id_of(weapon)).is_none() {
-        return smashline::original_status(Exec, weapon, *WEAPON_MARIO_CAPPY_STATUS_KIND_DUMMY)(weapon);
-    }
+    let _ = est_pot(w, id_of(weapon));
     0.into()
 }
 
