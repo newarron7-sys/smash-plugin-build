@@ -380,6 +380,16 @@ const HI_VITESSE: f32 = 3.2;
 static mut HI_T: [i32; 8] = [0; 8];
 static mut HI_V: [(f32, f32); 8] = [(0.0, 0.0); 8];
 static mut HI_FAIT: [bool; 8] = [false; 8];
+/// traînée rose de l'envol (sys_rocketbelt_jet : sa fumée, teintée rose, forme la traînée de la vidéo)
+static mut HI_FX: [u32; 8] = [0; 8];
+const TRAINEE_ROSE: (f32, f32, f32) = (1.0, 0.55, 0.7);
+
+unsafe fn hi_fx_off(boma: *mut BattleObjectModuleAccessor, e: usize) {
+    if HI_FX[e] != 0 && EffectModule::is_exist_effect(boma, HI_FX[e]) {
+        EffectModule::kill(boma, HI_FX[e], false, true);
+    }
+    HI_FX[e] = 0;
+}
 
 unsafe extern "C" fn hi_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
@@ -389,6 +399,7 @@ unsafe extern "C" fn hi_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     HI_FAIT[e] = true;
     HI_T[e] = 0;
     HI_V[e] = (0.0, 0.0);
+    HI_FX[e] = 0;
     corps_normal(boma);
     en_l_air(fighter);
     vitesse(fighter, 0.0, 0.0);
@@ -426,13 +437,22 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         sy = sy.max(-0.2);
         let n = (sx * sx + sy * sy).sqrt().max(0.01);
         HI_V[e] = (HI_VITESSE * sx / n, HI_VITESSE * sy / n);
-        // explosion de feu au départ (vidéo), là où il était
-        fx(boma, "sys_bomb_a", "top", (0.0, 2.0, 0.0), 0.8, None);
+        // demandé (vidéo de référence du 15/11) : éclat blanc + explosion de feu et fumée là où il était (posés au sol,
+        // ils ne le suivent pas), puis une traînée de fumée rose derrière lui pendant tout l'envol
+        let mut p = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+        ModelModule::joint_global_position(boma, Hash40::new("top"), &mut p, true);
+        let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+        let sol = Vector3f { x: p.x, y: p.y + 2.0, z: p.z };
+        EffectModule::req(boma, Hash40::new("sys_smash_flash"), &sol, &z, 1.2, 0, 0, false, 0);
+        EffectModule::req(boma, Hash40::new("sys_bomb_b"), &sol, &z, 0.9, 0, 0, false, 0);
+        EffectModule::req(boma, Hash40::new("sys_bomb_a"), &sol, &z, 0.6, 0, 0, false, 0);
+        let n = fx(boma, "sys_rocketbelt_jet", "hip", (0.0, 0.0, 0.0), 0.7, Some(TRAINEE_ROSE));
+        HI_FX[e] = n;
     }
     let (vx, vy) = HI_V[e];
     vitesse(fighter, vx, vy);
-    if t % 3 == 0 {
-        fx(boma, "sys_atk_smoke", "top", (0.0, 6.0, -2.0), 0.9, None);
+    if HI_FX[e] == 0 || !EffectModule::is_exist_effect(boma, HI_FX[e]) {
+        HI_FX[e] = fx(boma, "sys_rocketbelt_jet", "hip", (0.0, 0.0, 0.0), 0.7, Some(TRAINEE_ROSE));
     }
     if fighter.sub_transition_group_check_air_cliff().get_bool() {
         return 1.into();
@@ -452,6 +472,7 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
 unsafe extern "C" fn hi_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
     HI_T[slot(boma)] = 0;
+    hi_fx_off(boma, slot(boma));
     KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
     0.into()
 }
@@ -494,12 +515,7 @@ unsafe extern "C" fn g_envol(agent: &mut L2CAgentBase) {
     }
 }
 
-unsafe extern "C" fn e_envol(agent: &mut L2CAgentBase) {
-    frame(agent.lua_state_agent, HI_ENVOL as f32);
-    if is_excute(agent) {
-        EFFECT(agent, Hash40::new("sys_bomb_b"), Hash40::new("top"), 0, 1.0, 0, 0, 0, 0, 0.7, 0, 0, 0, 0, 0, 0, true);
-    }
-}
+unsafe extern "C" fn e_envol(_agent: &mut L2CAgentBase) {}
 
 unsafe extern "C" fn s_envol(agent: &mut L2CAgentBase) {
     frame(agent.lua_state_agent, HI_ENVOL as f32);
