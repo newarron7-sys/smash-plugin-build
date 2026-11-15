@@ -49,3 +49,7 @@ comme pour Master Chief, avant d'écrire les statuts.
 - v2c (15/11, vidéo du showcase) : B neutre tenu = il décolle et monte (0,5 par image) tant qu'il charge, pose de
   charge figée (REX : vitesse d'animation 0 dans SpecialNShot), clignote en rouge (FLASH rouge une fois sur deux,
   toutes les 3 images) ; décharge en l'air puis chute normale.
+- v2d (15/11) : Jet Boost : éclat (sys_smash_flash) + explosion (sys_bomb_b + sys_bomb_a) posés au sol au départ,
+  traînée de fumée rose (sys_rocketbelt_jet teinté, sur hip) pendant l'envol, d'après une vidéo de référence du
+  joueur (effets d'un autre perso : indisponibles pour Sonic, refaits avec les effets communs). Corps tourné dans le
+  sens du vol (os rot, comme le Flight de Super Sonic) : l'animation SpecialHi de REX est couchée vers l'avant.
