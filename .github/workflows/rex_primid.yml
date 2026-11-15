@@ -37,13 +37,13 @@ jobs:
           cd /tmp/w && mkdir -p /tmp/x /tmp/pub
           7z l -ba -slt sd.raw | awk '/^Path = /{p=substr($0,8)} /^Size = /{print $3"\t"p}' > /tmp/x/liste_sd.txt
           echo "=== dossiers de persos :"; sed -n 's#^[0-9]*\trex_/pf/[Ff]ighter/\([^/]*\)$#\1#p' /tmp/x/liste_sd.txt | sort -u | tr '\n' ' '; echo
-          echo "=== fichiers contenant prim :"; grep -i prim /tmp/x/liste_sd.txt | cut -f2 | head -60
+          echo "=== fichiers contenant prim :"; grep -i prim /tmp/x/liste_sd.txt | cut -f2 | tr "\n" " "; echo
           7z x -y sd.raw "rex_/pf/Fighter/*rim*/*" "rex_/pf/Fighter/*RIM*/*" "rex_/pf/module/ft_*rim*.rel" "rex_/pf/info/portrite/*" "rex_/pf/BrawlEx/*" "rex_/pf/*/*/*rim*" "rex_/pf/*/*rim*" -o/tmp/x >/dev/null || true
           rm -f sd.raw
           echo "fichiers extraits : $(find /tmp/x -type f | wc -l), $(du -sh /tmp/x | cut -f1)"
           openssl rand -out /tmp/k.bin 32
           tar cz -C /tmp/x . | openssl enc -aes-256-cbc -pbkdf2 -pass file:/tmp/k.bin | split -b 90m - /tmp/pub/rex.tgz.enc.
-          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc
+          openssl pkeyutl -encrypt -pubin -inkey $GITHUB_WORKSPACE/cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc
           rm -f /tmp/k.bin; ls -la /tmp/pub
       - name: Publier (branche sortie_primid, chiffre)
         run: |
