@@ -489,6 +489,11 @@ unsafe extern "C" fn mite_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
         }
     }
     M[e] = [x, y, vx, vy, lr, ph, t, att];
+    // v0.7 (diagnostic) : petit éclat bleu à sa place toutes les 8 images : montre s'il vit et où il est, même si son
+    // modèle ne s'affiche pas
+    if (t as i32) % 8 == 0 {
+        eff(w, "sys_smash_flash_s", x, y + 4.0, 0.6);
+    }
     placer(w, x, y);
     orienter(w, lr);
     visible(w);
@@ -605,6 +610,9 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
         }
     }
     B[e] = [x, y, lr, t, lache, tl];
+    if (t as i32) % 8 == 0 {
+        eff(w, "sys_smash_flash_s", x, y - 4.0, 0.8);
+    }
     placer(w, x, y);
     orienter(w, lr);
     visible(w);
