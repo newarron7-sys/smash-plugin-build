@@ -11,10 +11,13 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Outils
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
-          pip install ssbh_data_py numpy >/dev/null
+          pip install ssbh_data_py numpy >/dev/null && python3 -c 'import ssbh_data_py; print("ssbh_data_py ok")'
       - name: Modele de reference de Mario (skins GameBanana, squelette le plus courant)
         env:
           MAJORITE: '6'
