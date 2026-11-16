@@ -342,7 +342,10 @@ unsafe fn armes(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let mk = MotionModule::motion_kind(boma);
     let epee = COUPS_EPEE.iter().any(|n| mk == smash::hash40(n));
-    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_epee"), epee);
+    // v0.23 : tourné à gauche, le jeu échange les animations des deux bras : épée dans la main droite (copie en miroir)
+    let gauche = PostureModule::lr(boma) > 0.0;
+    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_epee"), epee && gauche);
+    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_epee_r"), epee && !gauche);
     // le boomerang : pour le côté B de REX (à venir)
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_boomerang"), false);
     // smash avant de REX : il crache du feu (Firebreath) pendant que le coup est actif
@@ -449,22 +452,13 @@ unsafe fn en_prise(boma: *mut BattleObjectModuleAccessor) -> bool {
      *FIGHTER_STATUS_KIND_CATCH_ATTACK, *FIGHTER_STATUS_KIND_CATCH_JUMP, *FIGHTER_STATUS_KIND_THROW].contains(&st)
 }
 
-/// v0.22 (le joueur : au demi-tour, comportement toujours bizarre) : pendant que le modèle de Primid tourne, l'os Throw
-/// (enfant de Rot) n'arrive pas où il faut (position calculée avec la rotation de l'image d'avant) : l'invocation est
-/// cachée pendant le demi-tour, et dès que l'os n'est pas à sa place (contrôlé à l'image suivante)
-static mut CIBLE: [[f32; 2]; 8] = [[0.0; 2]; 8];
-static mut DEPLACE: [bool; 8] = [false; 8];
-
-unsafe fn en_demi_tour(boma: *mut BattleObjectModuleAccessor, e: usize) -> bool {
+/// v0.23 (le joueur : en v0.22 les invocations étaient de nouveau invisibles, « comme au début ») : le contrôle de
+/// position de l'os (v0.22) et le côté mesuré aux orteils les cachaient tout le temps. Cachées seulement pendant les
+/// statuts de demi-tour (quelques images).
+unsafe fn en_demi_tour(boma: *mut BattleObjectModuleAccessor, _e: usize) -> bool {
     let st = StatusModule::status_kind(boma);
-    if [*FIGHTER_STATUS_KIND_TURN, *FIGHTER_STATUS_KIND_TURN_DASH, *FIGHTER_STATUS_KIND_TURN_RUN,
-        *FIGHTER_STATUS_KIND_TURN_RUN_BRAKE].contains(&st) {
-        return true;
-    }
-    if face_reelle(boma, e) != PostureModule::lr(boma) {
-        return true;
-    }
-    DEPLACE[e]
+    [*FIGHTER_STATUS_KIND_TURN, *FIGHTER_STATUS_KIND_TURN_DASH, *FIGHTER_STATUS_KIND_TURN_RUN,
+     *FIGHTER_STATUS_KIND_TURN_RUN_BRAKE].contains(&st)
 }
 
 unsafe fn mite_lacher(boma: *mut BattleObjectModuleAccessor, e: usize) {
@@ -482,15 +476,7 @@ unsafe fn mite_placer(boma: *mut BattleObjectModuleAccessor, e: usize, x: f32, y
         mite_lacher(boma, e);
         return false;
     }
-    if TENU[e] {
-        let mut g = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-        ModelModule::joint_global_position(boma, Hash40::new("throw"), &mut g, true);
-        DEPLACE[e] = ((g.x - CIBLE[e][0]).powi(2) + (g.y - CIBLE[e][1]).powi(2)).sqrt() > 3.0;
-    } else {
-        DEPLACE[e] = false;
-    }
     TENU[e] = true;
-    CIBLE[e] = [x, y];
     ModelModule::set_joint_translate(boma, Hash40::new("throw"), &Vector3f { x, y, z: 0.0 }, true, false);
     true
 }
@@ -673,7 +659,7 @@ unsafe fn inv_pas(fighter: &mut L2CFighterCommon, e: usize) {
         return;
     }
     if mite_placer(boma, e, M[e][0], M[e][1]) && !en_demi_tour(boma, e) {
-        inv_afficher(boma, Some((INV[e], pose, face_reelle(boma, e), s)));
+        inv_afficher(boma, Some((INV[e], pose, PostureModule::lr(boma), s)));
     } else {
         inv_afficher(boma, None);
     }
