@@ -443,6 +443,11 @@ for transparent, mi, oi, vb in DRAWS:
         # texture se répétait -> plusieurs yeux. Recadrées sur 0..1 : un seul iris par œil
         lo, hi = uv.min(0), uv.max(0)
         uv = (uv - lo) / np.where(hi - lo > 1e-6, hi - lo, 1)
+    _uvm = dict(x.split(':') for x in os.environ.get('UV_MIROIR', '').split(',') if ':' in x)
+    if mname in _uvm and len(uv):
+        # Knuckle Joe (photo du 16/11 : yeux en petits chevrons) : la texture des yeux n'a qu'un œil ; dans REX elle
+        # est répétée en miroir sur la largeur (matrice de texture x2) : les deux yeux, la bouche au milieu
+        uv = uv * np.array([float(_uvm[mname]), 1.0])
     o.texture_coordinates = [attr('map1', uv)]
     o.color_sets = [attr('colorSet1', np.full((nv, 4), 0.5))]
     o.vertex_indices = idx
@@ -696,6 +701,15 @@ for mname, texs in used_mats.items():
         for v in e.vectors:
             if v.param_id.name == 'CustomVector3':
                 v.data = [1.6, 1.6, 1.6, 1.0] if kind == 'lame' else [1.15, 1.15, 1.15, 1.0]
+    if mname in dict(x.split(':') for x in os.environ.get('UV_MIROIR', '').split(',') if ':' in x):
+        try:
+            for smp in e.samplers:
+                sd = smp.data
+                sd.wraps = S.matl_data.WrapMode.MirroredRepeat
+                smp.data = sd
+            print('UV MIROIR', mname)
+        except Exception as ex:  # noqa: BLE001
+            print('UV MIROIR : echec', mname, ex)
     if os.environ.get('EYE_CLAMP') == '1' and mname.startswith('Eye'):
         # Super Shadow : comme dans Brawl, UV d'origine (matrice identité) et texture non répétée : l'iris n'occupe
         # que la partie de l'œil côté nez, à sa vraie taille, le reste prend le bord blanc de la texture
