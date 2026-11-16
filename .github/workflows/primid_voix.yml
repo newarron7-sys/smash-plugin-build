@@ -3,6 +3,7 @@ on:
   push:
     branches: [ primid ]
     paths: [ '.github/workflows/primid_voix.yml' ]
+  workflow_dispatch:
 permissions:
   contents: write
 concurrency:
@@ -36,10 +37,9 @@ jobs:
             done
             echo "quota atteint (essai $essai)"; sleep 600
           done
-          sd=$(7z l -ba -slt rex.rar | sed -n 's/^Path = \(.*sd\.raw\)$/\1/p' | head -1)
-          7z e -y rex.rar "$sd" -o. >/dev/null; rm -f rex.rar
-          7z l -ba sd.raw "rex_/pf/sfx/*" | head -5
-          7z e -y sd.raw "rex_/pf/sfx/477.sawnd" -osfx >/dev/null || true
+          7z e -y -r rex.rar "sd.raw" -o. >/dev/null; rm -f rex.rar; ls -la sd.raw
+          7z l -ba -r sd.raw "*.sawnd" | tr -d '\r' | grep -i "477" | head -5
+          7z e -y -r sd.raw "477.sawnd" -osfx >/dev/null || true
           ls -la sfx; rm -f sd.raw
       - name: Sauvegarder (cache)
         if: steps.cache-sfx.outputs.cache-hit != 'true'
