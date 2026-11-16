@@ -338,56 +338,28 @@ const COUPS_EPEE: [&str; 11] = ["attack_s3_hi", "attack_s3_s", "attack_s3_lw", "
                                  "attack_hi4_start", "attack_air_n", "attack_air_b", "throw_f", "attack_dash",
                                  "landing_air_n"];
 
-/// os libres du ruban de la traînée (colonne k = k images plus tôt : pied, pointe ; même ordre que trail_primid.py)
-const TRAINEE: [(&str, &str); 9] = [("fingerl13", "fingerl23"), ("fingerl33", "fingerl43"), ("fingerl53", "fingerr13"),
-                                    ("fingerr23", "fingerr33"), ("fingerr43", "fingerr53"), ("uplipl1", "uplipr1"),
-                                    ("uplipl2", "uplipr2"), ("uplipc", "downlipc"), ("downlipr", "downlipl")];
-/// positions passées de la lame : [image][pied / pointe] ; nombre d'images remplies ; images depuis le dernier coup actif
-static mut HIST: [[[Vector3f; 2]; 9]; 8] = [[[Vector3f { x: 0.0, y: 0.0, z: 0.0 }; 2]; 9]; 8];
-static mut HIST_N: [usize; 8] = [0; 8];
-static mut DEPUIS_COUP: [i32; 8] = [99; 8];
+/// v0.33 : traînée d'épée = système de traînées du jeu (AFTER_IMAGE, comme Zero sur Roy) avec des textures que le jeu
+/// charge toujours : celles des objets (effect/system/item/trail). Mario n'a pas de dossier trail : ses textures à lui
+/// (v0.28, trail_c00) ne sont pas chargées (taches), et le ruban du modèle (v0.32) ne s'affichait pas. Textures de la
+/// Killing Edge (tex_item_killsword1/2) remplacées par des vertes dans le mod (objet rare ; seule sa traînée change).
+static mut TRAINEE_ON: [bool; 8] = [false; 8];
 
 unsafe fn trainee(fighter: &mut L2CFighterCommon, epee: bool, gauche: bool) {
     let boma = fighter.module_accessor;
     let e = e_of(boma);
+    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_trail"), false);
     let actif = epee && (0..7).any(|i| AttackModule::is_attack(boma, i, false));
-    DEPUIS_COUP[e] = if actif { 0 } else { (DEPUIS_COUP[e] + 1).min(99) };
-    let montre = epee && DEPUIS_COUP[e] <= 8;
-    if !montre {
-        if HIST_N[e] > 0 {
-            for (p, t) in TRAINEE.iter() {
-                ModelModule::clear_joint_srt(boma, Hash40::new(p));
-                ModelModule::clear_joint_srt(boma, Hash40::new(t));
-            }
-        }
-        HIST_N[e] = 0;
-        ModelModule::set_mesh_visibility(boma, Hash40::new("pr_trail"), false);
-        return;
+    if actif && !TRAINEE_ON[e] {
+        let os = Hash40::new(if gauche { "havel" } else { "haver" });
+        AFTER_IMAGE4_ON_arg29(fighter, Hash40::new("tex_item_killsword1"), Hash40::new("tex_item_killsword2"), 7,
+                              os, 0.0, 2.4, 0.0, os, 0.0, 13.6, 0.0, true, Hash40::new("null"),
+                              os, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0, *EFFECT_AXIS_Y, 0,
+                              *TRAIL_BLEND_ALPHA, 101, *TRAIL_CULL_NONE, 1.3, 0.2);
+        TRAINEE_ON[e] = true;
+    } else if !actif && TRAINEE_ON[e] {
+        AFTER_IMAGE_OFF(fighter, 4);
+        TRAINEE_ON[e] = false;
     }
-    // lame : le long de Y de l'os de la main (pr_epee de 2,4 à 13,4)
-    let os = Hash40::new(if gauche { "havel" } else { "haver" });
-    let mut pied = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-    let mut pointe = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-    ModelModule::joint_global_position_with_offset(boma, os, &Vector3f { x: 0.0, y: 3.0, z: 0.0 }, &mut pied, true);
-    ModelModule::joint_global_position_with_offset(boma, os, &Vector3f { x: 0.0, y: 13.6, z: 0.0 }, &mut pointe, true);
-    // décalage de l'historique ; au début d'un coup, toutes les colonnes sur la lame (pas de vieux morceaux)
-    let h = &mut HIST[e];
-    if HIST_N[e] == 0 {
-        for k in 0..9 {
-            h[k] = [pied, pointe];
-        }
-    } else {
-        for k in (1..9).rev() {
-            h[k] = h[k - 1];
-        }
-        h[0] = [pied, pointe];
-    }
-    HIST_N[e] = (HIST_N[e] + 1).min(9);
-    for (k, (p, t)) in TRAINEE.iter().enumerate() {
-        ModelModule::set_joint_translate(boma, Hash40::new(p), &h[k][0], true, false);
-        ModelModule::set_joint_translate(boma, Hash40::new(t), &h[k][1], true, false);
-    }
-    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_trail"), HIST_N[e] >= 2);
 }
 
 unsafe fn armes(fighter: &mut L2CFighterCommon) {
