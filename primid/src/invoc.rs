@@ -346,6 +346,21 @@ unsafe fn armes(fighter: &mut L2CFighterCommon) {
     let gauche = PostureModule::lr(boma) > 0.0;
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_epee"), epee && gauche);
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_epee_r"), epee && !gauche);
+    // v0.25 : l'Auroros du haut B (REX : il attrape Primid et l'emporte ; article retiré à l'image 67)
+    let haut_b = mk == smash::hash40("special_hi") || mk == smash::hash40("special_air_hi");
+    let fh = MotionModule::frame(boma);
+    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_aurore"), haut_b && fh >= 2.0 && fh < 67.0);
+    if haut_b && fh >= 2.0 && fh < 3.0 {
+        // éclat blanc à son arrivée (vidéo de REX)
+        let (x, y) = pos(boma);
+        EffectModule::req(boma, Hash40::new("sys_smash_flash"), &Vector3f { x, y: y + 20.0, z: 0.0 },
+            &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 1.2, 0, 0, false, 0);
+    }
+    if haut_b && fh >= 66.0 && fh < 67.0 {
+        let (x, y) = pos(boma);
+        EffectModule::req(boma, Hash40::new("sys_erace_smoke"), &Vector3f { x, y: y + 20.0, z: 0.0 },
+            &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 1.0, 0, 0, false, 0);
+    }
     // le boomerang : pour le côté B de REX (à venir)
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_boomerang"), false);
     // smash avant de REX : il crache du feu (Firebreath) pendant que le coup est actif
