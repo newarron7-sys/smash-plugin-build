@@ -338,6 +338,8 @@ const COUPS_EPEE: [&str; 11] = ["attack_s3_hi", "attack_s3_s", "attack_s3_lw", "
                                  "attack_hi4_start", "attack_air_n", "attack_air_b", "throw_f", "attack_dash",
                                  "landing_air_n"];
 
+static mut TRAINEE: [bool; 8] = [false; 8];
+
 unsafe fn armes(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let mk = MotionModule::motion_kind(boma);
@@ -346,18 +348,21 @@ unsafe fn armes(fighter: &mut L2CFighterCommon) {
     let gauche = PostureModule::lr(boma) > 0.0;
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_epee"), epee && gauche);
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_epee_r"), epee && !gauche);
-    // v0.27 (demandé) : traînée de l'épée pendant ses coups : éclats verts le long de la lame à chaque image où un
-    // coup est actif (ils s'effacent en quelques images : la traînée suit exactement le geste)
-    if epee && (0..6).any(|i| AttackModule::is_attack(boma, i, false)) {
+    // v0.28 (demandé : « comme pour Zero ») : vraie traînée d'épée (AFTER_IMAGE, textures tex_mario_sword1/2 du
+    // dossier trail_c00 + ef_mario_c00.eff : effets propres à ce costume, méthode de Zero sur Roy) le long de la lame
+    // (havel / haver : Y de 2,4 à 13,6), pendant que le coup est actif
+    let e = e_of(boma);
+    let actif = epee && (0..6).any(|i| AttackModule::is_attack(boma, i, false));
+    if actif && !TRAINEE[e] {
         let os = if gauche { "havel" } else { "haver" };
-        for k in [5.0_f32, 9.0, 13.0] {
-            let h = EffectModule::req_on_joint(boma, Hash40::new("sys_smash_flash_s"), Hash40::new(os),
-                &Vector3f { x: 0.0, y: k, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 0.35 + k * 0.02,
-                &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, false, 0, 0, 0) as u32;
-            if h != 0 {
-                EffectModule::set_rgb(boma, h, 0.3, 1.0, 0.55);
-            }
-        }
+        AFTER_IMAGE4_ON_arg29(fighter, Hash40::new("tex_mario_sword1"), Hash40::new("tex_mario_sword2"), 6,
+                              Hash40::new(os), 0.0, 2.4, 0.0, Hash40::new(os), 0.0, 13.6, 0.0, true, Hash40::new("null"),
+                              Hash40::new(os), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0, *EFFECT_AXIS_Y, 0,
+                              *TRAIL_BLEND_ALPHA, 101, *TRAIL_CULL_NONE, 1.3, 0.2);
+        TRAINEE[e] = true;
+    } else if !actif && TRAINEE[e] {
+        AFTER_IMAGE_OFF(fighter, 4);
+        TRAINEE[e] = false;
     }
     // v0.25 : l'Auroros du haut B (REX : il attrape Primid et l'emporte ; article retiré à l'image 67)
     let haut_b = mk == smash::hash40("special_hi") || mk == smash::hash40("special_air_hi");
