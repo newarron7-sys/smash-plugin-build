@@ -264,8 +264,11 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             landing_on = true;
         }
         let size = e.size * ECHELLE;
+        // smash avant : le coup de REX sur ThrowN (la boule d'énergie qui file devant lui) était posé sur top à 0 : il
+        // suit l'os throw, qui suit ThrowN (effets.rs)
+        let os = if script.starts_with("game_attacks4") && e.bone == "top" && e.x == 0.0 && e.y == 0.0 && e.z == 0.0 { "throw" } else { e.bone };
         let (angle, kbg) = (e.angle, e.kbg);
-        ATTACK(agent, e.id, 0, Hash40::new(e.bone), e.dmg, angle, kbg, e.fkb, e.bkb, size, e.x * ECHELLE, e.y * ECHELLE, e.z * ECHELLE,
+        ATTACK(agent, e.id, 0, Hash40::new(os), e.dmg, angle, kbg, e.fkb, e.bkb, size, e.x * ECHELLE, e.y * ECHELLE, e.z * ECHELLE,
                None, None, None, e.hitlag, e.sdi, *ATTACK_SETOFF_KIND_ON, lr_check, false, 0, e.trip, 0,
                false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL,
                *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), *ATTACK_SOUND_LEVEL_M, son(e.attr),
