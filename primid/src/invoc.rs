@@ -346,7 +346,7 @@ unsafe fn armes(fighter: &mut L2CFighterCommon) {
     // le boomerang : pour le côté B de REX (à venir)
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_boomerang"), false);
     // smash avant de REX : il crache du feu (Firebreath) pendant que le coup est actif
-    if mk == smash::hash40("attack_s4_s") && (0..3).any(|i| AttackModule::is_attack(boma, i, false)) {
+    if [smash::hash40("attack_s4_s"), smash::hash40("attack_s4_hi"), smash::hash40("attack_s4_lw")].contains(&mk) && (0..3).any(|i| AttackModule::is_attack(boma, i, false)) {
         let t = MotionModule::frame(boma) as i32;
         if t % 2 == 0 {
             let lr = PostureModule::lr(boma);
