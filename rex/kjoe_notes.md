@@ -53,3 +53,6 @@
   Metal Sonic). B neutre trop court → boules du B neutre repérées (marquer_neutre) : vie 45 images + 0,45 par image.
   Bas B : il continue sa plongée quand le 1er coup (270°) touche, rebond seulement sur le 2e coup (image 6+), avec
   is_infliction (pas is_infliction_status, qui gardait le coup du saut).
+- 16/11 : prises et lancers de REX (prises.rs) à la place des lancers PSI de Ness. Haut B : copies transparentes
+  façon REX = 3 copies du corps dans le modèle (fantomes.py : kjoe_fantome1..3, décalées vers le bas, matériau alp_
+  de Ness en _sort), montrées par le plugin pendant la montée (set_mesh_visibility, lib.rs fantomes()).

@@ -96,6 +96,7 @@ include!("generated.rs");
 mod effets;
 mod projectile;
 mod speciaux;
+mod prises;
 
 
 /// perso de base (nom interne) : Ness (le module de REX, ft_kjoe.rel, est un clone de Ness)
@@ -163,8 +164,21 @@ unsafe fn suivre_animation(fighter: &mut L2CFighterCommon) {
     sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, d * lr, 0.0_f32);
 }
 
+/// copies transparentes du haut B (fantomes.py) : visibles seulement pendant la montée (showcase de REX)
+const FANTOMES: [&str; 3] = ["kjoe_fantome1", "kjoe_fantome2", "kjoe_fantome3"];
+unsafe fn fantomes(boma: *mut BattleObjectModuleAccessor) {
+    let f = MotionModule::frame(boma);
+    let monte = StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_SPECIAL_HI && f >= 7.0 && f <= 34.0;
+    for (k, n) in FANTOMES.iter().enumerate() {
+        // les copies apparaissent l'une après l'autre au départ, et partent dans l'ordre à la fin
+        let vis = monte && f >= 7.0 + 2.0 * k as f32 && f <= 34.0 - 3.0 * k as f32;
+        ModelModule::set_mesh_visibility(boma, Hash40::new(n), vis);
+    }
+}
+
 unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
     ModelModule::set_scale(fighter.module_accessor, ECHELLE);
+    fantomes(fighter.module_accessor);
     suivre_animation(fighter);
     let boma = fighter.module_accessor;
     let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
@@ -306,6 +320,7 @@ macro_rules! scripts {
             $( if find($s).is_some() { a.acmd($s, $f, Priority::Low); } )*
             effets::install(&mut a);
             speciaux::install(&mut a);
+            prises::install(&mut a);
             a.on_line(Main, ss_frame);
             a.install();
             projectile::install();
