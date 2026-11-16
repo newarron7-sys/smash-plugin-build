@@ -94,6 +94,7 @@ pub struct Mv {
 include!("generated.rs");
 
 mod effets;
+mod projectile;
 
 
 /// perso de base (nom interne) : Ness (le module de REX, ft_kjoe.rel, est un clone de Ness)
@@ -264,9 +265,15 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             landing_on = true;
         }
         let size = e.size * ECHELLE;
-        // smash avant : le coup de REX sur ThrowN (la boule d'énergie qui file devant lui) était posé sur top à 0 : il
-        // suit l'os throw, qui suit ThrowN (effets.rs)
-        let os = if script.starts_with("game_attacks4") && e.bone == "top" && e.x == 0.0 && e.y == 0.0 && e.z == 0.0 { "throw" } else { e.bone };
+        // smash avant (demandé, 16/11 : un vrai projectile, comme la boule de feu du f-smash de Primid, qui fait
+        // sortir le projectile de son perso de base) : le coup de REX sur ThrowN (la boule d'énergie qui file devant
+        // lui) devient un vrai projectile de Ness, le PK Feu, lancé devant lui ; ses coups et ses effets sont
+        // remplacés pour Knuckle Joe (projectile.rs : 9 %, boule bleue, pas de colonne de feu)
+        if script.starts_with("game_attacks4") && e.bone == "top" && e.x == 0.0 && e.y == 0.0 && e.z == 0.0 {
+            ArticleModule::generate_article(boma, *FIGHTER_NESS_GENERATE_ARTICLE_PK_FIRE, false, -1);
+            continue;
+        }
+        let os = e.bone;
         let (angle, kbg) = (e.angle, e.kbg);
         ATTACK(agent, e.id, 0, Hash40::new(os), e.dmg, angle, kbg, e.fkb, e.bkb, size, e.x * ECHELLE, e.y * ECHELLE, e.z * ECHELLE,
                None, None, None, e.hitlag, e.sdi, *ATTACK_SETOFF_KIND_ON, lr_check, false, 0, e.trip, 0,
@@ -296,6 +303,7 @@ macro_rules! scripts {
             effets::install(&mut a);
             a.on_line(Main, ss_frame);
             a.install();
+            projectile::install();
         }
     };
 }
