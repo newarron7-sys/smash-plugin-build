@@ -146,6 +146,15 @@ unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             continue;
         }
         if e.clear {
+            // v0.35 (le joueur : « il devrait toucher de là ») : tilt bas de REX actif 1 seule image ; gardé 3 images
+            if script == "game_attacklw3" {
+                let fin = cur + 3.0 / r;
+                frame(lua, fin);
+                cur = fin;
+                if !is_excute(agent) {
+                    continue;
+                }
+            }
             AttackModule::clear_all(boma);
             continue;
         }
@@ -157,10 +166,19 @@ unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
         let os_coup = if e.bone == "havel" && PostureModule::lr(boma) < 0.0 { "haver" } else { e.bone };
         // v0.34 (le joueur : « le tilt haut, c'est un coup avec des effets de poison ») : coups violets (ombre)
         let attr = if script == "game_attackhi3" { "collision_attr_purple" } else { e.attr };
-        ATTACK(agent, e.id, 0, Hash40::new(os_coup), e.dmg, e.angle, e.kbg, e.fkb, e.bkb, e.size, e.x, e.y, e.z,
+        // v0.35 : coups d'épée : bruit d'entaille (sabre) au contact
+        let son_coup = if e.bone == "havel" { *COLLISION_SOUND_ATTR_CUTUP } else { *COLLISION_SOUND_ATTR_PUNCH };
+        let taille = if script == "game_attacklw3" { e.size * 1.3 } else { e.size };
+        // v0.35 (le joueur : « rajoute les effets sur tous ces coups ») : éclat d'ombre violet (REX : nuées violettes
+        // sur ses coups) sur le membre qui frappe, à chaque coup ; pas sur l'épée (traînée) ni le feu (smashs)
+        let feu = script.starts_with("game_attacks4") || script == "game_attacklw4";
+        if e.bone != "havel" && !feu && script != "game_attackhi3" && script != "game_attackdash" {
+            invoc::eclat_ombre(boma, os_coup, e.x, e.y, e.z, (taille / 5.0).clamp(0.45, 1.3));
+        }
+        ATTACK(agent, e.id, 0, Hash40::new(os_coup), e.dmg, e.angle, e.kbg, e.fkb, e.bkb, taille, e.x, e.y, e.z,
                None, None, None, e.hitlag, e.sdi, *ATTACK_SETOFF_KIND_ON, lr_check, false, 0, e.trip, 0,
                false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL,
-               *COLLISION_PART_MASK_ALL, false, Hash40::new(attr), *ATTACK_SOUND_LEVEL_M, *COLLISION_SOUND_ATTR_PUNCH,
+               *COLLISION_PART_MASK_ALL, false, Hash40::new(attr), *ATTACK_SOUND_LEVEL_M, son_coup,
                *ATTACK_REGION_PUNCH);
     }
     if mv.kind == 2 {

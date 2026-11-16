@@ -356,6 +356,11 @@ unsafe fn trainee(fighter: &mut L2CFighterCommon, epee: bool, gauche: bool) {
                               os, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0, *EFFECT_AXIS_Y, 0,
                               *TRAIL_BLEND_ALPHA, 101, *TRAIL_CULL_NONE, 1.3, 0.2);
         TRAINEE_ON[e] = true;
+        // v0.35 (le joueur : « rajoute les sfx d'épée du jeu de base ») : son du sabre laser (objet Beam Sword) à
+        // chaque coup d'épée ; grand coup pour le smash haut
+        let mk = MotionModule::motion_kind(boma);
+        let fort = mk == smash::hash40("attack_hi4") || mk == smash::hash40("throw_f");
+        PLAY_SE(fighter, Hash40::new(if fort { "se_item_beamsword_l" } else { "se_item_beamsword_m" }));
     } else if !actif && TRAINEE_ON[e] {
         AFTER_IMAGE_OFF(fighter, 4);
         TRAINEE_ON[e] = false;
@@ -432,6 +437,19 @@ unsafe fn armes(fighter: &mut L2CFighterCommon) {
     if (f as i32) % 9 == 0 && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_DEAD
         && VisibilityModule::is_visible(boma) {
         fumee_violette(boma, x - lr * 2.6, y + 8.5, 0.3);
+    }
+}
+
+/// v0.35 : éclat d'ombre sur l'os qui frappe (coups normaux) : fumée violette + petit éclat violet
+pub unsafe fn eclat_ombre(boma: *mut BattleObjectModuleAccessor, os: &str, x: f32, y: f32, z: f32, ech: f32) {
+    let o = Hash40::new(os);
+    for (nom, k) in [("sys_erace_smoke", 1.0f32), ("sys_smash_flash_s", 0.6)] {
+        let h = EffectModule::req_on_joint(boma, Hash40::new(nom), o, &Vector3f { x, y, z },
+            &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, ech * k, &Vector3f { x: 0.0, y: 0.0, z: 0.0 },
+            &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, false, 0, 0, 0) as u32;
+        if h != 0 {
+            EffectModule::set_rgb(boma, h, 0.5, 0.08, 0.7);
+        }
     }
 }
 
