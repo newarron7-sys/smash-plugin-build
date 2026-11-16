@@ -1117,6 +1117,10 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
         return 0.into();
     };
     let [mut x, mut y, lr, mut t, mut lache, mut tl] = B[e];
+    // v0.35 (le joueur : il disparaît juste après le 1er pot) : le J.E.T. a une durée de vie au bout de laquelle le jeu
+    // le retire : remise à plein à chaque image (c'est la boucle qui décide quand il part)
+    WorkModule::set_int(w, 9999, *WEAPON_INSTANCE_WORK_ID_INT_LIFE);
+    WorkModule::set_int(w, 9999, *WEAPON_INSTANCE_WORK_ID_INT_INIT_LIFE);
     // pot : chute (sous Botron), vitesse, explosion (temps)
     // v0.34 (le joueur : « il jette plusieurs fois des projectiles et après il s'en va ») : 3 pots, puis il part
     let [mut chute, mut vy, mut boum, mut lances] = P[e];
@@ -1151,7 +1155,7 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     } else {
         tl += 1.0;
         if mk == smash::hash40("light") && MotionModule::is_end(w) {
-            MotionModule::change_motion(w, Hash40::new("end"), 0.0, 1.0, false, 0.0, false, false);
+            MotionModule::change_motion(w, Hash40::new("wait"), 0.0, 1.0, false, 0.0, false, false);
         }
         if boum <= 0.0 {
             // le pot tombe (Botron reste sur place) et frappe en tombant
