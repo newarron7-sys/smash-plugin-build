@@ -407,9 +407,6 @@ unsafe extern "C" fn mite_passif(_weapon: &mut L2CWeaponCommon) -> L2CValue {
 /// position globale, 4e argument vrai). Throw sert aussi aux prises : pendant les prises de Primid, Mite est caché et
 /// l'os rendu au jeu.
 /// Mode 0 : position globale ; si l'os ne va pas où il faut (mesuré à l'image suivante), mode 1 : position locale.
-static mut MODE: [u8; 8] = [0; 8];
-static mut RATE: [u8; 8] = [0; 8];
-static mut CIBLE: [[f32; 2]; 8] = [[0.0; 2]; 8];
 static mut TENU: [bool; 8] = [false; 8];
 
 unsafe fn en_prise(boma: *mut BattleObjectModuleAccessor) -> bool {
@@ -424,40 +421,40 @@ unsafe fn mite_lacher(boma: *mut BattleObjectModuleAccessor, e: usize) {
     }
 }
 
-/// place l'os Throw pour que Mite soit en (x, y) dans le jeu ; faux pendant les prises
+/// place l'os Throw pour que l'invocation soit en (x, y) dans le jeu ; faux pendant les prises.
+/// v0.17 : toujours en position globale (le contrôle de la v0.13 basculait en position locale pendant un demi-tour
+/// de Primid : les invocations sautaient de l'autre côté)
 unsafe fn mite_placer(boma: *mut BattleObjectModuleAccessor, e: usize, x: f32, y: f32) -> bool {
     if en_prise(boma) {
         mite_lacher(boma, e);
-        RATE[e] = 0;
         return false;
     }
-    let mut g = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-    ModelModule::joint_global_position(boma, Hash40::new("throw"), &mut g, true);
-    if TENU[e] && MODE[e] == 0 {
-        // l'os est-il allé à la cible de l'image précédente ?
-        let d = ((g.x - CIBLE[e][0]).powi(2) + (g.y - CIBLE[e][1]).powi(2)).sqrt();
-        if d > 6.0 {
-            RATE[e] = RATE[e].saturating_add(1);
-            if RATE[e] > 4 {
-                MODE[e] = 1;
-            }
-        } else {
-            RATE[e] = 0;
-        }
-    }
-    CIBLE[e] = [x, y];
     TENU[e] = true;
-    if MODE[e] == 0 {
-        ModelModule::set_joint_translate(boma, Hash40::new("throw"), &Vector3f { x, y, z: 0.0 }, true, false);
-    } else {
-        // repère local (parent Rot, modèle tourné selon le côté de Primid : +Z = devant)
-        let mut r = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-        ModelModule::joint_global_position(boma, Hash40::new("rot"), &mut r, true);
-        let k = ModelModule::scale(boma).clamp(0.3, 3.0);
-        let plr = PostureModule::lr(boma);
-        ModelModule::set_joint_translate(boma, Hash40::new("throw"), &Vector3f { x: 0.0, y: (y - r.y) / k, z: plr * (x - r.x) / k }, false, false);
-    }
+    ModelModule::set_joint_translate(boma, Hash40::new("throw"), &Vector3f { x, y, z: 0.0 }, true, false);
     true
+}
+
+/// v0.17 : côté vers lequel le modèle de Primid est réellement tourné (pieds : orteil devant le pied). Pendant un
+/// demi-tour, le jeu tourne le modèle petit à petit alors que son côté (lr) change d'un coup : l'invocation, collée à
+/// Throw, tourne avec lui ; l'exemplaire est choisi d'après ce côté réel.
+static mut FACE: [f32; 8] = [1.0; 8];
+
+unsafe fn face_reelle(boma: *mut BattleObjectModuleAccessor, e: usize) -> f32 {
+    let mut a = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let mut b = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let mut c = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let mut d = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    ModelModule::joint_global_position(boma, Hash40::new("toel"), &mut a, true);
+    ModelModule::joint_global_position(boma, Hash40::new("footl"), &mut b, true);
+    ModelModule::joint_global_position(boma, Hash40::new("toer"), &mut c, true);
+    ModelModule::joint_global_position(boma, Hash40::new("footr"), &mut d, true);
+    let f = (a.x - b.x) + (c.x - d.x);
+    if f.abs() > 0.3 {
+        FACE[e] = f.signum();
+    } else if StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_TURN {
+        FACE[e] = PostureModule::lr(boma);
+    }
+    FACE[e]
 }
 
 // ------------------------------------------------------------------ v0.16 : Mite, Boobas, Cymul sur l'os Throw
@@ -615,7 +612,7 @@ unsafe fn inv_pas(fighter: &mut L2CFighterCommon, e: usize) {
         return;
     }
     if mite_placer(boma, e, M[e][0], M[e][1]) {
-        inv_afficher(boma, Some((INV[e], pose, PostureModule::lr(boma), s)));
+        inv_afficher(boma, Some((INV[e], pose, face_reelle(boma, e), s)));
     } else {
         inv_afficher(boma, None);
     }
@@ -626,7 +623,10 @@ unsafe fn inv_pas(fighter: &mut L2CFighterCommon, e: usize) {
 /// (plongeon), rebondit après le coup et recommence, pendant une douzaine de secondes.
 /// v0.16 (remarques du joueur sur la v0.14) : il courait à l'envers (son devant est le -z de son animation) et il était
 /// bien trop agressif : course plus lente, 1,5 s entre deux plongeons, il s'éloigne après un coup avant de revenir.
-/// Phases : 0 chute du portail, 1 course vers l'adversaire, 2 plongeon, 3 rebond après un coup, 4 s'éloigne.
+/// v0.17 (test du joueur : après un coup, il ne faisait plus que suivre l'adversaire : collé à lui, il n'était
+/// jamais à distance de plongeon) : il se tient à distance (entre 12 et 18), recule s'il est trop près, et replonge
+/// dès que l'attente est finie.
+/// Phases : 0 chute du portail, 1 à distance de l'adversaire, 2 plongeon, 3 rebond après un coup.
 /// Poses : 0-5 course, 6 plongeon, 7 repli, 8 debout. Renvoie (pose, sens d'affichage).
 unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
     let boma = fighter.module_accessor;
@@ -634,37 +634,43 @@ unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
     if att > 0.0 {
         att -= 1.0;
     }
+    let mut court = false;
     if ph < 0.5 {
         if chute(boma, x, &mut y, &mut vy, 0.15) {
             ph = 1.0;
         }
-    } else if ph < 1.5 || ph > 3.5 {
+    } else if ph < 1.5 {
         let cible = adversaire(e, x, y);
-        if let Some((dx, _)) = cible {
-            if ph > 3.5 {
-                // il s'éloigne de l'adversaire, puis fait demi-tour
-                lr = -dx.signum();
-                if att < 50.0 || dx.abs() > 45.0 {
-                    ph = 1.0;
-                }
-            } else if dx.abs() > 3.0 {
-                lr = dx.signum();
+        let mut v = 0.0;
+        if let Some((dx, dy)) = cible {
+            let sens = if dx.abs() > 1.0 { dx.signum() } else { lr };
+            if dx.abs() > 18.0 {
+                // il s'approche
+                lr = sens;
+                v = 1.0 * sens;
+            } else if dx.abs() < 12.0 && att > 0.0 {
+                // trop près pendant l'attente : il recule (il court dos à l'adversaire)
+                lr = -sens;
+                v = -0.9 * sens;
+            } else {
+                lr = sens;
+            }
+            if att <= 0.0 && vy == 0.0 && dx.abs() < 24.0 && dx.abs() > 6.0 && dy.abs() < 14.0 {
+                // plongeon rasant, comme dans la vidéo de REX (corps à l'horizontale)
+                lr = sens;
+                ph = 2.0;
+                vx = 2.4 * lr;
+                vy = 0.7;
+                v = 0.0;
+                AttackModule::clear(boma, 7, false);
             }
         }
-        x += 1.0 * lr;
-        match sol(boma, x, y, 14.0) {
-            Some(g) => { y = g; vy = 0.0; }
-            None => { vy = (vy - 0.15).max(-3.0); y += vy; }
-        }
+        x += v;
+        court = v != 0.0;
         if ph < 1.5 {
-            if let Some((dx, dy)) = cible {
-                if att <= 0.0 && vy == 0.0 && dx * lr > 0.0 && dx.abs() < 22.0 && dx.abs() > 8.0 && dy.abs() < 14.0 {
-                    // plongeon rasant, comme dans la vidéo de REX (corps à l'horizontale)
-                    ph = 2.0;
-                    vx = 2.4 * lr;
-                    vy = 0.7;
-                    AttackModule::clear(boma, 7, false);
-                }
+            match sol(boma, x, y, 14.0) {
+                Some(g) => { y = g; vy = 0.0; }
+                None => { vy = (vy - 0.15).max(-3.0); y += vy; }
             }
         }
     } else if ph < 2.5 {
@@ -674,10 +680,9 @@ unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
         inv_coup(fighter, x, y, 0.8, 50, 30, 60, 3.5, 3.0);
         // traînée rouge du plongeon (vidéo de REX), posée sur l'os Throw (= Mite) ; +Z de l'os = devant Primid
         if (t as i32) % 3 == 0 {
-            let plr = PostureModule::lr(boma);
-            let h = EffectModule::req_on_joint(boma, Hash40::new("sys_attack_speedline"), Hash40::new("throw"),
-                &Vector3f { x: 0.0, y: 4.0, z: 0.0 }, &Vector3f { x: 0.0, y: if lr * plr > 0.0 { 0.0 } else { 180.0 }, z: 0.0 },
-                0.7, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, false, 0, 0, 0) as u32;
+            // v0.17 : posé à l'endroit de Mite dans le jeu (sur l'os Throw, il restait sur Primid)
+            let h = EffectModule::req(boma, Hash40::new("sys_attack_speedline"), &Vector3f { x, y: y + 4.0, z: 0.0 },
+                &Vector3f { x: 0.0, y: 90.0 * lr, z: 0.0 }, 0.7, 0, 0, false, 0) as u32;
             if h != 0 {
                 EffectModule::set_rgb(boma, h, 1.0, 0.15, 0.15);
             }
@@ -698,15 +703,15 @@ unsafe fn mite_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
             }
         }
     } else {
-        // rebond après un coup, puis il s'éloigne
+        // rebond après un coup
         x += vx;
         if chute(boma, x, &mut y, &mut vy, 0.14) {
-            ph = 4.0;
+            ph = 1.0;
         }
     }
     M[e] = [x, y, vx, vy, lr, ph, t, att];
-    let pose = if (ph < 1.5 && ph > 0.5 || ph > 3.5) && vy == 0.0 {
-        ((t as i32 / 5) % 6) as usize
+    let pose = if ph < 1.5 && ph > 0.5 && vy == 0.0 {
+        if court { ((t as i32 / 5) % 6) as usize } else { 8 }
     } else if ph > 1.5 && ph < 2.5 {
         6
     } else {
@@ -798,10 +803,8 @@ unsafe fn boobas_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
         }
         if (t as i32) % 6 == 0 {
             // souffle (traînées blanches devant sa trompette) ; +Z de l'os Throw = devant Primid
-            let plr = PostureModule::lr(boma);
-            EffectModule::req_on_joint(boma, Hash40::new("sys_attack_speedline"), Hash40::new("throw"),
-                &Vector3f { x: 0.0, y: 10.0, z: 12.0 * lr * plr }, &Vector3f { x: 0.0, y: if lr * plr > 0.0 { 0.0 } else { 180.0 }, z: 0.0 },
-                0.8, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, false, 0, 0, 0);
+            EffectModule::req(boma, Hash40::new("sys_attack_speedline"), &Vector3f { x: x + 12.0 * lr, y: y + 10.0, z: 0.0 },
+                &Vector3f { x: 0.0, y: 90.0 * lr, z: 0.0 }, 0.8, 0, 0, false, 0);
         }
         if tp > 120.0 {
             ph = 4.0;
@@ -816,7 +819,8 @@ unsafe fn boobas_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
         }
     }
     M[e] = [x, y, vx, vy, lr, ph, t, att];
-    (pose, lr)
+    // v0.17 : le joueur : il apparaissait dans le mauvais sens
+    (pose, -lr)
 }
 
 // ---------------------------------------------------------------- Cymul
