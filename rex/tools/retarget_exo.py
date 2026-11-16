@@ -729,6 +729,9 @@ if GROUPE == 'chief_neutre':
     # sur place sauf les marches / courses des jambes (comme les marches de base : le jeu règle la vitesse dessus)
     IN_PLACE = {k for k in GROUPES['chief_neutre'] if not any(w in k for w in ('slow', 'middle', 'fast', 'walk', 'dash', 'brake'))}  # (d03speciallwground : sur place)
     KEEP_Y = set()
+# Knuckle Joe (vidéo du 16/11 : « il se téléporte à la fin de son down tilt ») : animations qui avancent dans REX
+# alors que le mouvement de Ness ne déplace pas le perso : sur place, le plugin le fait avancer (table AVANCE)
+IN_PLACE = IN_PLACE | set(x for x in os.environ.get('IN_PLACE_PLUS', '').split(',') if x)
 SLICE0 = np.zeros(3)
 CUR_FN = ''
 for fn, src in JOBS.items():

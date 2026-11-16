@@ -118,8 +118,52 @@ pub(crate) fn find(script: &str) -> Option<&'static Mv> {
 /// (bord du terrain, annulation), sinon il le resterait
 static mut CORPS_CHANGE: [bool; 8] = [false; 8];
 
+/// vidéo du 16/11 (« il se téléporte à la fin de son down tilt », même problème que Master Chief) : ses animations de
+/// REX avancent (tilt bas +28, attaque en courant +45, prise en courant +22) mais le mouvement de Ness ne déplace pas
+/// le perso : animations sur place (retarget_exo.py, IN_PLACE_PLUS) et le plugin le fait avancer de la même distance,
+/// image par image (table AVANCE de generated.rs, rex/tools/avance_rex.py), à l'échelle du modèle
+static mut AV_PREC: [(u64, f32); 8] = [(0, 0.0); 8];
+
+fn avance_a(t: &[f32], f: f32) -> f32 {
+    if t.is_empty() {
+        return 0.0;
+    }
+    let f = f.max(0.0);
+    let i = f.floor() as usize;
+    if i + 1 >= t.len() {
+        return t[t.len() - 1];
+    }
+    let k = f - i as f32;
+    t[i] * (1.0 - k) + t[i + 1] * k
+}
+
+unsafe fn suivre_animation(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let id = (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7);
+    let m = MotionModule::motion_kind(boma);
+    let tab = AVANCE.iter().find(|(n, _)| smash::hash40(n) == m).map(|(_, t)| *t);
+    let t = match tab {
+        Some(t) if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND => t,
+        _ => {
+            AV_PREC[id] = (0, 0.0);
+            return;
+        }
+    };
+    let f = MotionModule::frame(boma);
+    let (pm, pf) = AV_PREC[id];
+    AV_PREC[id] = (m, f);
+    if pm != m || f < pf {
+        return;
+    }
+    let d = (avance_a(t, f) - avance_a(t, pf)) * ECHELLE;
+    let lr = PostureModule::lr(boma);
+    KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_STOP);
+    sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, d * lr, 0.0_f32);
+}
+
 unsafe extern "C" fn ss_frame(fighter: &mut L2CFighterCommon) {
     ModelModule::set_scale(fighter.module_accessor, ECHELLE);
+    suivre_animation(fighter);
     let boma = fighter.module_accessor;
     let id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize;
     if id < 8 && CORPS_CHANGE[id] && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK_S4 {
