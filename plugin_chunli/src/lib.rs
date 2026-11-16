@@ -16,6 +16,7 @@
 //! onde de choc au sol et tremblement d'écran.
 //! v16 : B neutre (charge entre ses mains), tilt haut (1er coup qui ramène pour le 2e), effets propres : haut aérien
 //! (croissant violet), avant aérien (comme Mario), smash haut (comme Ryu), smash bas (Tatsumaki de Ken).
+//! v17 : tilt haut tiré droit devant au sol ; bas aérien : rebond au 1er coup qui garde l'adversaire, 2e coup spike.
 
 use smash::app::sv_animcmd::{frame, wait};
 use smash::app::lua_bind::*;
@@ -67,6 +68,10 @@ pub const STUN_PLUS: f32 = 12.0;
 pub const SBK_CIBLE: (f32, f32) = (9.0, 8.0);
 pub const SBK_TIRE: u32 = 3;
 pub const SBK_SDI: f32 = 0.2;
+
+/// bas aérien (16/11, joueur : « que le premier hit la fasse rebondir un tout petit peu et qu'il connecte avec le
+/// deuxième ») : vitesse verticale donnée quand le 1er coup touche (vérifié des images 6 à 10)
+pub const DAIR_REBOND: f32 = 1.0;
 const SBK_SCRIPTS: [&str; 4] = ["game_specialsstart", "game_specialairsstart", "game_specials", "game_specialairs"];
 
 /// intangibilité posée par un spécial (haut B, bas B) : remise à la normale si le statut est quitté avant la fin
@@ -191,8 +196,27 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
         // Focus de Ken : pas d'armure (Chun-Li est intangible comme dans Melee)
         liste.push(Ev { f: 1.0, k: K_RYU, id: 3, ..E });
     }
+    if script == "game_attackairlw" {
+        for f in 6..=10 {
+            liste.push(Ev { f: f as f32, k: K_FX, id: 3, ..E });
+        }
+    }
     liste.sort_by(|a, b| a.f.partial_cmp(&b.f).unwrap_or(core::cmp::Ordering::Equal));
+    let mut rebond_fait = false;
     for e in liste.iter() {
+        if e.k == K_FX && e.id == 3 {
+            let af = img(e.f);
+            if af > cur {
+                frame(lua, af);
+                cur = af;
+            }
+            if is_excute(agent) && !rebond_fait && AttackModule::is_infliction_status(boma, *COLLISION_KIND_MASK_HIT) {
+                rebond_fait = true;
+                let vx = KineticModule::get_sum_speed_x(boma, *KINETIC_ENERGY_RESERVE_ATTRIBUTE_MAIN) * PostureModule::lr(boma);
+                SET_SPEED_EX(agent, vx, DAIR_REBOND, *KINETIC_ENERGY_RESERVE_ATTRIBUTE_MAIN);
+            }
+            continue;
+        }
         if e.k == K_FX && e.id == 2 {
             // tilt haut : le 1er coup tire l'adversaire vers l'endroit du 2e (x devant, y haut, en e.size images)
             if is_excute(agent) {
