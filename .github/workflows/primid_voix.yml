@@ -1,0 +1,90 @@
+name: Primid - voix (banque de sons REX 477 -> idsp, modele vc_mario ; sortie chiffree pour la session)
+on:
+  push:
+    branches: [ primid ]
+    paths: [ '.github/workflows/primid_voix.yml' ]
+permissions:
+  contents: write
+concurrency:
+  group: primid-voix
+  cancel-in-progress: true
+jobs:
+  voix:
+    runs-on: windows-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Banque 477 (cache)
+        id: cache-sfx
+        uses: actions/cache@v4
+        with:
+          path: w/sfx
+          key: rex-primid-sfx-v1
+      - name: Recuperer la banque de sons de Primid dans le build REX (Google Drive du proprietaire)
+        if: steps.cache-sfx.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p w/sfx && cd w
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+          for essai in $(seq 1 25); do
+            for ID in 1EpUZCpCQTMTYAtrnQCTBgvp6KUAsLo6- 14KJsk4NLN3sRtSq-poawhJkefntOVG7C; do
+              curl -sSL -c ck.txt -A "$UA" "https://drive.google.com/uc?export=download&id=$ID" -o page.html || true
+              uuid=$(grep -oE 'name="uuid" value="[^"]+"' page.html | sed 's/.*value="//; s/"$//' || true)
+              curl -sSL -b ck.txt -A "$UA" -o rex.rar "https://drive.usercontent.google.com/download?id=$ID&export=download&confirm=t&uuid=$uuid" || true
+              if [ "$(stat -c %s rex.rar)" -gt 1000000000 ]; then echo "Google Drive OK"; break 2; fi
+              rm -f rex.rar
+            done
+            echo "quota atteint (essai $essai)"; sleep 600
+          done
+          sd=$(7z l -ba -slt rex.rar | sed -n 's/^Path = \(.*sd\.raw\)$/\1/p' | head -1)
+          7z e -y rex.rar "$sd" -o. >/dev/null; rm -f rex.rar
+          7z l -ba sd.raw "rex_/pf/sfx/*" | head -5
+          7z e -y sd.raw "rex_/pf/sfx/477.sawnd" -osfx >/dev/null || true
+          ls -la sfx; rm -f sd.raw
+      - name: Sauvegarder (cache)
+        if: steps.cache-sfx.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: w/sfx
+          key: rex-primid-sfx-v1
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Extraire (DSP -> WAV -> IDSP)
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "VGAudioCli.zip"
+          Invoke-WebRequest "https://github.com/Thealexbarney/VGAudio/releases/download/v2.2.1/VGAudioCli.zip" -OutFile $zip
+          $vg = Join-Path $env:RUNNER_TEMP "VGAudio"
+          Expand-Archive -Path $zip -DestinationPath $vg -Force
+          $vgexe = (Get-ChildItem -Path $vg -Filter "VGAudioCli.exe" -Recurse | Select-Object -First 1).FullName
+          git clone --depth 1 https://github.com/QuickLava/super-sawndz.git "$env:RUNNER_TEMP\super-sawndz"
+          $src = "$env:RUNNER_TEMP\super-sawndz\lavaResawndz"
+          cl /nologo /EHsc /std:c++17 /O2 /I"$src" /Fe:"$env:RUNNER_TEMP\extract_sawnd.exe" "$src\lavaBRSARLib.cpp" "$src\lavaDSP.cpp" "$src\lavaResawndz.cpp" "$src\lavaUtility.cpp" "$src\md5.cpp" "$PWD\outils\extract_sawnd.cpp"
+          $out = "$PWD\out\voix"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          & "$env:RUNNER_TEMP\extract_sawnd.exe" "$PWD\w\sfx\477.sawnd" $out | Tee-Object -FilePath "$out\extraction.txt"
+          Get-ChildItem -Path $out -Filter "*.dsp" | ForEach-Object {
+            & $vgexe -i $_.FullName -o ([System.IO.Path]::ChangeExtension($_.FullName, ".wav")) | Out-Null
+          }
+          Remove-Item "$out\*.dsp"
+          Write-Host "WAV=$((Get-ChildItem "$out\*.wav").Count)"
+          python "$PWD\outils\primid\audio\normalize.py" $out
+          Get-ChildItem -Path $out -Filter "*.wav" | ForEach-Object {
+            & $vgexe -i $_.FullName -o ([System.IO.Path]::ChangeExtension($_.FullName, ".idsp")) | Out-Null
+          }
+          Write-Host "IDSP=$((Get-ChildItem "$out\*.idsp").Count)"
+      - name: Modele vc_mario (GameBanana)
+        continue-on-error: true
+        shell: bash
+        run: |
+          python outils/primid/audio/template.py out/tpl mario "mario voice,mario voice pack,mario voice replacement,mario sound" > out/modele.txt 2>&1 || true
+          grep -E "CHOISI|MODELE|AUCUN" out/modele.txt | head -20
+      - name: Chiffrer et publier (branche sortie_primid_voix)
+        shell: bash
+        run: |
+          mkdir -p pub; openssl rand -out k.bin 32
+          tar cz -C out . | openssl enc -aes-256-cbc -pbkdf2 -pass file:k.bin > pub/out.tgz.enc
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in k.bin -out pub/k.session.enc
+          rm -f k.bin
+          cd pub && git init -q -b s && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "primid voix chiffre ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" s:sortie_primid_voix

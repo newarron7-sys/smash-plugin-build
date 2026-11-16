@@ -7,7 +7,7 @@ use smash::app::*;
 use smash::lib::lua_const::*;
 use smash::lib::L2CValue;
 use smash::lua2cpp::*;
-use smash::phx::Hash40;
+use smash::phx::{Hash40, Vector3f};
 use smash_script::*;
 use smashline::*;
 
@@ -16,6 +16,40 @@ static mut CHARGE: [f32; 8] = [0.0; 8];
 
 fn e_of(boma: *mut BattleObjectModuleAccessor) -> usize {
     unsafe { (WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID) as usize).min(7) }
+}
+
+
+// v0.34 (le joueur : « il se téléporte » au lancer bas et au jab) : l'avancée (Trans) de ces animations de REX n'est pas
+// appliquée par les statuts de Mario : le modèle avançait puis revenait d'un coup à la fin. Avancée retirée des
+// animations (e01throwlw, c00attack13 : Trans Z = 0) et appliquée ici à Primid lui-même, image par image.
+const AV_THROW_LW: [f32; 121] = [-0.00, -0.00, -0.00, -0.00, -0.00, -0.00, -0.00, -0.00, -0.00, -0.05, -0.08, 0.10, 0.47, 0.90, 1.37, 1.88, 2.44, 3.03, 3.65, 4.31, 4.99, 5.69, 6.41, 7.16, 7.91, 8.67, 9.45, 10.22, 11.00, 11.77, 12.53, 13.29, 14.04, 14.76, 15.47, 16.16, 16.82, 17.45, 18.04, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.54, 18.10, 17.62, 17.13, 16.64, 16.13, 15.62, 15.10, 14.58, 14.06, 13.54, 13.03, 12.51, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00];
+const AV_ATTACK13: [f32; 44] = [-0.00, -0.00, -0.49, -1.11, -1.60, -1.60, -0.00, 8.89, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00, 12.00];
+static mut AV_FAIT: [f32; 8] = [0.0; 8];
+static mut AV_MK: [u64; 8] = [0; 8];
+static mut AV_F: [f32; 8] = [0.0; 8];
+
+unsafe fn avancee(boma: *mut BattleObjectModuleAccessor, e: usize) {
+    let mk = MotionModule::motion_kind(boma);
+    let table: &[f32] = if mk == smash::hash40("throw_lw") { &AV_THROW_LW } else if mk == smash::hash40("attack_13") { &AV_ATTACK13 } else {
+        AV_MK[e] = 0;
+        return;
+    };
+    let f = MotionModule::frame(boma).max(0.0);
+    if AV_MK[e] != mk || f < AV_F[e] {
+        AV_MK[e] = mk;
+        AV_FAIT[e] = 0.0;
+    }
+    AV_F[e] = f;
+    let i = (f as usize).min(table.len() - 1);
+    let j = (i + 1).min(table.len() - 1);
+    let k = f - i as f32;
+    let cible = table[i] * (1.0 - k) + table[j] * k;
+    let d = cible - AV_FAIT[e];
+    if d.abs() > 0.001 {
+        let lr = PostureModule::lr(boma);
+        PostureModule::add_pos(boma, &Vector3f { x: d * lr, y: 0.0, z: 0.0 });
+        AV_FAIT[e] = cible;
+    }
 }
 
 pub unsafe fn update(fighter: &mut L2CFighterCommon) {
@@ -27,6 +61,7 @@ pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     } else if st == *FIGHTER_STATUS_KIND_ATTACK_HI4_HOLD {
         CHARGE[e] += 1.0;
     }
+    avancee(boma, e);
 }
 
 unsafe extern "C" fn hi4_main(fighter: &mut L2CFighterCommon) -> L2CValue {

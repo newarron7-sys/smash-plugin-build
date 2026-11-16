@@ -85,7 +85,22 @@ def timeline(m, base, off):
     """liste (frame, 'hit', params) / (frame, 'clear', None)"""
     f = 0.0
     out = []
-    for code, params in events(m, base, off):
+    # Primid v0.34 : boucles (00040100 « Set Loop » n, 00050000 « Execute Loop ») déroulées : le feu du smash avant de
+    # REX = 6 tours (coups toutes les 6 images) ; seul le 1er tour était lu. Boucle infinie (-1) : un seul tour.
+    evs = list(events(m, base, off))
+    plat, pile = [], []
+    for code, params in evs:
+        if code == 0x00040100 and params:
+            pile.append((int(pv(*params[0])) if params[0][0] != 1 else int(pv(*params[0])), len(plat)))
+            continue
+        if code == 0x00050000 and pile:
+            n, deb = pile.pop()
+            corps = plat[deb:]
+            for _ in range(max(n, 1) - 1):
+                plat.extend(corps)
+            continue
+        plat.append((code, params))
+    for code, params in plat:
         if code == 0x00010100:
             f += pv(*params[0])
         elif code == 0x00020100:

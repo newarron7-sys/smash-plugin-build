@@ -334,9 +334,9 @@ static mut DIAG_T: [[f32; 2]; 8] = [[0.0; 2]; 8];
 // ------------------------------------------------------------------ v0.18 : armes de REX
 /// coups où Primid tient son épée laser (PSA de REX : traînée d'épée sur AttackS3Hi, AttackS3Lw, AttackHi4,
 /// AttackAirN, AttackAirB, ThrowF ; vidéos du joueur : attaque rapide, tilts avant, smash haut chargé)
-const COUPS_EPEE: [&str; 11] = ["attack_s3_hi", "attack_s3_s", "attack_s3_lw", "attack_hi4", "attack_hi4_hold",
-                                 "attack_hi4_start", "attack_air_n", "attack_air_b", "throw_f", "attack_dash",
-                                 "landing_air_n"];
+/// v0.34 (le joueur) : pas d'épée à l'attaque rapide (REX : la plume de la tête et l'ombre du dos)
+const COUPS_EPEE: [&str; 10] = ["attack_s3_hi", "attack_s3_s", "attack_s3_lw", "attack_hi4", "attack_hi4_hold",
+                                 "attack_hi4_start", "attack_air_n", "attack_air_b", "throw_f", "landing_air_n"];
 
 /// v0.33 : traînée d'épée = système de traînées du jeu (AFTER_IMAGE, comme Zero sur Roy) avec des textures que le jeu
 /// charge toujours : celles des objets (effect/system/item/trail). Mario n'a pas de dossier trail : ses textures à lui
@@ -351,7 +351,7 @@ unsafe fn trainee(fighter: &mut L2CFighterCommon, epee: bool, gauche: bool) {
     let actif = epee && (0..7).any(|i| AttackModule::is_attack(boma, i, false));
     if actif && !TRAINEE_ON[e] {
         let os = Hash40::new(if gauche { "havel" } else { "haver" });
-        AFTER_IMAGE4_ON_arg29(fighter, Hash40::new("tex_item_killsword1"), Hash40::new("tex_item_killsword2"), 7,
+        AFTER_IMAGE4_ON_arg29(fighter, Hash40::new("tex_item_killsword1"), Hash40::new("tex_item_killsword2"), 10,
                               os, 0.0, 2.4, 0.0, os, 0.0, 13.6, 0.0, true, Hash40::new("null"),
                               os, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0, *EFFECT_AXIS_Y, 0,
                               *TRAIL_BLEND_ALPHA, 101, *TRAIL_CULL_NONE, 1.3, 0.2);
@@ -389,20 +389,58 @@ unsafe fn armes(fighter: &mut L2CFighterCommon) {
             &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 1.0, 0, 0, false, 0);
     }
     // le boomerang : pour le côté B de REX (à venir)
-    // smash avant de REX : il crache du feu (Firebreath) pendant que le coup est actif
-    if [smash::hash40("attack_s4_s"), smash::hash40("attack_s4_hi"), smash::hash40("attack_s4_lw")].contains(&mk) && (0..3).any(|i| AttackModule::is_attack(boma, i, false)) {
-        let t = MotionModule::frame(boma) as i32;
-        if t % 2 == 0 {
-            let lr = PostureModule::lr(boma);
-            let (x, y) = pos(boma);
+    // smash avant de REX : il crache du feu (Firebreath). v0.34 (le joueur : « le feu sort trop tard et ne reste pas
+    // assez longtemps ») : REX = 6 tours de coups toutes les 6 images (boucle du PSA, lue maintenant par gen.py) ;
+    // feu dès la fin de la charge (image 20) jusqu'à la fin du dernier coup (61) + 3
+    let f = MotionModule::frame(boma);
+    let lr = PostureModule::lr(boma);
+    let (x, y) = pos(boma);
+    if [smash::hash40("attack_s4_s"), smash::hash40("attack_s4_hi"), smash::hash40("attack_s4_lw")].contains(&mk)
+        && f >= 20.0 && f < 64.0 {
+        if (f as i32) % 2 == 0 {
             for k in 0..3 {
                 let kf = k as f32;
-                let h = EffectModule::req(boma, Hash40::new("sys_fireflower_shot"),
-                    &Vector3f { x: x + lr * (7.0 + 6.0 * kf), y: y + 11.0 - 1.5 * kf, z: 0.0 },
-                    &Vector3f { x: 0.0, y: 90.0 * lr, z: 0.0 }, 1.1 + 0.2 * kf, 0, 0, false, 0) as u32;
-                let _ = h;
+                EffectModule::req(boma, Hash40::new("sys_fireflower_shot"),
+                    &Vector3f { x: x + lr * (6.0 + 6.5 * kf), y: y + 11.0 - 1.2 * kf, z: 0.0 },
+                    &Vector3f { x: 0.0, y: 90.0 * lr, z: 0.0 }, 1.2 + 0.25 * kf, 0, 0, false, 0);
             }
         }
+    }
+    // v0.34 : smash bas de REX = coup de poing de feu : le poing (main gauche de REX, LHandN ; main droite quand le
+    // jeu échange les bras, tourné à gauche) dans les flammes pendant la charge et jusqu'à la fin du dernier coup (26)
+    let lw4 = mk == smash::hash40("attack_lw4") && f < 27.0;
+    if lw4 || mk == smash::hash40("attack_lw4_hold") {
+        if (f as i32) % 2 == 0 {
+            let main = Hash40::new(if lr > 0.0 { "handl" } else { "handr" });
+            EffectModule::req_on_joint(boma, Hash40::new("sys_fireflower_shot"), main,
+                &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 0.75,
+                &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, false, 0, 0, 0);
+        }
+    }
+    // v0.34 : tilt haut = poison (fumée violette de REX) pendant le coup (11 à 21 de REX) ; attaque rapide : la plume et
+    // l'ombre frappent (8 à 35)
+    if mk == smash::hash40("attack_hi3") && f >= 9.0 && f < 23.0 && (f as i32) % 2 == 0 {
+        fumee_violette(boma, x + lr * 1.0, y + 10.0 + (f - 9.0) * 0.6, 0.7);
+        fumee_violette(boma, x + lr * 2.0, y + 17.0, 0.9);
+    }
+    if mk == smash::hash40("attack_dash") && f >= 7.0 && f < 35.0 && (f as i32) % 3 == 0 {
+        fumee_violette(boma, x - lr * 2.0, y + 9.0, 0.6);
+        fumee_violette(boma, x + lr * 1.5, y + 15.0, 0.5);
+    }
+    // v0.34 : l'ombre du dos (Kagemushi de Brawl : grand carré noir ici, retiré du modèle) -> fumée violette qui s'en
+    // échappe comme dans REX
+    if (f as i32) % 9 == 0 && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_DEAD
+        && VisibilityModule::is_visible(boma) {
+        fumee_violette(boma, x - lr * 2.6, y + 8.5, 0.3);
+    }
+}
+
+/// fumée / éclat violets (poison, ombre de REX)
+unsafe fn fumee_violette(boma: *mut BattleObjectModuleAccessor, x: f32, y: f32, ech: f32) {
+    let h = EffectModule::req(boma, Hash40::new("sys_erace_smoke"), &Vector3f { x, y, z: 0.0 },
+                              &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, ech, 0, 0, false, 0) as u32;
+    if h != 0 {
+        EffectModule::set_rgb(boma, h, 0.45, 0.05, 0.65);
     }
 }
 
@@ -1080,12 +1118,17 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     };
     let [mut x, mut y, lr, mut t, mut lache, mut tl] = B[e];
     // pot : chute (sous Botron), vitesse, explosion (temps)
-    let [mut chute, mut vy, mut boum, _] = P[e];
+    // v0.34 (le joueur : « il jette plusieurs fois des projectiles et après il s'en va ») : 3 pots, puis il part
+    let [mut chute, mut vy, mut boum, mut lances] = P[e];
     t += 1.0;
     let mk = MotionModule::motion_kind(w);
     if lache < 0.5 {
         // vol (REX : StartFloat puis FloatFly) vers l'avant, à hauteur constante au-dessus du sol
-        x += 1.1 * lr;
+        match adversaire(e, x, y) {
+            // pots suivants : il se place au-dessus de l'adversaire
+            Some((dx, _)) if lances > 0.5 => x += (dx * 0.08).clamp(-1.3, 1.3),
+            _ => x += 1.1 * lr,
+        }
         if let Some(g) = sol(w, x, y, 80.0) {
             // v0.10 : juste au-dessus des têtes (v0.9 : tout en haut de l'écran)
             let cible = g + 22.0;
@@ -1095,7 +1138,7 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
             MotionModule::change_motion(w, Hash40::new("wait"), 0.0, 1.0, false, 0.0, false, false);
         }
         let au_dessus = adversaire(e, x, y).map_or(false, |(dx, dy)| dx.abs() < 7.0 && dy < 0.0 && dy > -70.0);
-        if au_dessus || t > 150.0 {
+        if au_dessus || t > (if lances > 0.5 { 70.0 } else { 150.0 }) {
             // il lâche son pot (REX : ShootStart + ShootFire)
             lache = 1.0;
             tl = 0.0;
@@ -1134,7 +1177,18 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
             if boum > 6.0 {
                 AttackModule::clear_all(w);
             }
-            if boum > 30.0 {
+            if boum > 24.0 && lances < 2.0 {
+                // pot suivant : il en reprend un et repart vers l'adversaire
+                lances += 1.0;
+                lache = 0.0;
+                t = 0.0;
+                boum = 0.0;
+                chute = 0.0;
+                vy = 0.0;
+                pot_porte(w, true);
+                pot_os(w, 0.0);
+                MotionModule::change_motion(w, Hash40::new("wait"), 0.0, 1.0, false, 0.0, false, false);
+            } else if boum > 30.0 {
                 // il remonte et s'en va (REX : ShootEnd)
                 y += 1.2;
                 x += 0.6 * lr;
@@ -1148,7 +1202,7 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
         }
     }
     B[e] = [x, y, lr, t, lache, tl];
-    P[e] = [chute, vy, boum, 0.0];
+    P[e] = [chute, vy, boum, lances];
     placer(w, x, y);
     orienter(w, lr);
     visible(w);

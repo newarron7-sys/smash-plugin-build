@@ -155,10 +155,12 @@ unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
         }
         // v0.27 : coups d'épée sur l'os de l'épée ; tourné à gauche, l'épée est dans l'autre main (copie en miroir)
         let os_coup = if e.bone == "havel" && PostureModule::lr(boma) < 0.0 { "haver" } else { e.bone };
+        // v0.34 (le joueur : « le tilt haut, c'est un coup avec des effets de poison ») : coups violets (ombre)
+        let attr = if script == "game_attackhi3" { "collision_attr_purple" } else { e.attr };
         ATTACK(agent, e.id, 0, Hash40::new(os_coup), e.dmg, e.angle, e.kbg, e.fkb, e.bkb, e.size, e.x, e.y, e.z,
                None, None, None, e.hitlag, e.sdi, *ATTACK_SETOFF_KIND_ON, lr_check, false, 0, e.trip, 0,
                false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL,
-               *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), *ATTACK_SOUND_LEVEL_M, *COLLISION_SOUND_ATTR_PUNCH,
+               *COLLISION_PART_MASK_ALL, false, Hash40::new(attr), *ATTACK_SOUND_LEVEL_M, *COLLISION_SOUND_ATTR_PUNCH,
                *ATTACK_REGION_PUNCH);
     }
     if mv.kind == 2 {

@@ -212,7 +212,10 @@ def main():
                     # Super Shadow : décalage dans le repère de l'os de Brawl (X, Y, Z = v[8], v[7], v[6]) -> repère de
                     # l'os d'Ultimate associé (hit_keys.py) ; sinon les coups des membres partaient de côté
                     _R = HIT_KEYS[bn]['R']
-                    _v = (v[8], v[7], v[6])
+                    # v0.34 : 't' = origine de l'os de Brawl dans le repère de son parent (os sans équivalent : la plume
+                    # HappaN au-dessus de la tête, l'ombre KagemushiN dans le dos -> tête / buste + ce décalage)
+                    _t = HIT_KEYS[bn].get('t', (0.0, 0.0, 0.0))
+                    _v = (v[8] + _t[0], v[7] + _t[1], v[6] + _t[2])
                     bz, by, bx = (sum(_R[k][j] * _v[j] for j in range(3)) for k in range(3))
                     bone = HIT_KEYS[bn]['u']
                 dmg = v[1] if 0 <= v[1] < 200 else 0.0

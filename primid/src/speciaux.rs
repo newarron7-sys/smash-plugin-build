@@ -72,7 +72,9 @@ unsafe fn fin(fighter: &mut L2CFighterCommon, e: usize) {
 pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let e = e_of(boma);
-    let tient = tenu(boma) && MotionModule::frame(boma) < LANCER;
+    // v0.34 (le joueur) : au tilt bas, il frappe avec son boomerang
+    let tilt_bas = MotionModule::motion_kind(boma) == smash::hash40("attack_lw3");
+    let tient = (tenu(boma) && MotionModule::frame(boma) < LANCER) || (tilt_bas && !en_vol(boma));
     let gauche = PostureModule::lr(boma) > 0.0;
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_boomerang"), tient && gauche);
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_boomerang_r"), tient && !gauche);
