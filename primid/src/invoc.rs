@@ -503,7 +503,7 @@ static mut INV: [u8; 8] = [0; 8];
 static mut Q: [[f32; 4]; 8] = [[0.0; 4]; 8];
 
 /// (nom des objets, nombre de poses, symétrique)
-const INV_OBJ: [(&str, usize, bool); 3] = [("mite", 9, false), ("boobas", 6, false), ("cymul", 6, true)];
+const INV_OBJ: [(&str, usize, bool); 3] = [("mite", 9, false), ("boobas", 6, false), ("cymul", 8, true)];
 
 unsafe fn inv_creer(boma: *mut BattleObjectModuleAccessor, e: usize, kind: u8) {
     if INV[e] != 0 {
@@ -856,10 +856,14 @@ unsafe fn boobas_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
 }
 
 // ---------------------------------------------------------------- Cymul
-/// REX (ItmPrimid00) : animations Start, Float, Reflector ; ennemi de l'Émissaire subspatial (SmashWiki) : il se
+/// REX (ItmPrimid00) : animations Start, Float, ItmBumper ; ennemi de l'Émissaire subspatial (SmashWiki) : il se
 /// déplace en volant ; quand un perso s'approche, il sort ses réflecteurs et tourne : petits coups répétés (toutes les
 /// 8 images, ils le gardent près de lui), puis un dernier coup qui l'envoie vers le haut.
-/// Phases : 0 sortie du portail, 1 vole vers l'adversaire, 2 tourne, 3 repos. Poses : 0-1 vol, 2-5 rotation.
+/// v0.19 (vidéo de REX du joueur) : il déploie ses lames (animation ItmBumper : réflecteurs sortis, rotation de 18° par
+/// image) et tourne ; plus gros (x1,2) ; il passait sous le sol (son origine est en son centre).
+/// Phases : 0 sortie du portail, 1 vole vers l'adversaire, 2 tourne, 3 repos.
+/// Poses : 0-1 vol, 2 lames sorties, 3-7 rotation (un quart de tour, les 4 lames se répètent).
+const CYMUL_BAS: f32 = 10.5;
 /// vitesse vers (ax, ay), lissée (il flotte)
 fn vise(x: f32, y: f32, vx: &mut f32, vy: &mut f32, ax: f32, ay: f32, v: f32) {
     let (dx, dy) = (ax - x, ay - y);
@@ -878,7 +882,7 @@ unsafe fn cymul_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
         att -= 1.0;
     }
     let cible = adversaire_obj(e, x, y);
-    let mut pose = if ((t as i32 / 20) % 2) == 0 { 0 } else { 1 };
+    let mut pose = if ((t as i32 / 30) % 2) == 0 { 0 } else { 1 };
     if ph < 0.5 {
         // sort du portail et descend un peu
         vise(x, y, &mut vx, &mut vy, x, y - 8.0, 0.6);
@@ -888,9 +892,9 @@ unsafe fn cymul_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
         }
     } else if ph < 1.5 || ph > 2.5 {
         if let Some((_, dx, dy)) = cible {
-            let (ax, ay) = (x + dx, y + dy + 5.0);
+            let (ax, ay) = (x + dx, y + dy + 9.0);
             vise(x, y, &mut vx, &mut vy, ax, ay, 0.75);
-            if ph < 1.5 && att <= 0.0 && dx.abs() < 12.0 && (dy + 5.0).abs() < 12.0 {
+            if ph < 1.5 && att <= 0.0 && dx.abs() < 18.0 && (dy + 9.0).abs() < 14.0 {
                 ph = 2.0;
                 Q[e][0] = 0.0;
                 vx = 0.0;
@@ -905,22 +909,22 @@ unsafe fn cymul_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
             Q[e][0] = 0.0;
         }
     } else {
-        // rotation, réflecteurs sortis : coups répétés puis coup final vers le haut
+        // rotation, lames sorties : coups répétés puis coup final vers le haut
         vx *= 0.8;
         vy *= 0.8;
-        pose = 2 + ((t as i32 / 3) % 4) as usize;
         let ti = tp as i32;
-        if ti < 48 {
-            if ti % 8 == 1 {
+        pose = if ti < 4 || ti > 56 { 2 } else { 3 + (ti % 5) as usize };
+        if ti >= 4 && ti < 50 {
+            if ti % 8 == 4 {
                 AttackModule::clear(boma, 7, false);
-                inv_coup(fighter, x, y, 1.2, 80, 20, 25, 6.0, 4.0);
-            } else if ti % 8 == 4 {
+                inv_coup(fighter, x, y, 1.2, 80, 20, 25, 11.0, 0.0);
+            } else if ti % 8 == 7 {
                 AttackModule::clear(boma, 7, false);
             }
-        } else if ti == 50 {
+        } else if ti == 52 {
             AttackModule::clear(boma, 7, false);
-            inv_coup(fighter, x, y, 2.5, 85, 110, 55, 7.0, 4.0);
-        } else if ti == 54 {
+            inv_coup(fighter, x, y, 2.5, 85, 110, 55, 12.0, 0.0);
+        } else if ti == 56 {
             AttackModule::clear(boma, 7, false);
         } else if ti > 60 {
             ph = 3.0;
@@ -930,10 +934,10 @@ unsafe fn cymul_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
     }
     x += vx;
     y += vy;
-    // jamais dans le sol
-    if let Some(g) = sol(boma, x, y, 3.0) {
-        if y < g + 3.0 {
-            y = g + 3.0;
+    // jamais dans le sol (son origine est en son centre)
+    if let Some(g) = sol(boma, x, y, CYMUL_BAS + 4.0) {
+        if y < g + CYMUL_BAS {
+            y = g + CYMUL_BAS;
             vy = vy.max(0.0);
         }
     }
