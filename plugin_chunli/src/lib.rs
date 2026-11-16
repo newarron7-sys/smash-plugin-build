@@ -10,6 +10,7 @@
 //! Étape 3 : lancers de Melee ; côté B avec l'avancée de Melee ; coups x 1,3.
 //! v8 : côté B à position imposée, tour plus lent ; adversaire tenu droit, couché sur le dos au lancer bas.
 //! v12 : côté B qui retient l'adversaire, un peu plus long ; bas B en l'air = plongée Hazanshu (sans charge).
+//! v13 : +6 images d'étourdissement sur tous ses coups (STUN_PLUS).
 
 use smash::app::sv_animcmd::{frame, wait};
 use smash::app::lua_bind::*;
@@ -46,6 +47,10 @@ pub const K_RELEASE: u8 = 15;
 
 /// taille des coups x 1,3 (demande du joueur : « élargis ses hitbox en général, elle touche pas assez bien »)
 pub const AGRANDI: f32 = 1.3;
+
+/// images d'étourdissement (hitstun) ajoutées à tous ses coups (demande du joueur, 16/11 : « ses coups ne stun pas
+/// assez, l'adversaire peut réagir beaucoup trop vite ») ; réglage commun, pas les lancers
+pub const STUN_PLUS: f32 = 6.0;
 
 /// intangibilité posée par un spécial (haut B, bas B) : remise à la normale si le statut est quitté avant la fin
 static mut INTANGIBLE: [bool; 8] = [false; 8];
@@ -254,6 +259,7 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
                        0, false, false, false, false, true, situation(e.sit), *COLLISION_CATEGORY_MASK_ALL,
                        *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), niveau(e.lvl), son(e.snd),
                        if e.snd == 1 { *ATTACK_REGION_KICK } else { *ATTACK_REGION_PUNCH });
+                AttackModule::set_add_reaction_frame(boma, e.id as i32, STUN_PLUS, false);
                 if catch_only || mv.kind == 5 {
                     // coup pendant la prise / le lancer : seulement sur l'adversaire tenu (comme Ken)
                     AttackModule::set_catch_only_all(boma, true, false);
