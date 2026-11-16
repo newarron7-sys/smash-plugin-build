@@ -104,8 +104,8 @@ pub const SS_COSTUMES: [usize; 1] = [100];
 
 /// taille (vidéo / remarque du 15/11 : « beaucoup trop grand et gros par rapport à Kirby ») : le modèle de REX fait
 /// 18 de haut avec ses cheveux (corps ~12) ; ramené à la taille de Kirby. Les coups de REX (tailles, décalages)
-/// suivent la même échelle.
-pub const ECHELLE: f32 = 0.6;
+/// suivent la même échelle. v1f (photo à côté de Kirby, 16/11 : « plus petit que Kirby ») : 0,6 -> 0,8.
+pub const ECHELLE: f32 = 0.8;
 
 /// poussées (script, image de REX, vitesse vers l'avant, vers le haut) : aucune pour l'instant
 pub const POUSSEES: &[(&str, f32, f32, f32)] = &[];
