@@ -12,7 +12,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Cache outils (cargo-skyline, toolchain Switch)
@@ -24,12 +24,13 @@ jobs:
             ~/.rustup/toolchains/*skyline*
             ~/.cargo/registry
             ~/.cargo/git
-            plugin_lylat/target
-          key: skyline-ly-v1-${{ hashFiles('plugin_lylat/Cargo.toml') }}
+            plugin_chunli/target
+          # même cache que plugin_chunli.yml (outils déjà là : update-std échoue sur la limite de l'API GitHub)
+          key: skyline-cl-v1-${{ hashFiles('plugin_chunli/Cargo.toml') }}
           restore-keys: skyline-
       - name: Compiler
         working-directory: plugin_lylat
-        timeout-minutes: 40
+        timeout-minutes: 15
         run: |
           command -v cargo-skyline >/dev/null || cargo install cargo-skyline
           if ! (rustup toolchain list | grep -qi skyline && [ -d ~/.cargo/skyline/toolchain ]); then for i in 1 2 3 4 5; do cargo skyline update-std && break; sleep 20; done; fi
