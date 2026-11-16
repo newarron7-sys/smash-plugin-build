@@ -390,7 +390,7 @@ GROUPES = {
         'd00specialnstart': ['SpecialNStart'], 'd00specialairnstart': ['SpecialAirNStart'],
         'd00specialnhold': ['SpecialNHold'], 'd00specialairnhold': ['SpecialAirNHold'],
         'd00specialnfire': ['SpecialNFire'], 'd00specialnairfire': ['SpecialAirNFire'],
-        'd00specialnend': ['SpecialNFire'], 'd00specialairnend': ['SpecialAirNFire'],
+        'd00specialnend': ['SpecialNEnd'], 'd00specialairnend': ['SpecialAirNFire'],
         'd01specials': ['SpecialAirSStart', 'SpecialS'], 'd01specialairs': ['SpecialAirSStart', 'SpecialS'],
         'd02specialhistart': ['SpecialHi'], 'd02specialairhistart': ['SpecialHi'],
         'd03speciallwstart': ['SpecialLwStart'], 'd03specialairlwstart': ['SpecialAirLwStart'],
@@ -785,6 +785,9 @@ if GROUPE == 'chief_prises':
     KEEP_Y = set()
 if GROUPE == 'kjoe_speciaux':
     IN_PLACE = set(GROUPES['kjoe_speciaux'])
+    # couches de visée / jambes de Master Chief (mêmes noms de fichiers que Ness) : pas pour Knuckle Joe
+    HAUT_SEUL = set()
+    JAMBES_DE = {}
     KEEP_Y = set()
 if GROUPE == 'metal_final':
     IN_PLACE = set(GROUPES['metal_final'])
