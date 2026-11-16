@@ -199,8 +199,22 @@ unsafe extern "C" fn n_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
                     EffectModule::set_rgb(boma, h, BLEU.0, BLEU.1, BLEU.2);
                 }
             }
+            // vidéo du showcase : pendant la charge, le corps clignote en blanc-lilas et une boule bleue brille au poing
+            if t % 6 == 0 {
+                FLASH(fighter, 0.9, 0.85, 1.0, 0.55 + 0.05 * niveau as f32);
+            } else if t % 6 == 3 {
+                FLASH(fighter, 0.9, 0.85, 1.0, 0.25);
+            }
+            if t % 5 == 1 {
+                let p = smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+                let h = EffectModule::req_follow(boma, Hash40::new("sys_smash_flash_s"), Hash40::new("handr"), &p, &p, 0.7 + 0.1 * niveau as f32, true, 0, 0, 0, 0, 0, false, false) as u32;
+                if h != 0 {
+                    EffectModule::set_rgb(boma, h, BLEU.0, BLEU.1, BLEU.2);
+                }
+            }
             let tenu = ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_SPECIAL);
             if (!tenu && t > 3) || t >= 180 {
+                COL_NORMAL(fighter);
                 N_PHASE[e] = 2;
                 N_NIVEAU = niveau;
                 mouvement(boma, if N_AIR[e] { "special_n_air_fire" } else { "special_n_fire" }, 1.0);
@@ -220,6 +234,7 @@ unsafe extern "C" fn n_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
 }
 
 unsafe extern "C" fn n_end(fighter: &mut L2CFighterCommon) -> L2CValue {
+    COL_NORMAL(fighter);
     KineticModule::enable_energy(fighter.module_accessor, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
     0.into()
 }
@@ -234,7 +249,9 @@ unsafe extern "C" fn g_n_tir(agent: &mut L2CAgentBase) {
 }
 unsafe extern "C" fn e_n_tir(agent: &mut L2CAgentBase) {
     frame(agent.lua_state_agent, N_LACHER);
-    fx(agent, "sys_smash_flash", "throw", (0.0, 0.0, 0.0), 1.0 + 0.15 * N_NIVEAU as f32, BLEU);
+    fx(agent, "sys_smash_flash", "handr", (0.0, 0.0, 0.0), 1.0 + 0.15 * N_NIVEAU as f32, BLEU);
+    // traits blancs derrière lui au coup de poing (showcase)
+    fx(agent, "sys_attack_speedline", "top", (0.0, 5.0, -3.0), 1.2, BLANC);
 }
 unsafe extern "C" fn s_n_tir(agent: &mut L2CAgentBase) {
     frame(agent.lua_state_agent, N_LACHER);
@@ -355,6 +372,7 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
 }
 
 unsafe extern "C" fn hi_end(fighter: &mut L2CFighterCommon) -> L2CValue {
+    COL_NORMAL(fighter);
     KineticModule::enable_energy(fighter.module_accessor, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
     0.into()
 }
@@ -380,9 +398,22 @@ unsafe extern "C" fn g_hi(agent: &mut L2CAgentBase) {
 }
 unsafe extern "C" fn e_hi(agent: &mut L2CAgentBase) {
     let lua = agent.lua_state_agent;
+    frame(lua, 1.0);
+    if is_excute(agent) {
+        FLASH(agent, 1.0, 1.0, 1.0, 0.7);
+    }
+    fx(agent, "sys_smash_flash_s", "top", (0.0, 5.0, 0.0), 1.3, BLANC);
     frame(lua, 5.0);
     if is_excute(agent) {
         LANDING_EFFECT(agent, Hash40::new("sys_jump_smoke"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, false);
+    }
+    frame(lua, 7.0);
+    if is_excute(agent) {
+        COL_NORMAL(agent);
+        // gerbe blanche au sol au départ (showcase)
+        EFFECT(agent, Hash40::new("sys_bomb_b"), Hash40::new("top"), 0, 2, 0, 0, 0, 0, 1.1, 0, 0, 0, 0, 0, 0, true);
+        LAST_EFFECT_SET_COLOR(agent, 1.0, 1.0, 1.0);
+        EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
     }
     frame(lua, 8.0);
     fx(agent, "sys_smash_flash", "handr", (0.0, 0.0, 0.0), 1.0, BLANC);
@@ -392,7 +423,10 @@ unsafe extern "C" fn e_hi(agent: &mut L2CAgentBase) {
         frame(lua, f);
         if is_excute(agent) {
             EFFECT(agent, Hash40::new("sys_smash_flash_s"), Hash40::new("handr"), 0, 0, 0, 0, 0, 0, 0.7, 0, 0, 0, 0, 0, 0, true);
-            LAST_EFFECT_SET_COLOR(agent, 1.0, 0.8, 0.4);
+            LAST_EFFECT_SET_COLOR(agent, 0.75, 0.9, 1.0);
+            // traînée bleu-blanc le long du corps en montant
+            EFFECT(agent, Hash40::new("sys_smash_flash_s"), Hash40::new("hip"), 0, 0, 0, 0, 0, 0, 1.1, 0, 0, 0, 0, 0, 0, true);
+            LAST_EFFECT_SET_COLOR(agent, 0.6, 0.85, 1.0);
         }
         f += 2.0;
     }
@@ -538,6 +572,12 @@ unsafe extern "C" fn e_lw_plongee(agent: &mut L2CAgentBase) {
         f += 2.0;
     }
 }
+unsafe extern "C" fn e_lw_depart(agent: &mut L2CAgentBase) {
+    frame(agent.lua_state_agent, 4.0);
+    if is_excute(agent) {
+        LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, false);
+    }
+}
 unsafe extern "C" fn e_lw_atterrit(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
@@ -566,7 +606,7 @@ pub fn install(a: &mut Agent) {
         "effect_specialhistart", "sound_specialhistart", "game_specialairhistart", "effect_specialairhistart",
         "sound_specialairhistart", "game_speciallwstart", "game_speciallwhold", "effect_speciallwhold",
         "game_specialairlwhold", "effect_specialairlwhold", "effect_speciallwend", "effect_specialairlwend",
-        "effect_speciallwhit", "effect_specialairlwhit"];
+        "effect_speciallwhit", "effect_specialairlwhit", "effect_speciallwstart"];
     for m in ["specialnstart", "specialairnstart", "specialnhold", "specialairnhold", "specialnfire", "specialnairfire",
               "specialnend", "specialairnend", "specials", "specialairs", "specialhistart", "specialairhistart",
               "speciallwstart", "specialairlwstart", "speciallwhold", "specialairlwhold", "speciallwend",
@@ -594,6 +634,7 @@ pub fn install(a: &mut Agent) {
         a.acmd(Box::leak(format!("sound_{}", m).into_boxed_str()), s_hi, Priority::Low);
     }
     a.acmd("game_speciallwstart", g_lw_depart, Priority::Low);
+    a.acmd("effect_speciallwstart", e_lw_depart, Priority::Low);
     for m in ["speciallwhold", "specialairlwhold"] {
         a.acmd(Box::leak(format!("game_{}", m).into_boxed_str()), g_lw_plongee, Priority::Low);
         a.acmd(Box::leak(format!("effect_{}", m).into_boxed_str()), e_lw_plongee, Priority::Low);

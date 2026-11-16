@@ -41,3 +41,8 @@
   saut de 26 + 6 %, SpecialLw : plongée 0,5 / -5, 10 % 270° puis 88°, SpecialLwEnd, SpecialLwHit rebond -7/+8).
 - Animations : groupe kjoe_speciaux (sur place), trajet par trajet_rex.py (table TRAJET), x ECHELLE.
 - Projectile du B neutre : PK Feu de Ness redessiné (projectile.rs), dégâts 6 + 3 x niveau, plus gros avec la charge.
+- Showcase des spéciaux (vidéo du 16/11) : B neutre = charge (corps qui clignote blanc-lilas, boule bleue au poing),
+  coup de poing avec traits blancs et tir ; haut B = flash blanc, gerbe blanche au sol au départ, traînée bleu-blanc ;
+  bas B = nuage de poussière au décollage et à l'atterrissage. Ajoutés dans speciaux.rs.
+- Piège : retarget_exo.py applique les couches de visée de Master Chief (HAUT_SEUL / JAMBES_DE) par nom de fichier
+  Ness (d00specialnhold…) : désactivées pour le groupe kjoe_speciaux (sinon KeyError SpecialNAimREDO, aucune anim).
