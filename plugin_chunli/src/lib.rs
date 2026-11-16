@@ -12,6 +12,8 @@
 //! v12 : côté B qui retient l'adversaire, un peu plus long ; bas B en l'air = plongée Hazanshu (sans charge).
 //! v13 : +6 images d'étourdissement sur tous ses coups (STUN_PLUS).
 //! v14 : +12 ; côté B : adversaire tiré devant elle à chaque coup, elle s'arrête au bord au sol.
+//! v15 : effets à la manière de Ken (traînées, impacts, fumées, charge) ; côté B avec les effets de Ken ; lancer bas :
+//! onde de choc au sol et tremblement d'écran.
 
 use smash::app::sv_animcmd::{frame, wait};
 use smash::app::lua_bind::*;
@@ -45,6 +47,9 @@ pub const K_RYU: u8 = 13;
 /// lancers : ATTACK_ABS (id 0 lancer, 1 lâcher si l'adversaire se libère) et moment du lâcher
 pub const K_THROW: u8 = 14;
 pub const K_RELEASE: u8 = 15;
+/// effets (gen_chunli.py, d'après les scripts d'effets de Ken) : id 0 traînée sys_attack_speedline (x, y, z dans
+/// « top », rx = inclinaison, size = taille) ; id 1 onde de choc du lancer bas (x, z = où l'adversaire est lâché)
+pub const K_FX: u8 = 16;
 
 /// taille des coups x 1,3 (demande du joueur : « élargis ses hitbox en général, elle touche pas assez bien »)
 pub const AGRANDI: f32 = 1.3;
@@ -93,10 +98,12 @@ pub struct Ev {
     pub shield: i32,
     /// 1 au sol, 2 en l'air, 3 les deux
     pub sit: u8,
+    /// effets : inclinaison (degrés, positif = vers le bas)
+    pub rx: f32,
 }
 
 pub const E: Ev = Ev { f: 0.0, k: K_HIT, id: 0, grp: 0, bone: "top", dmg: 0.0, angle: 361, kbg: 100, fkb: 0, bkb: 0, size: 3.0,
-    x: 0.0, y: 0.0, z: 0.0, attr: "collision_attr_normal", snd: 0, lvl: 1, shield: 0, sit: 3 };
+    x: 0.0, y: 0.0, z: 0.0, attr: "collision_attr_normal", snd: 0, lvl: 1, shield: 0, sit: 3, rx: 0.0 };
 
 pub struct Mv {
     pub script: &'static str,
@@ -184,7 +191,7 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     }
     liste.sort_by(|a, b| a.f.partial_cmp(&b.f).unwrap_or(core::cmp::Ordering::Equal));
     for e in liste.iter() {
-        if matches!(e.k, K_SE | K_VOIX) {
+        if matches!(e.k, K_SE | K_VOIX | K_FX) {
             continue;
         }
         // charge du smash : le jeu passe à la charge une image après le drapeau ; posé une image plus tôt que dans
@@ -343,25 +350,75 @@ pub(crate) unsafe fn run_son(agent: &mut L2CAgentBase, script: &str) {
 /// effets : éclair d'impact sur le coup le plus fort de chaque image de coup (ceux de Ken, flammes comprises, sont
 /// retirés : ils suivaient ses propres coups)
 pub(crate) unsafe fn run_effet(agent: &mut L2CAgentBase, script: &str) {
+    // effets à la manière des scripts de Ken (jeu de base) : fumée au pied au départ des tilts / smashs, poussière du
+    // dash, éclat de charge du smash, traînée du membre qui frappe une image avant le coup, impact au coup ; lancer
+    // bas : onde de choc au sol et poussière où l'adversaire est écrasé (comme les lancers bas de Cloud / Captain
+    // Falcon ; le tremblement d'écran est dans run_expression)
     let mv: &Mv = match find(script) { Some(m) => m, None => return };
     let lua = agent.lua_state_agent;
+    let mut liste: Vec<Ev> = mv.evs.iter().filter(|e| matches!(e.k, K_HIT | K_FX | K_HOLD)).copied().collect();
+    let premier = mv.evs.iter().filter(|e| e.k == K_HIT).map(|e| e.f).fold(f32::MAX, f32::min);
+    let r = &script[5..];
+    let tilt_smash = mv.kind == 1 || r.starts_with("attacks3") || r.starts_with("attackhi3") || r.starts_with("attacklw3");
+    if r == "attackdash" {
+        liste.push(Ev { f: 1.0, k: K_FX, id: 10, ..E });
+    } else if tilt_smash && premier < f32::MAX {
+        liste.push(Ev { f: (premier - 2.0).max(1.0), k: K_FX, id: 11, ..E });
+    }
+    liste.sort_by(|a, b| a.f.partial_cmp(&b.f).unwrap_or(core::cmp::Ordering::Equal));
     let mut cur = 0.0f32;
     let mut last = -1.0f32;
-    for (i, e) in mv.evs.iter().enumerate() {
-        if e.k != K_HIT || e.f == last {
+    for e in liste.iter() {
+        if e.k == K_HIT && e.f == last {
             continue;
         }
-        last = e.f;
-        let best = mv.evs.iter().filter(|o| o.k == K_HIT && o.f == e.f)
-            .fold(*e, |a, o| if o.dmg * o.size > a.dmg * a.size { *o } else { a });
-        let af = img(e.f);
+        let af = if e.k == K_HOLD { (e.f - 1.0).max(1.0) } else { img(e.f) };
         if af > cur {
             frame(lua, af);
             cur = af;
         }
+        if !is_excute(agent) {
+            continue;
+        }
+        match (e.k, e.id) {
+            (K_HIT, _) => {
+                last = e.f;
+                let best = mv.evs.iter().filter(|o| o.k == K_HIT && o.f == e.f)
+                    .fold(*e, |a, o| if o.dmg * o.size > a.dmg * a.size { *o } else { a });
+                EFFECT_FOLLOW_ALPHA(agent, Hash40::new("sys_attack_impact"), Hash40::new(best.bone), best.x, best.y, best.z,
+                                    0, 0, 0, 0.55 + 0.03 * best.dmg.min(15.0), false, 0.6);
+            }
+            (K_HOLD, _) => {
+                EFFECT(agent, Hash40::new("sys_smash_flash"), Hash40::new("top"), 7, 10, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, false);
+            }
+            (K_FX, 0) => {
+                EFFECT_FOLLOW_FLIP_ALPHA(agent, Hash40::new("sys_attack_speedline"), Hash40::new("sys_attack_speedline"),
+                                         Hash40::new("top"), e.x, e.y, e.z, e.rx, 0, 0, e.size, true, *EF_FLIP_YZ, 0.6);
+                LAST_EFFECT_SET_RATE(agent, 1.5);
+            }
+            (K_FX, 1) => {
+                EFFECT(agent, Hash40::new("sys_crown"), Hash40::new("top"), e.z, 0, e.x, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, false);
+                LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), e.z, 0, e.x, 0, 0, 0, 1.1, 0, 0, 0, 0,
+                               0, 0, false);
+            }
+            (K_FX, 10) => {
+                FOOT_EFFECT(agent, Hash40::new("sys_dash_smoke"), Hash40::new("top"), -3, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, false);
+            }
+            (K_FX, 11) => {
+                FOOT_EFFECT(agent, Hash40::new("sys_run_smoke"), Hash40::new("top"), -5, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, false);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// lancer bas : tremblement d'écran quand l'adversaire touche le sol (QUAKE, comme les lancers bas de Ken / Cloud)
+pub(crate) unsafe fn run_expression(agent: &mut L2CAgentBase, script: &str) {
+    let mv: &Mv = match find(script) { Some(m) => m, None => return };
+    if let Some(e) = mv.evs.iter().find(|e| e.k == K_FX && e.id == 1) {
+        frame(agent.lua_state_agent, img(e.f));
         if is_excute(agent) {
-            EFFECT_ALPHA(agent, Hash40::new("sys_attack_impact"), Hash40::new(best.bone), best.x, best.y, best.z, 0, 0, 0,
-                         0.55 + 0.03 * best.dmg.min(15.0), 0, 0, 0, 0, 0, 360, false, 0.5);
+            QUAKE(agent, *CAMERA_QUAKE_KIND_M);
         }
     }
 }
@@ -487,6 +544,8 @@ unsafe extern "C" fn cl_frame(fighter: &mut L2CFighterCommon) {
     }
 }
 
+unsafe extern "C" fn expression_throwlw(agent: &mut L2CAgentBase) { run_expression(agent, "game_throwlw"); }
+
 macro_rules! scripts {
     ($($g:ident, $s:ident, $e:ident => $n:literal),* $(,)?) => {
         $(
@@ -506,8 +565,12 @@ macro_rules! scripts {
                     if !r.starts_with("special") && !r.starts_with("throw") {
                         a.acmd(Box::leak(format!("sound_{}", r).into_boxed_str()), $s, Priority::Low);
                     }
-                    if !(r == "specialn" || r == "specialairn") {
+                    // effets de Ken gardés pour le Hadoken et le Tatsumaki (côté B : demande du joueur, 16/11)
+                    if !(r == "specialn" || r == "specialairn" || r.starts_with("specials") || r.starts_with("specialairs")) {
                         a.acmd(Box::leak(format!("effect_{}", r).into_boxed_str()), $e, Priority::Low);
+                    }
+                    if r == "throwlw" {
+                        a.acmd("expression_throwlw", expression_throwlw, Priority::Low);
                     }
                 }
             )*
