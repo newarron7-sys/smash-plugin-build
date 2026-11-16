@@ -351,6 +351,8 @@ GROUPES['primid_base'].update({
 })
 # v0.24 : haut B de Primid (REX : SpecialHi / SpecialAirHi : l'Auroros l'emporte vers le haut)
 GROUPES['primid_hi'] = {'d02specialhi': ['SpecialHi'], 'd02specialairhi': ['SpecialAirHi']}
+# v0.30 : côté B (boomerang) : lancer au sol / en l'air
+GROUPES['primid_s'] = {'d01specials': ['SpecialSThrowN'], 'd01specialairs': ['SpecialSThrowAir']}
 JOBS = GROUPES[GROUPE]
 # v0.7 : 6e argument optionnel = liste des animations du perso de base : les autres noms sont ignorés (un fichier
 # inconnu du jeu ne serait pas chargé)

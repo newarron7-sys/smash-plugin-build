@@ -95,6 +95,7 @@ include!("generated.rs");
 mod prises;
 mod invoc;
 mod coups;
+mod speciaux;
 
 /// perso de base (nom interne) : Mario
 pub const BASE: &str = "mario";
@@ -182,6 +183,7 @@ macro_rules! scripts {
             prises::install(&mut a);
             invoc::install(&mut a);
             coups::install(&mut a);
+            speciaux::install(&mut a);
             a.on_line(Main, primid_frame);
             a.install();
         }
@@ -192,6 +194,7 @@ macro_rules! scripts {
 unsafe extern "C" fn primid_frame(fighter: &mut L2CFighterCommon) {
     invoc::update(fighter);
     coups::update(fighter);
+    speciaux::update(fighter);
 }
 
 scripts! {
@@ -216,6 +219,8 @@ scripts! {
     g_attackairlw => "game_attackairlw",
     g_specialhi => "game_specialhi",
     g_specialairhi => "game_specialairhi",
+    g_specials => "game_specials",
+    g_specialairs => "game_specialairs",
 }
 
 /// effets, sons et expressions des scripts de Mario (placés pour ses animations à lui) : retirés sur celles de Primid
