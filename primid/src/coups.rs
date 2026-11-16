@@ -63,6 +63,15 @@ unsafe extern "C" fn hi4_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     0.into()
 }
 
+unsafe extern "C" fn rien(_agent: &mut L2CAgentBase) {}
+
 pub fn install(a: &mut Agent) {
     a.status(Main, *FIGHTER_STATUS_KIND_ATTACK_HI4, hi4_main);
+    // v0.24 : haut B = animation de REX (SpecialHi : l'Auroros l'emporte, montée dans l'animation) et ses coups
+    // (generated.rs, MAP_PLUS) ; effets, sons et expressions du Super Saut Poing de Mario (pièces) retirés
+    for m in ["specialhi", "specialairhi"] {
+        for k in ["effect", "sound", "expression"] {
+            a.acmd(&format!("{}_{}", k, m), rien, Priority::Low);
+        }
+    }
 }

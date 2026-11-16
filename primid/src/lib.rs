@@ -212,6 +212,8 @@ scripts! {
     g_attackairb => "game_attackairb",
     g_attackairhi => "game_attackairhi",
     g_attackairlw => "game_attackairlw",
+    g_specialhi => "game_specialhi",
+    g_specialairhi => "game_specialairhi",
 }
 
 /// effets, sons et expressions des scripts de Mario (placés pour ses animations à lui) : retirés sur celles de Primid
