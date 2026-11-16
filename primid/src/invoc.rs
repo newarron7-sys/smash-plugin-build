@@ -338,6 +338,58 @@ const COUPS_EPEE: [&str; 11] = ["attack_s3_hi", "attack_s3_s", "attack_s3_lw", "
                                  "attack_hi4_start", "attack_air_n", "attack_air_b", "throw_f", "attack_dash",
                                  "landing_air_n"];
 
+/// os libres du ruban de la traînée (colonne k = k images plus tôt : pied, pointe ; même ordre que trail_primid.py)
+const TRAINEE: [(&str, &str); 9] = [("fingerl13", "fingerl23"), ("fingerl33", "fingerl43"), ("fingerl53", "fingerr13"),
+                                    ("fingerr23", "fingerr33"), ("fingerr43", "fingerr53"), ("uplipl1", "uplipr1"),
+                                    ("uplipl2", "uplipr2"), ("uplipc", "downlipc"), ("downlipr", "downlipl")];
+/// positions passées de la lame : [image][pied / pointe] ; nombre d'images remplies ; images depuis le dernier coup actif
+static mut HIST: [[[Vector3f; 2]; 9]; 8] = [[[Vector3f { x: 0.0, y: 0.0, z: 0.0 }; 2]; 9]; 8];
+static mut HIST_N: [usize; 8] = [0; 8];
+static mut DEPUIS_COUP: [i32; 8] = [99; 8];
+
+unsafe fn trainee(fighter: &mut L2CFighterCommon, epee: bool, gauche: bool) {
+    let boma = fighter.module_accessor;
+    let e = e_of(boma);
+    let actif = epee && (0..7).any(|i| AttackModule::is_attack(boma, i, false));
+    DEPUIS_COUP[e] = if actif { 0 } else { (DEPUIS_COUP[e] + 1).min(99) };
+    let montre = epee && DEPUIS_COUP[e] <= 8;
+    if !montre {
+        if HIST_N[e] > 0 {
+            for (p, t) in TRAINEE.iter() {
+                ModelModule::clear_joint_srt(boma, Hash40::new(p));
+                ModelModule::clear_joint_srt(boma, Hash40::new(t));
+            }
+        }
+        HIST_N[e] = 0;
+        ModelModule::set_mesh_visibility(boma, Hash40::new("pr_trail"), false);
+        return;
+    }
+    // lame : le long de Y de l'os de la main (pr_epee de 2,4 à 13,4)
+    let os = Hash40::new(if gauche { "havel" } else { "haver" });
+    let mut pied = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let mut pointe = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    ModelModule::joint_global_position_with_offset(boma, os, &Vector3f { x: 0.0, y: 3.0, z: 0.0 }, &mut pied, true);
+    ModelModule::joint_global_position_with_offset(boma, os, &Vector3f { x: 0.0, y: 13.6, z: 0.0 }, &mut pointe, true);
+    // décalage de l'historique ; au début d'un coup, toutes les colonnes sur la lame (pas de vieux morceaux)
+    let h = &mut HIST[e];
+    if HIST_N[e] == 0 {
+        for k in 0..9 {
+            h[k] = [pied, pointe];
+        }
+    } else {
+        for k in (1..9).rev() {
+            h[k] = h[k - 1];
+        }
+        h[0] = [pied, pointe];
+    }
+    HIST_N[e] = (HIST_N[e] + 1).min(9);
+    for (k, (p, t)) in TRAINEE.iter().enumerate() {
+        ModelModule::set_joint_translate(boma, Hash40::new(p), &h[k][0], true, false);
+        ModelModule::set_joint_translate(boma, Hash40::new(t), &h[k][1], true, false);
+    }
+    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_trail"), HIST_N[e] >= 2);
+}
+
 unsafe fn armes(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let mk = MotionModule::motion_kind(boma);
@@ -346,21 +398,9 @@ unsafe fn armes(fighter: &mut L2CFighterCommon) {
     let gauche = PostureModule::lr(boma) > 0.0;
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_epee"), epee && gauche);
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_epee_r"), epee && !gauche);
-    // v0.29 : la traînée AFTER_IMAGE de la v0.28 (méthode de Zero) donnait des taches multicolores autour de son corps :
-    // Roy a un système de traînées d'épée dans ses effets, Mario non (ses textures trail_c00 ne sont pas chargées).
-    // Retour aux éclats verts le long de la lame (v0.27), plus serrés et plus petits, à chaque image où le coup est actif
-    let actif = epee && (0..6).any(|i| AttackModule::is_attack(boma, i, false));
-    if actif {
-        let os = if gauche { "havel" } else { "haver" };
-        for k in [3.5_f32, 6.0, 8.5, 11.0, 13.5] {
-            let h = EffectModule::req_on_joint(boma, Hash40::new("sys_smash_flash_s"), Hash40::new(os),
-                &Vector3f { x: 0.0, y: k, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 0.28,
-                &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, false, 0, 0, 0) as u32;
-            if h != 0 {
-                EffectModule::set_rgb(boma, h, 0.3, 1.0, 0.55);
-            }
-        }
-    }
+    // v0.32 : vraie traînée (le joueur : « toujours des éclats bleus ») : ruban pr_trail du modèle (trail_primid.py),
+    // ses 9 colonnes (pied, pointe) posées sur les positions de la lame 0 à 8 images plus tôt
+    trainee(fighter, epee, gauche);
     // v0.25 : l'Auroros du haut B (REX : il attrape Primid et l'emporte ; article retiré à l'image 67)
     let haut_b = mk == smash::hash40("special_hi") || mk == smash::hash40("special_air_hi");
     let fh = MotionModule::frame(boma);

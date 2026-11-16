@@ -222,6 +222,7 @@ static mut N_CHARGE: [f32; 8] = [0.0; 8];
 static mut N_TIRE: [bool; 8] = [false; 8];
 /// B tenu depuis le début du coup (sinon pas de charge)
 static mut N_TENU: [bool; 8] = [false; 8];
+static mut N_ATTENTE: [f32; 8] = [0.0; 8];
 
 unsafe fn coup_tir(fighter: &mut L2CFighterCommon, x: f32, y: f32, dmg: f32, angle: u64, kbg: i32, bkb: i32, taille: f32) {
     let boma = fighter.module_accessor;
@@ -298,19 +299,26 @@ unsafe fn tirs(fighter: &mut L2CFighterCommon) {
         // petit tir : 2 %, fait tressaillir
         coup_tir(fighter, x, y, 2.0, 361, 25, 12, 2.6);
         ModelModule::set_joint_translate(boma, Hash40::new("mustachel"), &Vector3f { x, y, z: 0.0 }, true, false);
+        ModelModule::set_joint_scale(boma, Hash40::new("mustachel"), &Vector3f { x: 2.0, y: 2.0, z: 2.0 });
         ModelModule::set_mesh_visibility(boma, Hash40::new("pr_beam_s"), true);
+        // v0.32 : lueur et traînée jaune-orange (tir de REX) pour mieux le voir
+        let h = EffectModule::req(boma, Hash40::new("sys_attack_speedline"), &Vector3f { x: x - vx, y, z: 0.0 },
+                                  &Vector3f { x: 0.0, y: 90.0 * vx.signum(), z: 0.0 }, 0.7, 0, 0, false, 0) as u32;
+        if h != 0 {
+            EffectModule::set_rgb(boma, h, 1.0, 0.75, 0.2);
+        }
         ModelModule::set_mesh_visibility(boma, Hash40::new("pr_beam_l"), false);
     } else {
         // tir chargé : 5 à 19 %, gros et lent, grossit avec la charge (objet de REX en entier à pleine charge)
         coup_tir(fighter, x, y, 5.0 + 14.0 * c, 361, 70, (30.0 + 30.0 * c) as i32, 3.0 + 5.0 * c);
-        let s = 0.35 + 0.65 * c;
+        let s = 0.5 + 0.7 * c;
         ModelModule::set_joint_translate(boma, Hash40::new("face"), &Vector3f { x, y, z: 0.0 }, true, false);
         ModelModule::set_joint_scale(boma, Hash40::new("face"), &Vector3f { x: s, y: s, z: s });
         ModelModule::set_mesh_visibility(boma, Hash40::new("pr_beam_l"), true);
         ModelModule::set_mesh_visibility(boma, Hash40::new("pr_beam_s"), false);
-        if (t as i32) % 3 == 0 {
-            let h = EffectModule::req(boma, Hash40::new("sys_attack_speedline"), &Vector3f { x: x - vx * 3.0, y, z: 0.0 },
-                                      &Vector3f { x: 0.0, y: 90.0 * vx.signum(), z: 0.0 }, 0.6 + 0.6 * c, 0, 0, false, 0) as u32;
+        {
+            let h = EffectModule::req(boma, Hash40::new("sys_attack_speedline"), &Vector3f { x: x - vx * 2.0, y, z: 0.0 },
+                                      &Vector3f { x: 0.0, y: 90.0 * vx.signum(), z: 0.0 }, 0.9 + 1.0 * c, 0, 0, false, 0) as u32;
             if h != 0 {
                 EffectModule::set_rgb(boma, h, 1.0, 0.85, 0.3);
             }
@@ -325,6 +333,7 @@ unsafe extern "C" fn n_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     N_CHARGE[e] = 0.0;
     N_TIRE[e] = false;
     N_TENU[e] = true;
+    N_ATTENTE[e] = 0.0;
     let air = StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR;
     MotionModule::change_motion(boma, Hash40::new(if air { "special_air_n" } else { "special_n" }), 0.0, 1.0, false, 0.0,
                                 false, false);
@@ -373,19 +382,28 @@ unsafe extern "C" fn n_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     };
     match N_ETAT[e] {
         0 => {
+            // v0.32 (le joueur : la charge touchait avant de lâcher) : B encore tenu à l'image 2 = pas de tir, il
+            // attend (pose de visée) ; relâché avant 12 images = petit tir ; tenu 12 images = charge
             if f >= N_TIR_RAPIDE && !N_TIRE[e] {
-                N_TIRE[e] = true;
-                tirer(fighter, None);
-            }
-            // B tenu : charge ; nouvel appui : nouveau tir
-            if f >= N_RANGE && N_TENU[e] {
-                N_ETAT[e] = 1;
-                n_aller(boma, N_CHARGE_DEB);
-                return 0.into();
+                if N_TENU[e] {
+                    N_ATTENTE[e] += 1.0;
+                    MotionModule::set_rate(boma, 0.0);
+                    if N_ATTENTE[e] >= 12.0 {
+                        MotionModule::set_rate(boma, 1.0);
+                        N_ETAT[e] = 1;
+                        n_aller(boma, N_CHARGE_DEB);
+                        return 0.into();
+                    }
+                } else {
+                    MotionModule::set_rate(boma, 1.0);
+                    N_TIRE[e] = true;
+                    tirer(fighter, None);
+                }
             }
             if f >= 8.0 && ControlModule::check_button_trigger(boma, *CONTROL_PAD_BUTTON_SPECIAL) {
                 N_TIRE[e] = false;
                 N_TENU[e] = true;
+                N_ATTENTE[e] = 0.0;
                 n_aller(boma, 0.0);
                 return 0.into();
             }
