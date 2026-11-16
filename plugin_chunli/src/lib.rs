@@ -9,6 +9,7 @@
 //! bas B = Focus), coups et animations de Melee.
 //! Étape 3 : lancers de Melee ; côté B avec l'avancée de Melee ; coups x 1,3.
 //! v8 : côté B à position imposée, tour plus lent ; adversaire tenu droit, couché sur le dos au lancer bas.
+//! v12 : côté B qui retient l'adversaire, un peu plus long ; bas B en l'air = plongée Hazanshu (sans charge).
 
 use smash::app::sv_animcmd::{frame, wait};
 use smash::app::lua_bind::*;
@@ -350,7 +351,8 @@ static mut SBK_LR: [f32; 8] = [1.0; 8];
 static mut SBK_D: [f32; 8] = [0.0; 8];
 /// tour du Spinning Bird Kick moins rapide que la fin du départ de Melee (v7 : « beaucoup trop loin et trop vite,
 /// l'adversaire ne reste pas dans les coups »)
-pub const SBK_BOUCLE: f32 = 0.6;
+/// v12 (16/11, « augmente un peu la distance ») : 0,6 -> 0,8
+pub const SBK_BOUCLE: f32 = 0.8;
 
 fn depl(cle: &str) -> &'static [f32] {
     DEPL_S.iter().find(|(k, _)| *k == cle).map(|(_, v)| *v).unwrap_or(&[])
@@ -396,6 +398,40 @@ unsafe fn spinning_bird_kick(boma: *mut BattleObjectModuleAccessor, st: i32) {
     PostureModule::set_pos(boma, &pos);
 }
 
+/// bas B en l'air = Hazanshu de Melee (vidéo du mod, 16/11) : elle plonge en avant vers le bas avec son coup de pied
+/// (coup final de Melee, 10 %). Le Focus de Ken (charge avec armure) n'est pas gardé : dès la fin du départ (3
+/// images), l'attaque part ; plongée imposée de l'image 5 de Melee (2 de l'attaque) jusqu'au sol, puis atterrissage
+pub const HAZ_VX: f32 = 1.6;
+pub const HAZ_VY: f32 = -1.3;
+static mut HAZ: [bool; 8] = [false; 8];
+
+unsafe fn hazanshu_air(boma: *mut BattleObjectModuleAccessor, st: i32) {
+    let e = entree(boma);
+    let air = StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR;
+    if st == *FIGHTER_STATUS_KIND_SPECIAL_LW && air {
+        HAZ[e] = true;
+        if MotionModule::frame(boma) >= MotionModule::end_frame(boma) - 1.0 {
+            StatusModule::change_status_request_from_script(boma, *FIGHTER_RYU_STATUS_KIND_SPECIAL_LW_ATTACK, false);
+        }
+        return;
+    }
+    if st != *FIGHTER_RYU_STATUS_KIND_SPECIAL_LW_ATTACK || !HAZ[e] {
+        HAZ[e] = false;
+        return;
+    }
+    if !air {
+        // elle touche le sol : atterrissage (comme dans Melee)
+        HAZ[e] = false;
+        StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_LANDING, false);
+        return;
+    }
+    KineticModule::clear_speed_all(boma);
+    if MotionModule::frame(boma) >= 2.0 {
+        let lr = PostureModule::lr(boma);
+        PostureModule::add_pos(boma, &Vector3f { x: HAZ_VX * lr, y: HAZ_VY, z: 0.0 });
+    }
+}
+
 /// Ken a des jabs « de près » (autres animations) : Chun-Li n'a que les siens -> jab normal
 unsafe extern "C" fn cl_frame(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
@@ -407,6 +443,7 @@ unsafe extern "C" fn cl_frame(fighter: &mut L2CFighterCommon) {
         INTANGIBLE[entree(boma)] = false;
     }
     spinning_bird_kick(boma, st);
+    hazanshu_air(boma, st);
     if StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_ATTACK {
         return;
     }
