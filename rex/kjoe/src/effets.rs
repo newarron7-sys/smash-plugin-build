@@ -43,12 +43,23 @@ unsafe extern "C" fn e_attacks4(agent: &mut L2CAgentBase) {
 
 unsafe extern "C" fn vide(_agent: &mut L2CAgentBase) {}
 
+unsafe extern "C" fn saut_aerien(agent: &mut L2CAgentBase) {
+    if is_excute(agent) {
+        EFFECT(agent, Hash40::new("sys_jump_aerial"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
+    }
+}
+
 pub fn install(a: &mut Agent) {
     for n in ["effect_attack11", "effect_attack12", "effect_attack13", "effect_attackdash", "effect_attacks3",
               "effect_attacks3hi", "effect_attacks3lw", "effect_attackhi3", "effect_attacklw3", "effect_attacks4charge", "effect_attackhi4",
               "effect_attackhi4charge", "effect_attacklw4", "effect_attacklw4charge", "effect_attackairn",
               "effect_attackairf", "effect_attackairb", "effect_attackairhi", "effect_attackairlw"] {
         a.acmd(n, vide, Priority::Low);
+    }
+    // vidéo du 16/11 (« son deuxième saut bug ») : le double saut de Ness l'entoure d'une bulle PSI bleue : retirée
+    // (Knuckle Joe n'a pas de PSI), un petit nuage à la place, comme le double saut des autres persos
+    for n in ["effect_jumpaerialfront", "effect_jumpaerialback"] {
+        a.acmd(n, saut_aerien, Priority::Low);
     }
     for n in ["effect_attacks4", "effect_attacks4hi", "effect_attacks4lw"] {
         a.acmd(n, e_attacks4, Priority::Low);

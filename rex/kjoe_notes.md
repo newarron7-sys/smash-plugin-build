@@ -30,3 +30,4 @@
   courant +22) sur place (IN_PLACE_PLUS) + avancée par le plugin (table AVANCE, avance_rex.py, x ECHELLE).
   À vérifier à chaque nouveau coup : « avance » dans animations.txt (piège de Master Chief).
 - Zone plus foncée autour des yeux (vidéo 16/11) : fond = couleur médiane du visage sous le masque (180,139,95, mesurée dans la texture aux UV du maillage Head) et même matière (PRM) que le visage.
+- Double saut : effet PSI de Ness (bulle bleue) remplacé par le nuage normal (sys_jump_aerial).
