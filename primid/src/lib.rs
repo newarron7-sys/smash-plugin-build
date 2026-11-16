@@ -94,6 +94,7 @@ include!("generated.rs");
 
 mod prises;
 mod invoc;
+mod coups;
 
 /// perso de base (nom interne) : Mario
 pub const BASE: &str = "mario";
@@ -178,6 +179,7 @@ macro_rules! scripts {
             $( if find($s).is_some() { a.acmd($s, $f, Priority::Low); } )*
             prises::install(&mut a);
             invoc::install(&mut a);
+            coups::install(&mut a);
             a.on_line(Main, primid_frame);
             a.install();
         }
@@ -187,6 +189,7 @@ macro_rules! scripts {
 /// chaque image : recharges des invocations du bas B
 unsafe extern "C" fn primid_frame(fighter: &mut L2CFighterCommon) {
     invoc::update(fighter);
+    coups::update(fighter);
 }
 
 scripts! {

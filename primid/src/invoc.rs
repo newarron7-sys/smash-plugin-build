@@ -441,9 +441,30 @@ unsafe extern "C" fn mite_passif(_weapon: &mut L2CWeaponCommon) -> L2CValue {
 /// Mode 0 : position globale ; si l'os ne va pas où il faut (mesuré à l'image suivante), mode 1 : position locale.
 static mut TENU: [bool; 8] = [false; 8];
 
+/// v0.22 (le joueur : les invocations disparaissent quand il attrape) : l'os Throw porte l'adversaire attrapé ; il n'est
+/// rendu au jeu que pendant qu'un adversaire est tenu (pas pendant la tentative de prise)
 unsafe fn en_prise(boma: *mut BattleObjectModuleAccessor) -> bool {
     let st = StatusModule::status_kind(boma);
-    st >= *FIGHTER_STATUS_KIND_CATCH && st <= *FIGHTER_STATUS_KIND_THROW
+    [*FIGHTER_STATUS_KIND_CATCH_PULL, *FIGHTER_STATUS_KIND_CATCH_DASH_PULL, *FIGHTER_STATUS_KIND_CATCH_WAIT,
+     *FIGHTER_STATUS_KIND_CATCH_ATTACK, *FIGHTER_STATUS_KIND_CATCH_JUMP, *FIGHTER_STATUS_KIND_THROW].contains(&st)
+}
+
+/// v0.22 (le joueur : au demi-tour, comportement toujours bizarre) : pendant que le modèle de Primid tourne, l'os Throw
+/// (enfant de Rot) n'arrive pas où il faut (position calculée avec la rotation de l'image d'avant) : l'invocation est
+/// cachée pendant le demi-tour, et dès que l'os n'est pas à sa place (contrôlé à l'image suivante)
+static mut CIBLE: [[f32; 2]; 8] = [[0.0; 2]; 8];
+static mut DEPLACE: [bool; 8] = [false; 8];
+
+unsafe fn en_demi_tour(boma: *mut BattleObjectModuleAccessor, e: usize) -> bool {
+    let st = StatusModule::status_kind(boma);
+    if [*FIGHTER_STATUS_KIND_TURN, *FIGHTER_STATUS_KIND_TURN_DASH, *FIGHTER_STATUS_KIND_TURN_RUN,
+        *FIGHTER_STATUS_KIND_TURN_RUN_BRAKE].contains(&st) {
+        return true;
+    }
+    if face_reelle(boma, e) != PostureModule::lr(boma) {
+        return true;
+    }
+    DEPLACE[e]
 }
 
 unsafe fn mite_lacher(boma: *mut BattleObjectModuleAccessor, e: usize) {
@@ -461,7 +482,15 @@ unsafe fn mite_placer(boma: *mut BattleObjectModuleAccessor, e: usize, x: f32, y
         mite_lacher(boma, e);
         return false;
     }
+    if TENU[e] {
+        let mut g = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+        ModelModule::joint_global_position(boma, Hash40::new("throw"), &mut g, true);
+        DEPLACE[e] = ((g.x - CIBLE[e][0]).powi(2) + (g.y - CIBLE[e][1]).powi(2)).sqrt() > 3.0;
+    } else {
+        DEPLACE[e] = false;
+    }
     TENU[e] = true;
+    CIBLE[e] = [x, y];
     ModelModule::set_joint_translate(boma, Hash40::new("throw"), &Vector3f { x, y, z: 0.0 }, true, false);
     true
 }
@@ -643,7 +672,7 @@ unsafe fn inv_pas(fighter: &mut L2CFighterCommon, e: usize) {
     if INV[e] == 0 {
         return;
     }
-    if mite_placer(boma, e, M[e][0], M[e][1]) {
+    if mite_placer(boma, e, M[e][0], M[e][1]) && !en_demi_tour(boma, e) {
         inv_afficher(boma, Some((INV[e], pose, face_reelle(boma, e), s)));
     } else {
         inv_afficher(boma, None);
