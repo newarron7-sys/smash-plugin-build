@@ -152,7 +152,9 @@ unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_AIR_FLAG_ENABLE_LANDING);
             landing_on = true;
         }
-        ATTACK(agent, e.id, 0, Hash40::new(e.bone), e.dmg, e.angle, e.kbg, e.fkb, e.bkb, e.size, e.x, e.y, e.z,
+        // v0.27 : coups d'épée sur l'os de l'épée ; tourné à gauche, l'épée est dans l'autre main (copie en miroir)
+        let os_coup = if e.bone == "havel" && PostureModule::lr(boma) < 0.0 { "haver" } else { e.bone };
+        ATTACK(agent, e.id, 0, Hash40::new(os_coup), e.dmg, e.angle, e.kbg, e.fkb, e.bkb, e.size, e.x, e.y, e.z,
                None, None, None, e.hitlag, e.sdi, *ATTACK_SETOFF_KIND_ON, lr_check, false, 0, e.trip, 0,
                false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL,
                *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), *ATTACK_SOUND_LEVEL_M, *COLLISION_SOUND_ATTR_PUNCH,

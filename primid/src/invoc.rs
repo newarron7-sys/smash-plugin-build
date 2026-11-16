@@ -346,6 +346,19 @@ unsafe fn armes(fighter: &mut L2CFighterCommon) {
     let gauche = PostureModule::lr(boma) > 0.0;
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_epee"), epee && gauche);
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_epee_r"), epee && !gauche);
+    // v0.27 (demandé) : traînée de l'épée pendant ses coups : éclats verts le long de la lame à chaque image où un
+    // coup est actif (ils s'effacent en quelques images : la traînée suit exactement le geste)
+    if epee && (0..6).any(|i| AttackModule::is_attack(boma, i, false)) {
+        let os = if gauche { "havel" } else { "haver" };
+        for k in [5.0_f32, 9.0, 13.0] {
+            let h = EffectModule::req_on_joint(boma, Hash40::new("sys_smash_flash_s"), Hash40::new(os),
+                &Vector3f { x: 0.0, y: k, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 0.35 + k * 0.02,
+                &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, false, 0, 0, 0) as u32;
+            if h != 0 {
+                EffectModule::set_rgb(boma, h, 0.3, 1.0, 0.55);
+            }
+        }
+    }
     // v0.25 : l'Auroros du haut B (REX : il attrape Primid et l'emporte ; article retiré à l'image 67)
     let haut_b = mk == smash::hash40("special_hi") || mk == smash::hash40("special_air_hi");
     let fh = MotionModule::frame(boma);

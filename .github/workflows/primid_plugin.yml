@@ -51,7 +51,7 @@ jobs:
         run: |
           pip install numpy >/dev/null
           D=/tmp/w/x/rex_/pf/Fighter/primid; mkdir -p /tmp/out
-          MAP_PLUS="game_specialhi=SpecialHi,game_specialairhi=SpecialAirHi" SUIVRE=1 python3 outils/primid/rex/tools/gen_rex.py $D/FitPrimid.pac $D/FitPrimidMotionEtc.pac $D/FitPrimid00.pac primid/src/generated.rs > /tmp/out/generation.txt 2>&1
+          BONES_PLUS="LHaveN=havel,RHaveN=haver" MAP_PLUS="game_specialhi=SpecialHi,game_specialairhi=SpecialAirHi" SUIVRE=1 python3 outils/primid/rex/tools/gen_rex.py $D/FitPrimid.pac $D/FitPrimidMotionEtc.pac $D/FitPrimid00.pac primid/src/generated.rs > /tmp/out/generation.txt 2>&1
           test -s primid/src/generated.rs && echo "generated.rs ok"
       - name: Cache outils (cargo-skyline, toolchain Switch)
         uses: actions/cache@v4

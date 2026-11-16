@@ -13,6 +13,11 @@ from gen import timeline, pv, BONES, ELEM, anim_lengths, bone_names  # noqa: E40
 from lz import decompress  # noqa: E402
 import gen as _gen  # noqa: E402
 import psa as _psa  # noqa: E402
+# Primid v0.27 : BONES_PLUS="LHaveN=havel,..." : os d'Ultimate choisis pour des os de Brawl (Primid : LHaveN -> havel,
+# l'os de son épée ; la table générale met handl, dont l'axe Y pointe vers le bas : ses coups d'épée partaient sous sa main)
+for _it in os.environ.get('BONES_PLUS', '').split(','):
+    if '=' in _it:
+        BONES[_it.split('=')[0]] = _it.split('=')[1]
 
 if os.environ.get('SUIVRE') == '1':
     # Super Shadow : certaines sous-actions ne font qu'un « goto » (0x00090100) ou un appel de sous-routine
