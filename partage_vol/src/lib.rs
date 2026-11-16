@@ -22,6 +22,7 @@ use smash::lib::lua_const::*;
 use smash::lib::L2CValue;
 use smash::lua2cpp::*;
 use smash::phx::{Hash40, Vector3f};
+use smash_script::macros::is_excute;
 use smash_script::*;
 use smashline::*;
 
