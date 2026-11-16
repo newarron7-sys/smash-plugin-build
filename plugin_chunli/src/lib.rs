@@ -11,13 +11,14 @@
 //! v8 : côté B à position imposée, tour plus lent ; adversaire tenu droit, couché sur le dos au lancer bas.
 //! v12 : côté B qui retient l'adversaire, un peu plus long ; bas B en l'air = plongée Hazanshu (sans charge).
 //! v13 : +6 images d'étourdissement sur tous ses coups (STUN_PLUS).
+//! v14 : +12 ; côté B : adversaire tiré devant elle à chaque coup, elle s'arrête au bord au sol.
 
 use smash::app::sv_animcmd::{frame, wait};
 use smash::app::lua_bind::*;
 use smash::app::*;
 use smash::lib::lua_const::*;
 use smash::lua2cpp::*;
-use smash::phx::{Hash40, Vector3f};
+use smash::phx::{Hash40, Vector2f, Vector3f};
 use smash::hash40;
 use smash_script::macros::*;
 use smash_script::*;
@@ -50,7 +51,16 @@ pub const AGRANDI: f32 = 1.3;
 
 /// images d'étourdissement (hitstun) ajoutées à tous ses coups (demande du joueur, 16/11 : « ses coups ne stun pas
 /// assez, l'adversaire peut réagir beaucoup trop vite ») ; réglage commun, pas les lancers
-pub const STUN_PLUS: f32 = 6.0;
+/// v14 (16/11 : « augmente vraiment les stun, qu'elle ait le temps d'enchaîner ») : 6 -> 12
+pub const STUN_PLUS: f32 = 12.0;
+
+/// côté B (départ et tour) : l'adversaire est tiré vers ce point devant elle (repère « top » : x devant, y haut) en
+/// SBK_TIRE images à chaque coup, avec peu de DI (SBK_SDI) : il prend tous les coups et revient devant s'il est
+/// derrière (demande du joueur, 16/11)
+pub const SBK_CIBLE: (f32, f32) = (9.0, 8.0);
+pub const SBK_TIRE: u32 = 3;
+pub const SBK_SDI: f32 = 0.2;
+const SBK_SCRIPTS: [&str; 4] = ["game_specialsstart", "game_specialairsstart", "game_specials", "game_specialairs"];
 
 /// intangibilité posée par un spécial (haut B, bas B) : remise à la normale si le statut est quitté avant la fin
 static mut INTANGIBLE: [bool; 8] = [false; 8];
@@ -254,12 +264,17 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
                     landing_on = true;
                 }
                 // Melee : sens de l'éjection d'après la position de l'adversaire (ATTACK_LR_CHECK_POS)
+                let sbk = SBK_SCRIPTS.contains(&script);
                 ATTACK(agent, e.id, e.grp, Hash40::new(e.bone), e.dmg, e.angle, e.kbg, e.fkb, e.bkb, e.size * AGRANDI, e.x, e.y,
-                       e.z, None, None, None, 1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, e.shield, 0.0,
+                       e.z, None, None, None, 1.0, if sbk { SBK_SDI } else { 1.0 }, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, e.shield, 0.0,
                        0, false, false, false, false, true, situation(e.sit), *COLLISION_CATEGORY_MASK_ALL,
                        *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), niveau(e.lvl), son(e.snd),
                        if e.snd == 1 { *ATTACK_REGION_KICK } else { *ATTACK_REGION_PUNCH });
                 AttackModule::set_add_reaction_frame(boma, e.id as i32, STUN_PLUS, false);
+                if sbk {
+                    AttackModule::set_vec_target_pos(boma, e.id as i32, Hash40::new("top"),
+                                                     &Vector2f { x: SBK_CIBLE.0, y: SBK_CIBLE.1 }, SBK_TIRE, false);
+                }
                 if catch_only || mv.kind == 5 {
                     // coup pendant la prise / le lancer : seulement sur l'adversaire tenu (comme Ken)
                     AttackModule::set_catch_only_all(boma, true, false);
@@ -399,6 +414,16 @@ unsafe fn spinning_bird_kick(boma: *mut BattleObjectModuleAccessor, st: i32) {
                                             (false, false) => "s_end", (false, true) => "s_air_end" });
         if t.is_empty() { 0.0 } else { t[f.min(t.len() - 1)] }
     };
+    let mut v = v;
+    if !air && v != 0.0 {
+        // au sol : elle s'arrête au bord comme le Tatsumaki de Ken / Ryu (vidéo 16/11 : elle partait hors du terrain
+        // puis le jeu la ramenait d'un coup sur le bord)
+        let nx = SBK_X[e] + (SBK_D[e] + v) * SBK_LR[e];
+        let y = PostureModule::pos_y(boma);
+        if GroundModule::ray_check(boma, &Vector2f { x: nx + 2.0 * SBK_LR[e], y: y + 3.0 }, &Vector2f { x: 0.0, y: -6.0 }, true) != 1 {
+            v = 0.0;
+        }
+    }
     SBK_D[e] += v;
     let pos = Vector3f { x: SBK_X[e] + SBK_D[e] * SBK_LR[e], y: PostureModule::pos_y(boma), z: PostureModule::pos_z(boma) };
     PostureModule::set_pos(boma, &pos);
