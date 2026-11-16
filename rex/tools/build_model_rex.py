@@ -573,6 +573,8 @@ def ao_from(col, lo=0.8):
 
 # matière -> (métal, rugosité, reflet) ; reflet = alpha du PRM (x0,2 dans le shader, 0,16 par défaut)
 def matter(mname):
+    if mname in os.environ.get('FILL_MATS', '').split(','):
+        return 0.0, 0.45, 0.35          # Knuckle Joe : yeux peints sur la peau : même matière que le visage
     if 'Hair' in mname:
         return 0.0, 0.42, 0.35
     if 'Face' in mname or 'Eye' in mname:
