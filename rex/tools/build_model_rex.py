@@ -297,6 +297,12 @@ for ent in arc_entries(raw):
             TEX[n] = tex0.read_tex0(ent[4], o, pals.get(n)).convert('RGBA')
         except Exception as e:  # noqa: BLE001
             print('texture illisible', n, e)
+for _r in [x for x in os.environ.get('TEX_REPLACE', '').split(',') if '=' in x]:
+    # Knuckle Joe : texture du corps avec les yeux peints dedans (bake_yeux.py)
+    _n, _f = _r.split('=', 1)
+    if _n in TEX and os.path.exists(_f):
+        TEX[_n] = Image.open(_f).convert('RGBA')
+        print('TEXTURE REMPLACEE', _n, _f)
 print('TEXTURES', {n: TEX[n].size for n in TEX})
 
 
