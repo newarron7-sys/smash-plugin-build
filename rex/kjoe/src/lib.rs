@@ -95,6 +95,7 @@ include!("generated.rs");
 
 mod effets;
 mod projectile;
+mod speciaux;
 
 
 /// perso de base (nom interne) : Ness (le module de REX, ft_kjoe.rel, est un clone de Ness)
@@ -270,6 +271,7 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
         // lui) devient un vrai projectile de Ness, le PK Feu, lancé devant lui ; ses coups et ses effets sont
         // remplacés pour Knuckle Joe (projectile.rs : 9 %, boule bleue, pas de colonne de feu)
         if script.starts_with("game_attacks4") && e.bone == "top" && e.x == 0.0 && e.y == 0.0 && e.z == 0.0 {
+            speciaux::N_TIR = false;
             ArticleModule::generate_article(boma, *FIGHTER_NESS_GENERATE_ARTICLE_PK_FIRE, false, -1);
             continue;
         }
@@ -301,6 +303,7 @@ macro_rules! scripts {
             a.set_costume(SS_COSTUMES.to_vec());
             $( if find($s).is_some() { a.acmd($s, $f, Priority::Low); } )*
             effets::install(&mut a);
+            speciaux::install(&mut a);
             a.on_line(Main, ss_frame);
             a.install();
             projectile::install();

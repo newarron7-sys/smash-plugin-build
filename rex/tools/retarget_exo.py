@@ -385,6 +385,19 @@ GROUPES = {
         'j00entryr': ['EntryR'], 'j02win1': ['Win'], 'j02win1wait': ['WinWait'], 'j02win2': ['Win2'],
         'j02win2wait': ['Win2Wait'], 'j02lose': ['Lose'],
     },
+    # Knuckle Joe, spéciaux (16/11) : sur place, le plugin le déplace (table TRAJET de trajet_rex.py)
+    'kjoe_speciaux': {
+        'd00specialnstart': ['SpecialNStart'], 'd00specialairnstart': ['SpecialAirNStart'],
+        'd00specialnhold': ['SpecialNHold'], 'd00specialairnhold': ['SpecialAirNHold'],
+        'd00specialnfire': ['SpecialNFire'], 'd00specialnairfire': ['SpecialAirNFire'],
+        'd00specialnend': ['SpecialNFire'], 'd00specialairnend': ['SpecialAirNFire'],
+        'd01specials': ['SpecialAirSStart', 'SpecialS'], 'd01specialairs': ['SpecialAirSStart', 'SpecialS'],
+        'd02specialhistart': ['SpecialHi'], 'd02specialairhistart': ['SpecialHi'],
+        'd03speciallwstart': ['SpecialLwStart'], 'd03specialairlwstart': ['SpecialAirLwStart'],
+        'd03speciallwhold': ['SpecialLw'], 'd03specialairlwhold': ['SpecialLw'],
+        'd03speciallwend': ['SpecialLwEnd'], 'd03specialairlwend': ['SpecialLwEnd'],
+        'd03speciallwhit': ['SpecialLwHit'], 'd03specialairlwhit': ['SpecialLwHit'],
+    },
     'base': {
         # attente
         'a00wait1': ['Wait1'], 'a00wait2': ['Wait2'], 'a00wait3': ['Wait1'], 'a00waititem': ['Wait1'],
@@ -769,6 +782,9 @@ if GROUPE == 'chief_speciaux':
 if GROUPE == 'chief_prises':
     # sur place sauf la prise en courant (le jeu la fait glisser avec l'avancée de l'animation)
     IN_PLACE = {k for k in GROUPES['chief_prises'] if k != 'e00catchdash'}
+    KEEP_Y = set()
+if GROUPE == 'kjoe_speciaux':
+    IN_PLACE = set(GROUPES['kjoe_speciaux'])
     KEEP_Y = set()
 if GROUPE == 'metal_final':
     IN_PLACE = set(GROUPES['metal_final'])

@@ -16,9 +16,16 @@ use smashline::*;
 
 const BLEU: (f32, f32, f32) = (0.45, 0.7, 1.0);
 
+/// B neutre (speciaux.rs) : boule plus forte et plus grosse avec la charge (niveaux 0 à 5) ; smash avant : 9 % de REX
 unsafe extern "C" fn g_shoot(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
-        ATTACK(agent, 0, 0, Hash40::new("top"), 9.0, 361, 112, 0, 65, 4.0 * crate::ECHELLE, 0.0, 0.0, 0.0, None, None, None,
+        let (dmg, kbg, bkb, taille) = if crate::speciaux::N_TIR {
+            let k = crate::speciaux::N_NIVEAU as f32;
+            (6.0 + 3.0 * k, 70 + 6 * crate::speciaux::N_NIVEAU, 40 + 6 * crate::speciaux::N_NIVEAU, 3.0 + 0.6 * k)
+        } else {
+            (9.0, 112, 65, 4.0)
+        };
+        ATTACK(agent, 0, 0, Hash40::new("top"), dmg, 361, kbg, 0, bkb, taille * crate::ECHELLE, 0.0, 0.0, 0.0, None, None, None,
                0.7, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, true, true, false, false, false,
                *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
                Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_M, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_BOMB);
@@ -31,7 +38,8 @@ unsafe extern "C" fn e_shoot(agent: &mut L2CAgentBase) {
     while f < 60.0 {
         frame(lua, f);
         if is_excute(agent) {
-            EFFECT_FOLLOW(agent, Hash40::new("sys_flame"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.9, true);
+            let sc = if crate::speciaux::N_TIR { 0.6 + 0.15 * crate::speciaux::N_NIVEAU as f32 } else { 0.9 };
+            EFFECT_FOLLOW(agent, Hash40::new("sys_flame"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, sc, true);
             LAST_EFFECT_SET_COLOR(agent, BLEU.0, BLEU.1, BLEU.2);
             EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash_s"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.8, true);
             LAST_EFFECT_SET_COLOR(agent, 0.8, 0.9, 1.0);

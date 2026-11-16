@@ -50,10 +50,12 @@ jobs:
           python3 rex/tools/hit_keys.py /tmp/out /tmp/out/hit_keys.json > /tmp/out/hit_keys.txt 2>&1
           HIT_KEYS=/tmp/out/hit_keys.json RATE=1 BODY=1 SUIVRE=1 python3 rex/tools/gen_rex.py $D/FitKJoe.pac $D/FitKJoeMotionEtc.pac $D/FitKJoe00.pac /tmp/out/generated.rs > /tmp/out/generation.txt 2>&1; wc -l /tmp/out/generated.rs
           python3 rex/tools/avance_rex.py $D/FitKJoe00.pac $D/FitKJoeMotionEtc.pac attack_lw3=AttackLw3 attack_dash=AttackDash catch_dash=CatchDash >> /tmp/out/generated.rs 2>> /tmp/out/generation.txt
+          python3 rex/tools/trajet_rex.py $D/FitKJoe00.pac $D/FitKJoeMotionEtc.pac s=SpecialAirSStart+SpecialS hi=SpecialHi lw_start=SpecialLwStart lw_hit=SpecialLwHit >> /tmp/out/generated.rs 2>> /tmp/out/generation.txt
       - name: Animations (base + coups, squelette de Ness)
         run: |
           D=/tmp/w/rex_/pf/Fighter/kjoe
           IN_PLACE_PLUS=c02attacklw3,c00attackdash,e00catchdash SOL=1 NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitKJoe00.pac $D/FitKJoeMotionEtc.pac /tmp/out /tmp/out/motion/c00 kjoe_base rex/tools/ness_motions.txt > /tmp/out/animations.txt 2>&1 || true
+          SOL=1 NO_EXO=1 python3 rex/tools/retarget_exo.py $D/FitKJoe00.pac $D/FitKJoeMotionEtc.pac /tmp/out /tmp/out/motion/c00 kjoe_speciaux rex/tools/ness_motions.txt >> /tmp/out/animations.txt 2>&1 || true
           echo "animations : $(ls /tmp/out/motion/c00/*.nuanmb 2>/dev/null | wc -l)"
       - name: Apercus (modele, os, poses)
         continue-on-error: true

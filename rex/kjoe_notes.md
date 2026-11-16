@@ -33,3 +33,11 @@
 - Double saut : effet PSI de Ness (bulle bleue) remplacé par le nuage normal (sys_jump_aerial).
 - Smash avant : le coup de REX sur ThrowN devient un vrai projectile : PK Feu de Ness (generate_article, comme le f-smash de Primid avec la boule de feu de son perso de base), scripts ness_pkfire remplacés (9 %, boule bleue, pas de colonne). Attention : le PK Feu du side B actuel (celui de Ness, pas encore remplacé) prend aussi ces scripts.
 - Animations : groupe kjoe_base (toutes les animations de base de REX aux noms de Ness : double saut JumpAerialF/B, atterrissages LandingLight/Heavy, garde, roulades, dégâts, au sol, bord, nage, provocations, entrée/victoire) ; le groupe base de Rock prenait JumpF pour le double saut et Landing (absent) laissait la pose de Ness.
+
+## Spéciaux (16/11) — speciaux.rs
+- Décompilés dans FitKJoe.pac : B neutre (SpecialNStart / NHold / NFire, charge 0x1D aux paliers 15/30/60/90/180,
+  article au tir image 7), côté B (SpecialAirSStart 15 + SpecialS 49 : ruée de 66, 12 % puis x1,25 = 15 %),
+  haut B (SpecialHi 70 : monte de 30, 16 % à 8 puis 12/11 % jusqu'à 31, chute spéciale), bas B (SpecialLwStart :
+  saut de 26 + 6 %, SpecialLw : plongée 0,5 / -5, 10 % 270° puis 88°, SpecialLwEnd, SpecialLwHit rebond -7/+8).
+- Animations : groupe kjoe_speciaux (sur place), trajet par trajet_rex.py (table TRAJET), x ECHELLE.
+- Projectile du B neutre : PK Feu de Ness redessiné (projectile.rs), dégâts 6 + 3 x niveau, plus gros avec la charge.
