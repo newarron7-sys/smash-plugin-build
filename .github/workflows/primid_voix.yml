@@ -20,7 +20,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: w/sfx
-          key: rex-primid-sfx-v1
+          key: rex-primid-sfx-v2
       - name: Recuperer la banque de sons de Primid dans le build REX (Google Drive du proprietaire)
         if: steps.cache-sfx.outputs.cache-hit != 'true'
         shell: bash
@@ -41,16 +41,16 @@ jobs:
           set +o pipefail
           7z l -ba sd.raw > liste.txt 2>&1 || true
           wc -l liste.txt; grep -i "sfx" liste.txt | head -5; grep -i "477" liste.txt | head -5; head -5 liste.txt
-          p=$(tr -d '\r' < liste.txt | grep -iE "sfx.477\.sawnd" | head -1 | awk '{print $NF}')
+          p=$(tr -d '\r' < liste.txt | grep -iE "sfx.1dd\.sawnd" | head -1 | awk '{print $NF}')
           echo "chemin : $p"
-          7z e -y sd.raw "$p" -osfx >/dev/null || 7z e -y -r sd.raw "477.sawnd" -osfx >/dev/null || true
-          ls -la sfx; rm -f sd.raw
+          7z e -y sd.raw "$p" -osfx >/dev/null || 7z e -y -r sd.raw "1DD.sawnd" -osfx >/dev/null || true
+          ls -la sfx; rm -f sd.raw; for f in sfx/*; do mv "$f" sfx/primid.sawnd; done; ls -la sfx
       - name: Sauvegarder (cache)
         if: steps.cache-sfx.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: w/sfx
-          key: rex-primid-sfx-v1
+          key: rex-primid-sfx-v2
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Extraire (DSP -> WAV -> IDSP)
         shell: pwsh
@@ -65,7 +65,7 @@ jobs:
           cl /nologo /EHsc /std:c++17 /O2 /I"$src" /Fe:"$env:RUNNER_TEMP\extract_sawnd.exe" "$src\lavaBRSARLib.cpp" "$src\lavaDSP.cpp" "$src\lavaResawndz.cpp" "$src\lavaUtility.cpp" "$src\md5.cpp" "$PWD\outils\extract_sawnd.cpp"
           $out = "$PWD\out\voix"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
-          & "$env:RUNNER_TEMP\extract_sawnd.exe" "$PWD\w\sfx\477.sawnd" $out | Tee-Object -FilePath "$out\extraction.txt"
+          & "$env:RUNNER_TEMP\extract_sawnd.exe" "$PWD\w\sfx\primid.sawnd" $out | Tee-Object -FilePath "$out\extraction.txt"
           Get-ChildItem -Path $out -Filter "*.dsp" | ForEach-Object {
             & $vgexe -i $_.FullName -o ([System.IO.Path]::ChangeExtension($_.FullName, ".wav")) | Out-Null
           }
@@ -80,8 +80,9 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          python outils/primid/audio/template.py out/tpl mario "mario voice,mario voice pack,mario voice replacement,mario sound" > out/modele.txt 2>&1 || true
+          python outils/primid/audio/template.py tpl mario "mario voice,mario voice pack,mario voice replacement,mario sound" > out/modele.txt 2>&1 || true
           grep -E "CHOISI|MODELE|AUCUN" out/modele.txt | head -20
+          cp tpl/*_modele.nus3audio out/ 2>/dev/null || true; ls -la out
       - name: Chiffrer et publier (branche sortie_primid_voix)
         shell: bash
         run: |
