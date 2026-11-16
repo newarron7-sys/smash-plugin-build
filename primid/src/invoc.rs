@@ -331,9 +331,41 @@ unsafe fn diag(boma: *mut BattleObjectModuleAccessor, x: f32, y: f32, ok: bool) 
 /// boucle tourne (leur temps avance) : blanc pour Mite, jaune pour Botron
 static mut DIAG_T: [[f32; 2]; 8] = [[0.0; 2]; 8];
 
+// ------------------------------------------------------------------ v0.18 : armes de REX
+/// coups où Primid tient son épée laser (PSA de REX : traînée d'épée sur AttackS3Hi, AttackS3Lw, AttackHi4,
+/// AttackAirN, AttackAirB, ThrowF ; vidéos du joueur : attaque rapide, tilts avant, smash haut chargé)
+const COUPS_EPEE: [&str; 11] = ["attack_s3_hi", "attack_s3_s", "attack_s3_lw", "attack_hi4", "attack_hi4_hold",
+                                 "attack_hi4_start", "attack_air_n", "attack_air_b", "throw_f", "attack_dash",
+                                 "landing_air_n"];
+
+unsafe fn armes(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let mk = MotionModule::motion_kind(boma);
+    let epee = COUPS_EPEE.iter().any(|n| mk == smash::hash40(n));
+    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_epee"), epee);
+    // le boomerang : pour le côté B de REX (à venir)
+    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_boomerang"), false);
+    // smash avant de REX : il crache du feu (Firebreath) pendant que le coup est actif
+    if mk == smash::hash40("attack_s4_s") && (0..3).any(|i| AttackModule::is_attack(boma, i, false)) {
+        let t = MotionModule::frame(boma) as i32;
+        if t % 2 == 0 {
+            let lr = PostureModule::lr(boma);
+            let (x, y) = pos(boma);
+            for k in 0..3 {
+                let kf = k as f32;
+                let h = EffectModule::req(boma, Hash40::new("sys_fireflower_shot"),
+                    &Vector3f { x: x + lr * (7.0 + 6.0 * kf), y: y + 11.0 - 1.5 * kf, z: 0.0 },
+                    &Vector3f { x: 0.0, y: 90.0 * lr, z: 0.0 }, 1.1 + 0.2 * kf, 0, 0, false, 0) as u32;
+                let _ = h;
+            }
+        }
+    }
+}
+
 pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     let e = e_of(fighter.module_accessor);
     inv_pas(fighter, e);
+    armes(fighter);
     portail_afficher(fighter.module_accessor, e);
     for k in 0..4 {
         if RECH[e][k] > 0 {
