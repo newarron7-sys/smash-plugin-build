@@ -111,10 +111,10 @@ unsafe fn mouvement(boma: *mut BattleObjectModuleAccessor, nom: &str, rate: f32)
     MotionModule::change_motion(boma, Hash40::new(nom), 0.0, rate, false, 0.0, false, false);
 }
 
-/// coup (os, dégâts, angle, croissance, recul, taille, hauteur, avant) ; tailles et positions à l'échelle du modèle
+/// coup (os, dégâts, angle, croissance, recul, taille, hauteur, avant) ; tailles et positions de REX telles quelles
 #[allow(clippy::too_many_arguments)]
 unsafe fn coup(agent: &mut L2CAgentBase, id: u64, os: &str, dmg: f32, ang: u64, kbg: i32, bkb: i32, size: f32, y: f32, z: f32, son: i32) {
-    ATTACK(agent, id, 0, Hash40::new(os), dmg, ang, kbg, 0, bkb, size * ECHELLE, 0.0, y * ECHELLE, z * ECHELLE, None, None, None,
+    ATTACK(agent, id, 0, Hash40::new(os), dmg, ang, kbg, 0, bkb, size, 0.0, y, z, None, None, None,
            1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, false, false, false, false, true,
            *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
            Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_L, son, *ATTACK_REGION_PUNCH);
@@ -244,7 +244,9 @@ unsafe extern "C" fn g_n_tir(agent: &mut L2CAgentBase) {
     frame(agent.lua_state_agent, N_LACHER);
     if is_excute(agent) {
         N_TIR = true;
-        ArticleModule::generate_article(agent.module_accessor, *FIGHTER_NESS_GENERATE_ARTICLE_PK_FIRE, false, -1);
+        let id = ArticleModule::generate_article(agent.module_accessor, *FIGHTER_NESS_GENERATE_ARTICLE_PK_FIRE, false, -1);
+        let _ = id;
+        crate::projectile::marquer_neutre(agent.module_accessor);
     }
 }
 unsafe extern "C" fn e_n_tir(agent: &mut L2CAgentBase) {
@@ -487,7 +489,10 @@ unsafe extern "C" fn lw_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
             // plongée
             LW_T[e] += 1;
             vitesse(fighter, LW_VX * ECHELLE, LW_VY * ECHELLE);
-            if AttackModule::is_infliction_status(boma, *COLLISION_KIND_MASK_HIT) {
+            // vidéo du 16/11 : il doit redescendre sur le 2e coup même quand le 1er touche. Le 1er (270°, images 1 à 5)
+            // ne l'arrête pas ; il ne rebondit que si le 2e (88°, image 6 et après) touche. is_infliction = cette
+            // image seulement (is_infliction_status gardait le coup du saut et le faisait rebondir tout de suite)
+            if f >= 6.0 && AttackModule::is_infliction(boma, *COLLISION_KIND_MASK_HIT) {
                 LW_PHASE[e] = 3;
                 LW_PREC[e] = 0.0;
                 AttackModule::clear_all(boma);

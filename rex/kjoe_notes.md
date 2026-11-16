@@ -49,3 +49,7 @@
 - PIÈGE (v2, 16/11, « aucune animation ») : le config.json du reslot partageait (share-to-added / share-to-vanilla)
   111 fichiers que le mod fournit (spéciaux, dégâts, garde, bord, esquives, nage, provocations, victoire) : ARCropolis
   chargeait ceux de Ness. Lancer rex/tools/fix_partages.py sur le mod à CHAQUE livraison, avant verif_config.
+- 16/11 (vidéos) : coups trop petits / ne touchaient pas devant → tailles et positions de REX sans x0,8 (comme
+  Metal Sonic). B neutre trop court → boules du B neutre repérées (marquer_neutre) : vie 45 images + 0,45 par image.
+  Bas B : il continue sa plongée quand le 1er coup (270°) touche, rebond seulement sur le 2e coup (image 6+), avec
+  is_infliction (pas is_infliction_status, qui gardait le coup du saut).

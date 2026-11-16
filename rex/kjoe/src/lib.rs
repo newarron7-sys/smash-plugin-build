@@ -265,7 +265,9 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_AIR_FLAG_ENABLE_LANDING);
             landing_on = true;
         }
-        let size = e.size * ECHELLE;
+        // tailles et positions de REX telles quelles (comme Metal Sonic) : réduites x0,8 avec le modèle, elles
+        // étaient trop petites et ne touchaient pas devant lui (16/11, « pareil pour tous ses coups »)
+        let size = e.size;
         // smash avant (demandé, 16/11 : un vrai projectile, comme la boule de feu du f-smash de Primid, qui fait
         // sortir le projectile de son perso de base) : le coup de REX sur ThrowN (la boule d'énergie qui file devant
         // lui) devient un vrai projectile de Ness, le PK Feu, lancé devant lui ; ses coups et ses effets sont
@@ -277,7 +279,7 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
         }
         let os = e.bone;
         let (angle, kbg) = (e.angle, e.kbg);
-        ATTACK(agent, e.id, 0, Hash40::new(os), e.dmg, angle, kbg, e.fkb, e.bkb, size, e.x * ECHELLE, e.y * ECHELLE, e.z * ECHELLE,
+        ATTACK(agent, e.id, 0, Hash40::new(os), e.dmg, angle, kbg, e.fkb, e.bkb, size, e.x, e.y, e.z,
                None, None, None, e.hitlag, e.sdi, *ATTACK_SETOFF_KIND_ON, lr_check, false, 0, e.trip, 0,
                false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL,
                *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), *ATTACK_SOUND_LEVEL_M, son(e.attr),

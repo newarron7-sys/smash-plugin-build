@@ -6,7 +6,10 @@
 //!   une boule d'énergie bleue (flamme teintée + éclat) au lieu de l'éclair orange du PK Feu ;
 //! - quand il touche : pas de colonne de feu à plusieurs coups (pas dans REX), juste une petite explosion bleue.
 
+use smash::app::lua_bind::*;
 use smash::app::sv_animcmd::frame;
+use smash::app::BattleObjectModuleAccessor;
+use smash::hash40;
 use smash::lib::lua_const::*;
 use smash::lua2cpp::*;
 use smash::phx::Hash40;
@@ -25,7 +28,7 @@ unsafe extern "C" fn g_shoot(agent: &mut L2CAgentBase) {
         } else {
             (9.0, 112, 65, 4.0)
         };
-        ATTACK(agent, 0, 0, Hash40::new("top"), dmg, 361, kbg, 0, bkb, taille * crate::ECHELLE, 0.0, 0.0, 0.0, None, None, None,
+        ATTACK(agent, 0, 0, Hash40::new("top"), dmg, 361, kbg, 0, bkb, taille, 0.0, 0.0, 0.0, None, None, None,
                0.7, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, true, true, false, false, false,
                *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
                Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_M, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_BOMB);
@@ -55,6 +58,41 @@ unsafe extern "C" fn e_pillar(agent: &mut L2CAgentBase) {
     }
 }
 
+// ---------------------------------------------------------------- portée du B neutre
+// vidéo du 16/11 : la boule du B neutre n'allait pas assez loin (durée de vie du PK Feu de Ness). Les boules du B
+// neutre sont repérées à leur naissance (marquer_neutre) puis vivent plus longtemps et vont plus vite.
+const NEUTRE_VIE: i32 = 45;
+const NEUTRE_BONUS: f32 = 0.45;
+static mut NEUTRES: [u32; 8] = [u32::MAX; 8];
+static mut NEUTRES_I: usize = 0;
+static mut A_MARQUER: bool = false;
+
+/// appelé par le B neutre juste après generate_article : la prochaine boule de ce joueur est une boule du B neutre
+pub unsafe fn marquer_neutre(_boma: *mut BattleObjectModuleAccessor) {
+    A_MARQUER = true;
+}
+
+unsafe extern "C" fn pk_frame(weapon: &mut L2CFighterBase) {
+    let boma = weapon.module_accessor;
+    if MotionModule::motion_kind(boma) != hash40("shoot") {
+        return;
+    }
+    let oid = (*weapon.battle_object).battle_object_id;
+    let f = MotionModule::frame(boma);
+    if f < 1.0 {
+        if A_MARQUER && !NEUTRES.contains(&oid) {
+            A_MARQUER = false;
+            NEUTRES[NEUTRES_I % 8] = oid;
+            NEUTRES_I += 1;
+            WorkModule::set_int(boma, NEUTRE_VIE, *WEAPON_INSTANCE_WORK_ID_INT_LIFE);
+        }
+    }
+    if NEUTRES.contains(&oid) {
+        let lr = PostureModule::lr(boma);
+        PostureModule::add_pos(boma, &smash::phx::Vector3f { x: NEUTRE_BONUS * lr, y: 0.0, z: 0.0 });
+    }
+}
+
 unsafe extern "C" fn vide(_agent: &mut L2CAgentBase) {}
 
 pub fn install() {
@@ -64,5 +102,6 @@ pub fn install() {
     w.acmd("effect_shoot", e_shoot, Priority::Low);
     w.acmd("game_pillar", vide, Priority::Low);
     w.acmd("effect_pillar", e_pillar, Priority::Low);
+    w.on_line(Main, pk_frame);
     w.install();
 }
