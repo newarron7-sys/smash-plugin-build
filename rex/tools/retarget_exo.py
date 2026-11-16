@@ -390,7 +390,7 @@ GROUPES = {
         'd00specialnstart': ['SpecialNStart'], 'd00specialairnstart': ['SpecialAirNStart'],
         'd00specialnhold': ['SpecialNHold'], 'd00specialairnhold': ['SpecialAirNHold'],
         'd00specialnfire': ['SpecialNFire'], 'd00specialnairfire': ['SpecialAirNFire'],
-        'd00specialnend': ['SpecialNEnd'], 'd00specialairnend': ['SpecialAirNFire'],
+        'd00specialnend': ['SpecialNFire'], 'd00specialairnend': ['SpecialAirNFire'],
         'd01specials': ['SpecialAirSStart', 'SpecialS'], 'd01specialairs': ['SpecialAirSStart', 'SpecialS'],
         'd02specialhistart': ['SpecialHi'], 'd02specialairhistart': ['SpecialHi'],
         'd03speciallwstart': ['SpecialLwStart'], 'd03specialairlwstart': ['SpecialAirLwStart'],
