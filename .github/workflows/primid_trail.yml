@@ -1,0 +1,30 @@
+name: Primid - textures de traînée (sortie chiffree)
+on:
+  push:
+    branches: [ primid ]
+    paths: [ '.github/workflows/primid_trail.yml', 'outils/primid/fetch_trail.py' ]
+permissions:
+  contents: write
+jobs:
+  trail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Outils
+        run: sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
+      - name: Textures de traînée (mods GameBanana)
+        run: |
+          mkdir -p /tmp/tr
+          python3 outils/primid/fetch_trail.py /tmp/tr > /tmp/tr/log.txt 2>&1 || true
+          tail -40 /tmp/tr/log.txt
+      - name: Chiffrer et publier (branche sortie_primid_trail)
+        run: |
+          mkdir -p /tmp/pub
+          openssl rand -out /tmp/k.bin 32
+          tar cz -C /tmp/tr . | openssl enc -aes-256-cbc -pbkdf2 -pass file:/tmp/k.bin > /tmp/pub/tr.tgz.enc
+          openssl pkeyutl -encrypt -pubin -inkey $GITHUB_WORKSPACE/cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc
+          rm -f /tmp/k.bin
+          cd /tmp/pub && git init -q -b s && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "traînées chiffrées"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" s:sortie_primid_trail
