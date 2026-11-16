@@ -7,6 +7,7 @@
 //! - quand il touche : pas de colonne de feu à plusieurs coups (pas dans REX), juste une petite explosion bleue.
 
 use smash::app::sv_animcmd::frame;
+use smash::lib::lua_const::*;
 use smash::lua2cpp::*;
 use smash::phx::Hash40;
 use smash_script::macros::*;
@@ -20,7 +21,7 @@ unsafe extern "C" fn g_shoot(agent: &mut L2CAgentBase) {
         ATTACK(agent, 0, 0, Hash40::new("top"), 9.0, 361, 112, 0, 65, 4.0 * crate::ECHELLE, 0.0, 0.0, 0.0, None, None, None,
                0.7, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, true, true, false, false, false,
                *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
-               Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_M, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_ENERGY);
+               Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_M, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_BOMB);
     }
 }
 
