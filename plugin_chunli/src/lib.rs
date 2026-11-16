@@ -48,7 +48,7 @@ pub const K_RYU: u8 = 13;
 pub const K_THROW: u8 = 14;
 pub const K_RELEASE: u8 = 15;
 /// effets (gen_chunli.py, d'après les scripts d'effets de Ken) : id 0 traînée sys_attack_speedline (x, y, z dans
-/// « top », rx = inclinaison, size = taille) ; id 1 onde de choc du lancer bas (x, z = où l'adversaire est lâché)
+/// « top », rx = inclinaison, size = taille) ; id 1 onde de choc du lancer bas (x, z = où son pied l'écrase)
 pub const K_FX: u8 = 16;
 
 /// taille des coups x 1,3 (demande du joueur : « élargis ses hitbox en général, elle touche pas assez bien »)
