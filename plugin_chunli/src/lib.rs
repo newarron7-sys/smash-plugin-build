@@ -14,6 +14,8 @@
 //! v14 : +12 ; côté B : adversaire tiré devant elle à chaque coup, elle s'arrête au bord au sol.
 //! v15 : effets à la manière de Ken (traînées, impacts, fumées, charge) ; côté B avec les effets de Ken ; lancer bas :
 //! onde de choc au sol et tremblement d'écran.
+//! v16 : B neutre (charge entre ses mains), tilt haut (1er coup qui ramène pour le 2e), effets propres : haut aérien
+//! (croissant violet), avant aérien (comme Mario), smash haut (comme Ryu), smash bas (Tatsumaki de Ken).
 
 use smash::app::sv_animcmd::{frame, wait};
 use smash::app::lua_bind::*;
@@ -191,6 +193,16 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     }
     liste.sort_by(|a, b| a.f.partial_cmp(&b.f).unwrap_or(core::cmp::Ordering::Equal));
     for e in liste.iter() {
+        if e.k == K_FX && e.id == 2 {
+            // tilt haut : le 1er coup tire l'adversaire vers l'endroit du 2e (x devant, y haut, en e.size images)
+            if is_excute(agent) {
+                for h in mv.evs.iter().filter(|h| h.k == K_HIT && h.f == e.f) {
+                    AttackModule::set_vec_target_pos(boma, h.id as i32, Hash40::new("top"), &Vector2f { x: e.x, y: e.y },
+                                                     e.size as u32, false);
+                }
+            }
+            continue;
+        }
         if matches!(e.k, K_SE | K_VOIX | K_FX) {
             continue;
         }
@@ -358,12 +370,48 @@ pub(crate) unsafe fn run_effet(agent: &mut L2CAgentBase, script: &str) {
     let lua = agent.lua_state_agent;
     let mut liste: Vec<Ev> = mv.evs.iter().filter(|e| matches!(e.k, K_HIT | K_FX | K_HOLD)).copied().collect();
     let premier = mv.evs.iter().filter(|e| e.k == K_HIT).map(|e| e.f).fold(f32::MAX, f32::min);
+    let dernier = mv.evs.iter().filter(|e| e.k == K_HIT).map(|e| e.f).fold(0.0f32, f32::max);
     let r = &script[5..];
+    // demandes du joueur (16/11) : effets propres à 4 coups (sans traînée générique)
+    let propre = matches!(r, "attackairhi" | "attackairf" | "attackhi4" | "attacklw4");
+    if propre {
+        liste.retain(|e| !(e.k == K_FX && e.id == 0));
+    }
     let tilt_smash = mv.kind == 1 || r.starts_with("attacks3") || r.starts_with("attackhi3") || r.starts_with("attacklw3");
     if r == "attackdash" {
         liste.push(Ev { f: 1.0, k: K_FX, id: 10, ..E });
-    } else if tilt_smash && premier < f32::MAX {
+    } else if tilt_smash && !propre && premier < f32::MAX {
         liste.push(Ev { f: (premier - 2.0).max(1.0), k: K_FX, id: 11, ..E });
+    }
+    if premier < f32::MAX {
+        match r {
+            // haut aérien : grand croissant violet comme le haut aérien de Black Shadow
+            "attackairhi" => liste.push(Ev { f: (premier - 1.0).max(1.0), k: K_FX, id: 20, ..E }),
+            // avant aérien : comme celui de Mario (éclat sur le membre qui frappe pendant l'élan, arc au coup)
+            "attackairf" => {
+                let b = mv.evs.iter().filter(|e| e.k == K_HIT && e.f == premier)
+                    .fold(None::<Ev>, |a, o| match a { Some(x) if x.dmg * x.size >= o.dmg * o.size => Some(x), _ => Some(*o) });
+                if let Some(b) = b {
+                    liste.push(Ev { f: (premier - 8.0).max(1.0), k: K_FX, id: 21, bone: b.bone, ..E });
+                }
+                liste.push(Ev { f: (premier - 1.0).max(1.0), k: K_FX, id: 22, ..E });
+            }
+            // smash haut : comme le smash haut de Ryu (arc vers le haut, poussière au sol)
+            "attackhi4" => {
+                liste.push(Ev { f: (premier - 1.0).max(1.0), k: K_FX, id: 23, ..E });
+                liste.push(Ev { f: premier + 1.0, k: K_FX, id: 24, ..E });
+            }
+            // smash bas : effets du Tatsumaki de Ken (comme le côté B) pendant toute la rotation
+            "attacklw4" => {
+                liste.push(Ev { f: (premier - 1.0).max(1.0), k: K_FX, id: 25, ..E });
+                let mut f = premier;
+                while f <= dernier {
+                    liste.push(Ev { f, k: K_FX, id: 26, ..E });
+                    f += 8.0;
+                }
+            }
+            _ => {}
+        }
     }
     liste.sort_by(|a, b| a.f.partial_cmp(&b.f).unwrap_or(core::cmp::Ordering::Equal));
     let mut cur = 0.0f32;
@@ -406,6 +454,37 @@ pub(crate) unsafe fn run_effet(agent: &mut L2CAgentBase, script: &str) {
             }
             (K_FX, 11) => {
                 FOOT_EFFECT(agent, Hash40::new("sys_run_smoke"), Hash40::new("top"), -5, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, false);
+            }
+            (K_FX, 20) => {
+                // placement du haut aérien de Ken (arc vertical devant / au-dessus), plus grand, teinté violet
+                EFFECT_FOLLOW_FLIP_ALPHA(agent, Hash40::new("sys_attack_arc"), Hash40::new("sys_attack_arc"), Hash40::new("top"),
+                                         0, 15, 4.5, 0, 0, 90, 1.3, true, *EF_FLIP_YZ, 0.9);
+                LAST_EFFECT_SET_COLOR(agent, 0.6, 0.25, 1.0);
+                LAST_EFFECT_SET_RATE(agent, 1.6);
+            }
+            (K_FX, 21) => {
+                EFFECT(agent, Hash40::new("sys_smash_flash"), Hash40::new(e.bone), 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, true);
+            }
+            (K_FX, 22) => {
+                EFFECT_FOLLOW_FLIP(agent, Hash40::new("sys_attack_arc_b"), Hash40::new("sys_attack_arc_b"), Hash40::new("top"),
+                                   0, 7, -1, -3, -11, -113, 1.1, true, *EF_FLIP_YZ);
+                LAST_EFFECT_SET_RATE(agent, 0.8);
+            }
+            (K_FX, 23) => {
+                EFFECT_FOLLOW_FLIP_ALPHA(agent, Hash40::new("ken_attack_arc"), Hash40::new("ken_attack_arc"), Hash40::new("top"),
+                                         -2, 13, 0, 16, -30, 76, 1, true, *EF_FLIP_YZ, 0.5);
+                LAST_EFFECT_SET_RATE(agent, 1.4);
+            }
+            (K_FX, 24) => {
+                LANDING_EFFECT(agent, Hash40::new("sys_v_smoke_a"), Hash40::new("top"), 3, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, false);
+            }
+            (K_FX, 25) => {
+                FOOT_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), -1, 0, 0, 0, 0, 0, 0.85, 0, 0, 0, 0, 0, 0, false);
+                LAST_EFFECT_SET_ALPHA(agent, 0.5);
+            }
+            (K_FX, 26) => {
+                FOOT_EFFECT(agent, Hash40::new("ken_tatsumaki_smoke_r"), Hash40::new("top"), 2, 0, 0, 0, 0, 0, 1.1, 0, 0, 0, 0, 0, 0, false);
+                LAST_EFFECT_SET_RATE(agent, 1.1);
             }
             _ => {}
         }
