@@ -46,3 +46,6 @@
   bas B = nuage de poussière au décollage et à l'atterrissage. Ajoutés dans speciaux.rs.
 - Piège : retarget_exo.py applique les couches de visée de Master Chief (HAUT_SEUL / JAMBES_DE) par nom de fichier
   Ness (d00specialnhold…) : désactivées pour le groupe kjoe_speciaux (sinon KeyError SpecialNAimREDO, aucune anim).
+- PIÈGE (v2, 16/11, « aucune animation ») : le config.json du reslot partageait (share-to-added / share-to-vanilla)
+  111 fichiers que le mod fournit (spéciaux, dégâts, garde, bord, esquives, nage, provocations, victoire) : ARCropolis
+  chargeait ceux de Ness. Lancer rex/tools/fix_partages.py sur le mod à CHAQUE livraison, avant verif_config.
