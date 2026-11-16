@@ -1,0 +1,39 @@
+name: Verif partage vol (compilation seulement)
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'partage_vol/**', '.github/workflows/partage_vol.yml' ]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: partage_vol
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache outils (cargo-skyline, toolchain Switch)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-skyline
+            ~/.cargo/skyline
+            ~/.rustup/toolchains/*skyline*
+            ~/.cargo/registry
+            ~/.cargo/git
+            partage_vol/target
+          key: skyline-pv-v1-${{ hashFiles('partage_vol/Cargo.toml') }}
+          restore-keys: skyline-
+      - name: Compiler
+        working-directory: partage_vol
+        timeout-minutes: 40
+        run: |
+          command -v cargo-skyline >/dev/null || cargo install cargo-skyline
+          if ! (rustup toolchain list | grep -qi skyline && [ -d ~/.cargo/skyline/toolchain ]); then for i in 1 2 3 4 5; do cargo skyline update-std && break; sleep 20; done; fi
+          rm -f target/aarch64-skyline-switch/release/*.nro
+          set +o pipefail; yes | CARGO_TERM_COLOR=never cargo skyline build --release 2>&1 | grep -E -A8 "error" | sed '/generated.rs/,+8d' | head -80; set -o pipefail
+          N=$(ls target/aarch64-skyline-switch/release/*.nro | head -1); test -s "$N"
+          echo OK
