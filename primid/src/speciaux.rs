@@ -264,8 +264,7 @@ unsafe fn tirer(fighter: &mut L2CFighterCommon, charge: Option<f32>) {
     let lr = PostureModule::lr(boma);
     let (x, y) = canon(boma);
     AttackModule::clear(boma, ID_TIR as i32, false);
-    ModelModule::clear_joint_srt(boma, Hash40::new("face"));
-    ModelModule::clear_joint_srt(boma, Hash40::new("mustachel"));
+    ModelModule::clear_joint_srt(boma, Hash40::new("throw"));
     match charge {
         None => {
             TIR[e] = [x, y, 7.0 * lr, 0.0, 1.0, 0.0];
@@ -275,6 +274,32 @@ unsafe fn tirer(fighter: &mut L2CFighterCommon, charge: Option<f32>) {
             TIR[e] = [x, y, (3.2 + 0.8 * c) * lr, 0.0, 2.0, c];
             eclat(boma, "sys_smash_flash", x, y, 0.6 + 0.8 * c, 1.0, 0.8, 0.3);
         }
+    }
+}
+
+/// v0.38 (le joueur : « le projectile va dans tous les sens au lieu d'être tout droit ») : les tirs étaient sur Face /
+/// mustacheL, enfants de la tête (ils tournaient avec elle). Maintenant sur Throw (enfant de Rot : ne tourne qu'avec le
+/// perso) ; copie _r quand le tir part dans l'autre sens que Primid. Throw sert aux prises : tir caché pendant une prise.
+unsafe fn en_prise(boma: *mut BattleObjectModuleAccessor) -> bool {
+    let st = StatusModule::status_kind(boma);
+    [*FIGHTER_STATUS_KIND_CATCH_PULL, *FIGHTER_STATUS_KIND_CATCH_DASH_PULL, *FIGHTER_STATUS_KIND_CATCH_WAIT,
+     *FIGHTER_STATUS_KIND_CATCH_ATTACK, *FIGHTER_STATUS_KIND_CATCH_JUMP, *FIGHTER_STATUS_KIND_THROW].contains(&st)
+}
+
+unsafe fn tir_placer(boma: *mut BattleObjectModuleAccessor, x: f32, y: f32, s: f32) {
+    if en_prise(boma) {
+        ModelModule::clear_joint_srt(boma, Hash40::new("throw"));
+        return;
+    }
+    ModelModule::set_joint_translate(boma, Hash40::new("throw"), &Vector3f { x, y, z: 0.0 }, true, false);
+    ModelModule::set_joint_scale(boma, Hash40::new("throw"), &Vector3f { x: s, y: s, z: s });
+}
+
+/// quel tir montrer : 0 aucun, 1 petit, 2 chargé ; inverse : copie tournée de 180°
+unsafe fn tir_montrer(boma: *mut BattleObjectModuleAccessor, quel: u8, inverse: bool) {
+    let cache = en_prise(boma);
+    for (n, q, r) in [("pr_beam_s", 1, false), ("pr_beam_s_r", 1, true), ("pr_beam_l", 2, false), ("pr_beam_l_r", 2, true)] {
+        ModelModule::set_mesh_visibility(boma, Hash40::new(n), !cache && quel == q && inverse == r);
     }
 }
 
@@ -292,12 +317,10 @@ unsafe fn tirs(fighter: &mut L2CFighterCommon) {
     if sorte < 0.5 || mort || t >= vie {
         if sorte > 0.5 {
             AttackModule::clear(boma, ID_TIR as i32, false);
-            ModelModule::clear_joint_srt(boma, Hash40::new("face"));
-            ModelModule::clear_joint_srt(boma, Hash40::new("mustachel"));
+            ModelModule::clear_joint_srt(boma, Hash40::new("throw"));
             TIR[e][4] = 0.0;
         }
-        ModelModule::set_mesh_visibility(boma, Hash40::new("pr_beam_s"), false);
-        ModelModule::set_mesh_visibility(boma, Hash40::new("pr_beam_l"), false);
+        tir_montrer(boma, 0, false);
         return;
     }
     t += 1.0;
@@ -307,24 +330,20 @@ unsafe fn tirs(fighter: &mut L2CFighterCommon) {
     if sorte < 1.5 {
         // petit tir : 2 %, fait tressaillir
         coup_tir(fighter, x, y, 2.0, 361, 25, 12, 2.6);
-        ModelModule::set_joint_translate(boma, Hash40::new("mustachel"), &Vector3f { x, y, z: 0.0 }, true, false);
-        ModelModule::set_joint_scale(boma, Hash40::new("mustachel"), &Vector3f { x: 2.0, y: 2.0, z: 2.0 });
-        ModelModule::set_mesh_visibility(boma, Hash40::new("pr_beam_s"), true);
+        tir_placer(boma, x, y, 2.0);
+        tir_montrer(boma, 1, vx * PostureModule::lr(boma) < 0.0);
         // v0.32 : lueur et traînée jaune-orange (tir de REX) pour mieux le voir
         let h = EffectModule::req(boma, Hash40::new("sys_attack_speedline"), &Vector3f { x: x - vx, y, z: 0.0 },
                                   &Vector3f { x: 0.0, y: 90.0 * vx.signum(), z: 0.0 }, 0.7, 0, 0, false, 0) as u32;
         if h != 0 {
             EffectModule::set_rgb(boma, h, 1.0, 0.75, 0.2);
         }
-        ModelModule::set_mesh_visibility(boma, Hash40::new("pr_beam_l"), false);
     } else {
         // tir chargé : 5 à 19 %, gros et lent, grossit avec la charge (objet de REX en entier à pleine charge)
         coup_tir(fighter, x, y, 5.0 + 14.0 * c, 361, 70, (30.0 + 30.0 * c) as i32, 3.0 + 5.0 * c);
         let s = 0.5 + 0.7 * c;
-        ModelModule::set_joint_translate(boma, Hash40::new("face"), &Vector3f { x, y, z: 0.0 }, true, false);
-        ModelModule::set_joint_scale(boma, Hash40::new("face"), &Vector3f { x: s, y: s, z: s });
-        ModelModule::set_mesh_visibility(boma, Hash40::new("pr_beam_l"), true);
-        ModelModule::set_mesh_visibility(boma, Hash40::new("pr_beam_s"), false);
+        tir_placer(boma, x, y, s);
+        tir_montrer(boma, 2, vx * PostureModule::lr(boma) < 0.0);
         {
             let h = EffectModule::req(boma, Hash40::new("sys_attack_speedline"), &Vector3f { x: x - vx * 2.0, y, z: 0.0 },
                                       &Vector3f { x: 0.0, y: 90.0 * vx.signum(), z: 0.0 }, 0.9 + 1.0 * c, 0, 0, false, 0) as u32;
