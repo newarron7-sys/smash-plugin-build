@@ -100,8 +100,9 @@ mod speciaux;
 /// perso de base (nom interne) : Mario
 pub const BASE: &str = "mario";
 
-/// costume de Mario remplacé par Primid
-pub const PR_COSTUMES: [usize; 1] = [0];
+/// v0.39 (le joueur : sa propre case sur le CSS, après Master Chief) : costume c140 de Mario (case ui_chara_primid) ;
+/// avant : c00 de Mario (remplacé)
+pub const PR_COSTUMES: [usize; 1] = [140];
 
 fn find(script: &str) -> Option<&'static Mv> {
     MOVES.iter().find(|m| m.script == script)
