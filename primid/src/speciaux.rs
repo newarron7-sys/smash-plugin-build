@@ -68,6 +68,15 @@ unsafe fn fin(fighter: &mut L2CFighterCommon, e: usize) {
     ModelModule::clear_joint_srt(boma, Hash40::new("hat"));
 }
 
+/// boomerang en vol : montre la copie k (tournée de k x 45°), cache les autres (k < 0 : tout caché)
+unsafe fn boom_vol(boma: *mut BattleObjectModuleAccessor, k: i32) {
+    const NOMS: [&str; 8] = ["pr_boom_vol0", "pr_boom_vol1", "pr_boom_vol2", "pr_boom_vol3", "pr_boom_vol4",
+                             "pr_boom_vol5", "pr_boom_vol6", "pr_boom_vol7"];
+    for (i, n) in NOMS.iter().enumerate() {
+        ModelModule::set_mesh_visibility(boma, Hash40::new(n), i as i32 == k);
+    }
+}
+
 /// chaque image (depuis la boucle de Primid) : vol du boomerang, affichage
 pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
@@ -81,12 +90,12 @@ pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     tirs(fighter);
     let [mut x, mut y, mut vx, mut vy, mut t, mut ph, mut a] = BM[e];
     if ph < 0.5 {
-        ModelModule::set_mesh_visibility(boma, Hash40::new("pr_boom_vol"), false);
+        boom_vol(boma, -1);
         return;
     }
     if StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_DEAD {
         fin(fighter, e);
-        ModelModule::set_mesh_visibility(boma, Hash40::new("pr_boom_vol"), false);
+        boom_vol(boma, -1);
         return;
     }
     t += 1.0;
@@ -126,18 +135,16 @@ pub unsafe fn update(fighter: &mut L2CFighterCommon) {
                                       &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 0.6, 0, 0, false, 0) as u32;
             let _ = h;
             fin(fighter, e);
-            ModelModule::set_mesh_visibility(boma, Hash40::new("pr_boom_vol"), false);
+            boom_vol(boma, -1);
             return;
         }
     }
     // tourne sur lui-même (dans le plan de l'écran)
-    a = (a + 33.0) % 360.0;
+    // v0.36 : rotation par copies déjà tournées (8 x 45°, une par image), plus de rotation de l'os (il basculait)
+    a = (a + 1.0) % 8.0;
     BM[e] = [x, y, vx, vy, t, ph, a];
     ModelModule::set_joint_translate(boma, Hash40::new("hat"), &Vector3f { x, y, z: 0.0 }, true, false);
-    ModelModule::set_joint_rotate(boma, Hash40::new("hat"), &Vector3f { x: a, y: 0.0, z: 0.0 },
-                                  MotionNodeRotateCompose { _address: *MOTION_NODE_ROTATE_COMPOSE_AFTER as u8 },
-                                  MotionNodeRotateOrder { _address: *MOTION_NODE_ROTATE_ORDER_XYZ as u8 });
-    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_boom_vol"), true);
+    boom_vol(boma, a as i32);
 }
 
 // ------------------------------------------------------------------ statut SPECIAL_S (côté B)
