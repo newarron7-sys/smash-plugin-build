@@ -83,6 +83,19 @@ jobs:
           python outils/primid/audio/template.py tpl mario "mario voice,mario voice pack,mario voice replacement,mario sound" > out/modele.txt 2>&1 || true
           grep -E "CHOISI|MODELE|AUCUN" out/modele.txt | head -20
           cp tpl/*_modele.nus3audio out/ 2>/dev/null || true; ls -la out
+      - name: Mods de voix de Mario par costume (config.json, nus3bank) pour comparer
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p out/ref && cd out/ref
+          for M in 479043 518570 362575; do
+            url=$(curl -sSL "https://gamebanana.com/apiv11/Mod/$M?_csvProperties=_aFiles" | python -c "import json,sys; print(json.load(sys.stdin)['_aFiles'][0]['_sDownloadUrl'])")
+            curl -sSL -o m.bin "$url"; mkdir -p x$M; 7z x -y m.bin -ox$M >/dev/null; rm -f m.bin
+            find x$M -type f | sed 's/^/  /' > liste_$M.txt
+            find x$M -type f \( -name '*.json' -o -name '*.nus3bank' -o -name '*.tonelabel' -o -name '*.txt' \) | while read f; do mkdir -p "garde/$(dirname "$f")"; cp "$f" "garde/$f"; done
+            rm -rf x$M
+          done
+          ls -R garde | head -50
       - name: Chiffrer et publier (branche sortie_primid_voix)
         shell: bash
         run: |
