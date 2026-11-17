@@ -1,0 +1,45 @@
+name: Terrain (chiffre)
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'donnees/stage.tgz.enc' ]
+permissions:
+  contents: write
+concurrency:
+  group: stage
+  cancel-in-progress: true
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Cache yamlvd
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/yamlvd
+          key: yamlvd-v1
+      - name: yamlvd
+        run: |
+          command -v yamlvd >/dev/null || cargo install --locked --git https://github.com/ultimate-research/lvd-rs yamlvd >/dev/null 2>&1 || cargo install --locked yamlvd >/dev/null 2>&1 || true
+          command -v yamlvd >/dev/null && echo "yamlvd ok" || echo "yamlvd absent"
+      - name: Travail (rien n'est affiche)
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          pip install -q ssbh_data_py numpy pyyaml >/dev/null 2>&1
+          printf '%s' "$CLE" > /tmp/k
+          mkdir -p /tmp/a /tmp/out /tmp/pub
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/k -in donnees/stage.tgz.enc | tar xz -C /tmp/a
+          bash /tmp/a/run.sh >/dev/null 2>&1 || true
+          echo "fichiers : $(find /tmp/out -type f | wc -l)"
+          tar cz -C /tmp/out . | openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -out /tmp/pub/stage.tgz.enc
+          rm -f /tmp/k
+      - name: Publier (branche stage_out, chiffre)
+        run: |
+          cd /tmp/pub && git init -q -b stage_out && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m stage
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" stage_out
