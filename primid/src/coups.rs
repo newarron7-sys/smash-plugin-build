@@ -52,10 +52,63 @@ unsafe fn avancee(boma: *mut BattleObjectModuleAccessor, e: usize) {
     }
 }
 
+/// v0.39 (le joueur, vidéo de REX : « à la fin il saute en l'air en arrière ») : REX passe en l'air à l'image 86 du
+/// lancer bas (PSA : 0E000100 0, vitesse 1,25, puis élan à 94) et retombe librement. Ici : à 86, Primid passe en chute
+/// (statut FALL, il peut agir en l'air) avec un élan vers le haut et l'arrière, l'animation du saut continue.
+const SAUT_IMAGE: f32 = 86.0;
+const SAUT_VY: f32 = 2.2;
+const SAUT_VX: f32 = 0.65;
+/// 0 rien, 1 saut demandé, 2 en l'air (élan donné)
+static mut SAUT: [u8; 8] = [0; 8];
+
+unsafe fn saut_lancer_bas(fighter: &mut L2CFighterCommon, e: usize, st: i32) {
+    let boma = fighter.module_accessor;
+    let mk = MotionModule::motion_kind(boma);
+    let lancer = mk == smash::hash40("throw_lw");
+    if st == *FIGHTER_STATUS_KIND_THROW && lancer {
+        if SAUT[e] == 0 && MotionModule::frame(boma) >= SAUT_IMAGE
+            && StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
+            SAUT[e] = 1;
+            StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), false);
+            GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
+            PostureModule::add_pos(boma, &Vector3f { x: 0.0, y: 1.0, z: 0.0 });
+            StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_FALL, false);
+        } else if MotionModule::frame(boma) < SAUT_IMAGE {
+            SAUT[e] = 0;
+        }
+        return;
+    }
+    if SAUT[e] == 0 {
+        return;
+    }
+    if st != *FIGHTER_STATUS_KIND_FALL {
+        SAUT[e] = 0;
+        return;
+    }
+    let lr = PostureModule::lr(boma);
+    if SAUT[e] == 1 {
+        SAUT[e] = 2;
+        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY, SAUT_VY);
+        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_CONTROL, -SAUT_VX * lr, 0.0);
+        // la chute remet son animation : le saut arrière de REX reprend où il était
+        MotionModule::change_motion(boma, Hash40::new("throw_lw"), SAUT_IMAGE, 1.25, false, 0.0, false, false);
+        AV_MK[e] = smash::hash40("throw_lw");
+        AV_F[e] = SAUT_IMAGE;
+        return;
+    }
+    if lancer && MotionModule::is_end(boma) {
+        MotionModule::change_motion(boma, Hash40::new("fall"), 0.0, 1.0, false, 0.0, false, false);
+        SAUT[e] = 0;
+    } else if !lancer {
+        SAUT[e] = 0;
+    }
+}
+
 pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let e = e_of(boma);
     let st = StatusModule::status_kind(boma);
+    saut_lancer_bas(fighter, e, st);
     if st == *FIGHTER_STATUS_KIND_ATTACK_HI4_START {
         CHARGE[e] = 0.0;
     } else if st == *FIGHTER_STATUS_KIND_ATTACK_HI4_HOLD {

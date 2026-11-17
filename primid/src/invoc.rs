@@ -1066,6 +1066,18 @@ unsafe fn cymul_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
         vy *= 0.8;
         let ti = tp as i32;
         pose = if ti < 4 || ti > 56 { 2 } else { 3 + (ti % 5) as usize };
+        // v0.39 (vidéo de REX du joueur : « rajoute l'effet quand il tourne ») : traînées blanches autour de lui,
+        // dans le plan des lames (à plat, couché vers la caméra), qui font le tour
+        if ti >= 4 && ti <= 56 && ti % 3 == 0 {
+            for k in 0..2 {
+                let tour = ((ti * 50 + k * 180) % 360) as f32;
+                let h = EffectModule::req(boma, Hash40::new("sys_attack_arc"), &Vector3f { x, y: y - 1.0, z: 0.0 },
+                    &Vector3f { x: 75.0, y: tour, z: 0.0 }, 1.25, 0, 0, false, 0) as u32;
+                if h != 0 {
+                    EffectModule::set_rgb(boma, h, 1.0, 1.0, 1.0);
+                }
+            }
+        }
         if ti >= 4 && ti < 50 {
             if ti % 8 == 4 {
                 AttackModule::clear(boma, 7, false);
