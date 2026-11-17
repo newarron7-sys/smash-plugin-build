@@ -296,6 +296,8 @@ unsafe fn tir_placer(boma: *mut BattleObjectModuleAccessor, x: f32, y: f32, s: f
 }
 
 /// quel tir montrer : 0 aucun, 1 petit, 2 chargé ; inverse : copie tournée de 180°
+/// v0.41 (photo du joueur : le tir chargé était à l'envers, sa traînée devant) : sur Throw, le tir tiré vers l'avant
+/// de Primid est la copie tournée (_r)
 unsafe fn tir_montrer(boma: *mut BattleObjectModuleAccessor, quel: u8, inverse: bool) {
     let cache = en_prise(boma);
     for (n, q, r) in [("pr_beam_s", 1, false), ("pr_beam_s_r", 1, true), ("pr_beam_l", 2, false), ("pr_beam_l_r", 2, true)] {
@@ -331,7 +333,7 @@ unsafe fn tirs(fighter: &mut L2CFighterCommon) {
         // petit tir : 2 %, fait tressaillir
         coup_tir(fighter, x, y, 2.0, 361, 25, 12, 2.6);
         tir_placer(boma, x, y, 2.0);
-        tir_montrer(boma, 1, vx * PostureModule::lr(boma) < 0.0);
+        tir_montrer(boma, 1, vx * PostureModule::lr(boma) > 0.0);
         // v0.32 : lueur et traînée jaune-orange (tir de REX) pour mieux le voir
         let h = EffectModule::req(boma, Hash40::new("sys_attack_speedline"), &Vector3f { x: x - vx, y, z: 0.0 },
                                   &Vector3f { x: 0.0, y: 90.0 * vx.signum(), z: 0.0 }, 0.7, 0, 0, false, 0) as u32;
@@ -343,7 +345,7 @@ unsafe fn tirs(fighter: &mut L2CFighterCommon) {
         coup_tir(fighter, x, y, 5.0 + 14.0 * c, 361, 70, (30.0 + 30.0 * c) as i32, 3.0 + 5.0 * c);
         let s = 0.5 + 0.7 * c;
         tir_placer(boma, x, y, s);
-        tir_montrer(boma, 2, vx * PostureModule::lr(boma) < 0.0);
+        tir_montrer(boma, 2, vx * PostureModule::lr(boma) > 0.0);
         {
             let h = EffectModule::req(boma, Hash40::new("sys_attack_speedline"), &Vector3f { x: x - vx * 2.0, y, z: 0.0 },
                                       &Vector3f { x: 0.0, y: 90.0 * vx.signum(), z: 0.0 }, 0.9 + 1.0 * c, 0, 0, false, 0) as u32;
