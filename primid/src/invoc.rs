@@ -1108,6 +1108,18 @@ unsafe extern "C" fn pump_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
     weapon.fastshift(L2CValue::Ptr(botron_loop as *const () as _))
 }
 
+unsafe extern "C" fn pump_touche(_w: &mut L2CWeaponCommon, _a: &L2CValue, _b: &L2CValue) -> L2CValue {
+    0.into()
+}
+
+unsafe extern "C" fn pump_degats(_w: &mut L2CWeaponCommon, _a: &L2CValue) -> L2CValue {
+    0.into()
+}
+
+unsafe extern "C" fn pump_rien(_w: &mut L2CWeaponCommon) -> L2CValue {
+    0.into()
+}
+
 unsafe extern "C" fn pump_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let w = weapon.module_accessor;
     let _ = est_botron(w, id_of(weapon));
@@ -1270,6 +1282,14 @@ pub fn install(a: &mut Agent) {
                *WEAPON_MARIO_PUMP_STATUS_KIND_TERM] {
         p.status(Main, st, pump_main);
         p.status(Exec, st, pump_exec);
+        // v0.35d (le joueur : il disparaît toujours juste après le 1er pot ; la durée de vie n'y était pour rien) :
+        // il disparaît quand son pot TOUCHE : le code du J.E.T. de Mario retire l'objet quand son coup touche
+        // (CheckAttack) ; retiré, ainsi que ses autres fonctions de statut (fin, sortie, dégâts)
+        p.status(CheckAttack, st, pump_touche);
+        p.status(CheckDamage, st, pump_degats);
+        p.status(End, st, pump_rien);
+        p.status(Exit, st, pump_rien);
+        p.status(Init, st, pump_rien);
     }
     for m in ["hold", "light", "heavy", "start", "end", "wait"] {
         for k in ["game", "effect", "sound"] {
