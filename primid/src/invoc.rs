@@ -1133,7 +1133,9 @@ unsafe fn pot_coup(weapon: &mut L2CWeaponCommon, dmg: f32, taille: f32, kbg: i32
     ATTACK(weapon, 1, 0, Hash40::new("hachin"), dmg, 70, kbg, 0, bkb, taille, 0.0, -4.0, 0.0, None, None, None, 1.0, 1.0,
            *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, true, true, false, false, false,
            *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
-           Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_BOMB, *ATTACK_REGION_BOMB);
+           Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_BOMB, *ATTACK_REGION_OBJECT);
+    // v0.35f (le joueur : il disparaît toujours pile quand le pot touche) : un coup de type BOMBE fait « exploser »
+    // l'objet qui le porte (le jeu retire le projectile, comme une bombe) : Botron disparaissait avec. Type OBJET.
 }
 
 unsafe fn pot_os(w: *mut BattleObjectModuleAccessor, chute: f32) {
