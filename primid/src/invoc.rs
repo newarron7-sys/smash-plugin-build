@@ -1,4 +1,4 @@
-//! Primid v0.2 : son bas B de REX (invocations de l'Émissaire subspatial).
+//! Primid v0.37 : son bas B de REX (invocations de l'Émissaire subspatial).
 //!
 //! REX (FitPrimid.pac, action 0x115) : SummonStart (vitesse 2) -> SummonWait (B tenu, portail au-dessus de sa tête) ;
 //! le stick choisit l'ennemi (au-delà de 0,75) -> SummonGo (interruptible à l'image 9) ; B lâché -> SummonEnd.
@@ -492,6 +492,7 @@ unsafe fn pot_frappe(fighter: &mut L2CFighterCommon, e: usize) {
 
 pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     let e = e_of(fighter.module_accessor);
+    pump_attente(fighter.module_accessor, e);
     pot_frappe(fighter, e);
     inv_pas(fighter, e);
     armes(fighter);
@@ -563,77 +564,105 @@ unsafe extern "C" fn mite_passif(_weapon: &mut L2CWeaponCommon) -> L2CValue {
     0.into()
 }
 
-/// v0.13 : Mite est collé à l'os Throw de Primid (v0.12 : os ajouté pr_mite, sans piste d'animation : il ne bougeait
-/// pas, Mite restait aux pieds de Primid). Throw est animé partout et HDR le déplace par set_joint_translate (Lucario :
-/// position globale, 4e argument vrai). Throw sert aussi aux prises : pendant les prises de Primid, Mite est caché et
-/// l'os rendu au jeu.
-/// Mode 0 : position globale ; si l'os ne va pas où il faut (mesuré à l'image suivante), mode 1 : position locale.
-static mut TENU: [bool; 8] = [false; 8];
+/// v0.37 (le joueur : elles buguaient au demi-tour et aux prises, Botron non) : Mite, Boobas et Cymul ne sont plus dans
+/// le modèle de Primid (os Throw, que le jeu tourne avec lui et prend pour tenir l'adversaire) mais dans le J.E.T., comme
+/// Botron (tools/invocs_pump.py : objets pr_<nom><pose> sur l'os racine). Mario n'a qu'un J.E.T. : une seule invocation
+/// à la fois en tout (choix du joueur). Leur comportement et leurs coups restent menés depuis Primid (inv_pas, coups
+/// de Primid : le J.E.T. disparaît quand son propre coup touche) ; le J.E.T. ne fait que les montrer (inv_loop).
+/// ce que montre le J.E.T. : 0 Botron, sinon l'invocation (INV_MITE...)
+static mut PUMP_MODE: [u8; 8] = [0; 8];
+/// J.E.T. à créer à l'image suivante (l'ancien est en train d'être retiré) : mode + 1, 0 = rien
+static mut PUMP_ATTENTE: [u8; 8] = [0; 8];
+static mut PUMP_ESSAIS: [i32; 8] = [0; 8];
+/// pose à montrer : (invocation, pose, sens)
+static mut VUE: [(u8, usize, f32); 8] = [(0, 0, 1.0); 8];
 
-/// v0.22 (le joueur : les invocations disparaissent quand il attrape) : l'os Throw porte l'adversaire attrapé ; il n'est
-/// rendu au jeu que pendant qu'un adversaire est tenu (pas pendant la tentative de prise)
-unsafe fn en_prise(boma: *mut BattleObjectModuleAccessor) -> bool {
-    let st = StatusModule::status_kind(boma);
-    [*FIGHTER_STATUS_KIND_CATCH_PULL, *FIGHTER_STATUS_KIND_CATCH_DASH_PULL, *FIGHTER_STATUS_KIND_CATCH_WAIT,
-     *FIGHTER_STATUS_KIND_CATCH_ATTACK, *FIGHTER_STATUS_KIND_CATCH_JUMP, *FIGHTER_STATUS_KIND_THROW].contains(&st)
+unsafe fn pump_generer(boma: *mut BattleObjectModuleAccessor, e: usize) {
+    BOT_ATTEND[e] = true;
+    BOT_ID[e] = 0;
+    ArticleModule::generate_article(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP, false, -1);
+    if let Some(w) = article_boma(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP) {
+        if BOT_ATTEND[e] {
+            StatusModule::change_status_force(w, *WEAPON_MARIO_PUMP_STATUS_KIND_WAIT, false);
+        }
+    }
+    PUMP_ATTENTE[e] = 0;
 }
 
-/// v0.23 (le joueur : en v0.22 les invocations étaient de nouveau invisibles, « comme au début ») : le contrôle de
-/// position de l'os (v0.22) et le côté mesuré aux orteils les cachaient tout le temps. Cachées seulement pendant les
-/// statuts de demi-tour (quelques images).
-unsafe fn en_demi_tour(boma: *mut BattleObjectModuleAccessor, _e: usize) -> bool {
-    let st = StatusModule::status_kind(boma);
-    [*FIGHTER_STATUS_KIND_TURN, *FIGHTER_STATUS_KIND_TURN_DASH, *FIGHTER_STATUS_KIND_TURN_RUN,
-     *FIGHTER_STATUS_KIND_TURN_RUN_BRAKE].contains(&st)
-}
-
-unsafe fn mite_lacher(boma: *mut BattleObjectModuleAccessor, e: usize) {
-    if TENU[e] {
-        ModelModule::clear_joint_srt(boma, Hash40::new("throw"));
-        TENU[e] = false;
+/// nouvelle invocation sur le J.E.T. : l'ancien (Botron ou une autre invocation) est retiré d'abord
+unsafe fn pump_creer(boma: *mut BattleObjectModuleAccessor, e: usize, mode: u8) {
+    PUMP_MODE[e] = mode;
+    POT[e][0] = 0.0;
+    VUE[e] = (mode, 0, 1.0);
+    if ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP) {
+        // l'ancien n'est plus réclamé (sa boucle se retire elle-même) ; le nouveau à l'image suivante
+        BOT_ATTEND[e] = false;
+        BOT_ID[e] = 0;
+        ArticleModule::remove_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
+        PUMP_ATTENTE[e] = mode + 1;
+        PUMP_ESSAIS[e] = 0;
+    } else {
+        pump_generer(boma, e);
     }
 }
 
-/// place l'os Throw pour que l'invocation soit en (x, y) dans le jeu ; faux pendant les prises.
-/// v0.17 : toujours en position globale (le contrôle de la v0.13 basculait en position locale pendant un demi-tour
-/// de Primid : les invocations sautaient de l'autre côté)
-unsafe fn mite_placer(boma: *mut BattleObjectModuleAccessor, e: usize, x: f32, y: f32) -> bool {
-    if en_prise(boma) {
-        mite_lacher(boma, e);
-        return false;
+/// chaque image (Primid) : création différée
+unsafe fn pump_attente(boma: *mut BattleObjectModuleAccessor, e: usize) {
+    if PUMP_ATTENTE[e] == 0 {
+        return;
     }
-    TENU[e] = true;
-    ModelModule::set_joint_translate(boma, Hash40::new("throw"), &Vector3f { x, y, z: 0.0 }, true, false);
-    true
+    PUMP_ESSAIS[e] += 1;
+    if !ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP) || PUMP_ESSAIS[e] > 6 {
+        if ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP) {
+            ArticleModule::remove_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
+        }
+        pump_generer(boma, e);
+    }
 }
 
-/// v0.17 : côté vers lequel le modèle de Primid est réellement tourné (pieds : orteil devant le pied). Pendant un
-/// demi-tour, le jeu tourne le modèle petit à petit alors que son côté (lr) change d'un coup : l'invocation, collée à
-/// Throw, tourne avec lui ; l'exemplaire est choisi d'après ce côté réel.
-static mut FACE: [f32; 8] = [1.0; 8];
+/// le J.E.T. de cette invocation existe-t-il (ou va-t-il être créé) ?
+unsafe fn pump_la(boma: *mut BattleObjectModuleAccessor, e: usize) -> bool {
+    PUMP_ATTENTE[e] != 0 || ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP)
+}
 
-unsafe fn face_reelle(boma: *mut BattleObjectModuleAccessor, e: usize) -> f32 {
-    let mut a = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-    let mut b = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-    let mut c = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-    let mut d = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
-    ModelModule::joint_global_position(boma, Hash40::new("toel"), &mut a, true);
-    ModelModule::joint_global_position(boma, Hash40::new("footl"), &mut b, true);
-    ModelModule::joint_global_position(boma, Hash40::new("toer"), &mut c, true);
-    ModelModule::joint_global_position(boma, Hash40::new("footr"), &mut d, true);
-    let f = (a.x - b.x) + (c.x - d.x);
-    if f.abs() > 0.3 {
-        FACE[e] = f.signum();
-    } else if StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_TURN {
-        FACE[e] = PostureModule::lr(boma);
+/// objets du J.E.T. : Botron (polygon0 à 9) et les poses des invocations (pr_<nom><pose>)
+unsafe fn pump_afficher(w: *mut BattleObjectModuleAccessor, botron: bool, quoi: Option<(u8, usize)>) {
+    for k in 0..10 {
+        ModelModule::set_mesh_visibility(w, Hash40::new(&format!("polygon{}", k)), botron);
     }
-    FACE[e]
+    for (k, (nom, np, _)) in INV_OBJ.iter().enumerate() {
+        for p in 0..*np {
+            let on = quoi.map_or(false, |(kind, pose)| kind as usize == k + 1 && pose.min(np - 1) == p);
+            ModelModule::set_mesh_visibility(w, Hash40::new(&format!("pr_{}{}", nom, p)), on);
+        }
+    }
+}
+
+/// boucle du J.E.T. quand il porte Mite, Boobas ou Cymul : placé et tourné d'après Primid (inv_pas)
+unsafe extern "C" fn inv_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
+    let w = weapon.module_accessor;
+    let Some(e) = est_botron(w, id_of(weapon)) else {
+        tuer(weapon);
+        return 0.into();
+    };
+    if INV[e] == 0 || PUMP_MODE[e] == 0 {
+        BOT_ID[e] = 0;
+        tuer(weapon);
+        return 0.into();
+    }
+    WorkModule::set_int(w, 9999, *WEAPON_INSTANCE_WORK_ID_INT_LIFE);
+    WorkModule::set_int(w, 9999, *WEAPON_INSTANCE_WORK_ID_INT_INIT_LIFE);
+    let (kind, pose, s) = VUE[e];
+    placer(w, M[e][0], M[e][1]);
+    orienter(w, s);
+    visible(w);
+    pump_afficher(w, false, Some((kind, pose)));
+    0.into()
 }
 
 // ------------------------------------------------------------------ v0.16 : Mite, Boobas, Cymul sur l'os Throw
-// Les trois sont dessinés dans le modèle de Primid (tools/invocs_primid.py) et partagent l'os Throw (méthode validée
-// pour Mite en v0.13 / v0.14) : une seule à la fois ; en invoquer une autre fait disparaître la précédente.
-// Botron reste à part (J.E.T.).
+// v0.16 à v0.36 : dessinées dans le modèle de Primid (os Throw). v0.37 : dans le J.E.T. (voir pump_creer) ; une seule
+// invocation à la fois en tout (Botron compris).
 
 const INV_MITE: u8 = 1;
 const INV_BOOBAS: u8 = 2;
@@ -652,6 +681,7 @@ unsafe fn inv_creer(boma: *mut BattleObjectModuleAccessor, e: usize, kind: u8) {
         eff(boma, "sys_erace_smoke", M[e][0], M[e][1] + 3.0, 0.8);
         AttackModule::clear(boma, 7, false);
     }
+    botron_partir(boma, e);
     let lr = PostureModule::lr(boma);
     let (x, y) = pos(boma);
     // REX : elles sortent du portail, au-dessus de sa tête
@@ -664,6 +694,16 @@ unsafe fn inv_creer(boma: *mut BattleObjectModuleAccessor, e: usize, kind: u8) {
         _ => RECH[e][3] = RECH_CYMUL,
     }
     eff(boma, "sys_erace_smoke", M[e][0], M[e][1], 0.6);
+    pump_creer(boma, e, kind);
+}
+
+/// v0.37 : Botron présent quand on invoque autre chose : il part (fumée) ; son pot ne frappe plus
+unsafe fn botron_partir(boma: *mut BattleObjectModuleAccessor, e: usize) {
+    if PUMP_MODE[e] == 0 && ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP) {
+        eff(boma, "sys_erace_smoke", B[e][0], B[e][1], 1.0);
+    }
+    POT[e][0] = 0.0;
+    AttackModule::clear(boma, ID_POT as i32, false);
 }
 
 unsafe fn inv_fin(fighter: &mut L2CFighterCommon, e: usize) {
@@ -671,40 +711,14 @@ unsafe fn inv_fin(fighter: &mut L2CFighterCommon, e: usize) {
     eff(boma, "sys_erace_smoke", M[e][0], M[e][1] + 3.0, 0.8);
     AttackModule::clear(boma, 7, false);
     INV[e] = 0;
-    inv_afficher(boma, None);
-    mite_lacher(boma, e);
-}
-
-/// objets pr_<nom><pose><a-d> : a (Primid à droite, s +1), b (droite, -1), c (gauche, +1), d (gauche, -1) ;
-/// s = sens de l'invocation (+1 : le +z de son animation vers la droite de l'écran)
-unsafe fn inv_afficher(boma: *mut BattleObjectModuleAccessor, quoi: Option<(u8, usize, f32, f32)>) {
-    for (k, (nom, np, sym)) in INV_OBJ.iter().enumerate() {
-        let choix = quoi.and_then(|(kind, pose, plr, s)| {
-            if kind as usize != k + 1 {
-                return None;
-            }
-            let l = if *sym {
-                if plr > 0.0 { 0 } else { 2 }
-            } else {
-                match (plr > 0.0, s > 0.0) {
-                    (true, true) => 0,
-                    (true, false) => 1,
-                    (false, true) => 2,
-                    (false, false) => 3,
-                }
-            };
-            Some((pose.min(np - 1), l))
-        });
-        // à chaque image (le jeu peut remettre la visibilité des objets, par exemple à la réapparition)
-        for p in 0..*np {
-            for (l, c) in ["a", "b", "c", "d"].iter().enumerate() {
-                if *sym && (l == 1 || l == 3) {
-                    continue;
-                }
-                let n = format!("pr_{}{}{}", nom, p, c);
-                ModelModule::set_mesh_visibility(boma, Hash40::new(&n), choix == Some((p, l)));
-            }
-        }
+    // le J.E.T. qui la montrait est retiré (sa boucle le fait aussi d'elle-même)
+    if PUMP_MODE[e] != 0 && PUMP_ATTENTE[e] == 0 && ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP) {
+        ArticleModule::remove_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
+    }
+    if PUMP_MODE[e] != 0 {
+        PUMP_ATTENTE[e] = 0;
+        BOT_ATTEND[e] = false;
+        BOT_ID[e] = 0;
     }
 }
 
@@ -767,12 +781,13 @@ const INV_VIE: f32 = 720.0;
 unsafe fn inv_pas(fighter: &mut L2CFighterCommon, e: usize) {
     let boma = fighter.module_accessor;
     if INV[e] == 0 {
-        inv_afficher(boma, None);
         return;
     }
     M[e][6] += 1.0;
     let (x, y, t) = (M[e][0], M[e][1], M[e][6]);
-    if t > INV_VIE || y < -300.0 || StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_DEAD {
+    // le J.E.T. retiré par le jeu (après sa création) : l'invocation s'arrête aussi
+    let perdu = t > 10.0 && !pump_la(boma, e);
+    if perdu || t > INV_VIE || y < -300.0 || StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_DEAD {
         inv_fin(fighter, e);
         return;
     }
@@ -784,11 +799,7 @@ unsafe fn inv_pas(fighter: &mut L2CFighterCommon, e: usize) {
     if INV[e] == 0 {
         return;
     }
-    if mite_placer(boma, e, M[e][0], M[e][1]) && !en_demi_tour(boma, e) {
-        inv_afficher(boma, Some((INV[e], pose, PostureModule::lr(boma), s)));
-    } else {
-        inv_afficher(boma, None);
-    }
+    VUE[e] = (INV[e], pose, s);
 }
 
 // ---------------------------------------------------------------- Mite
@@ -1089,20 +1100,16 @@ unsafe fn cymul_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
 // ------------------------------------------------------------------ Botron (J.E.T. de Mario) et son pot (eau du J.E.T.)
 
 unsafe fn botron_creer(boma: *mut BattleObjectModuleAccessor, e: usize) {
-    if ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP) {
-        ArticleModule::remove_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP, ArticleOperationTarget(*ARTICLE_OPE_TARGET_ALL));
+    if INV[e] != 0 {
+        // v0.37 : une seule invocation à la fois : celle qui est là disparaît
+        eff(boma, "sys_erace_smoke", M[e][0], M[e][1] + 3.0, 0.8);
+        AttackModule::clear(boma, 7, false);
+        INV[e] = 0;
     }
     let lr = PostureModule::lr(boma);
     let (x, y) = pos(boma);
     B[e] = [x + 6.0 * lr, y + 20.0, lr, 0.0, 0.0, 0.0];
-    BOT_ATTEND[e] = true;
-    BOT_ID[e] = 0;
-    ArticleModule::generate_article(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP, false, -1);
-    if let Some(w) = article_boma(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP) {
-        if BOT_ATTEND[e] {
-            StatusModule::change_status_force(w, *WEAPON_MARIO_PUMP_STATUS_KIND_WAIT, false);
-        }
-    }
+    pump_creer(boma, e, 0);
     RECH[e][1] = RECH_BOTRON;
 }
 
@@ -1129,6 +1136,22 @@ unsafe extern "C" fn pump_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
     };
     P[e] = [0.0, 0.0, 0.0, 0.0];
     POT[e][0] = 0.0;
+    EffectModule::kill_all(w, 0, true, false);
+    if PUMP_MODE[e] != 0 {
+        // v0.37 : Mite, Boobas ou Cymul
+        if INV[e] == 0 {
+            BOT_ID[e] = 0;
+            tuer(weapon);
+            return 0.into();
+        }
+        liberer(w, VUE[e].2);
+        placer(w, M[e][0], M[e][1]);
+        visible(w);
+        MotionModule::change_motion(w, Hash40::new("wait"), 0.0, 0.0, false, 0.0, false, false);
+        pump_afficher(w, false, Some((VUE[e].0, VUE[e].1)));
+        return weapon.fastshift(L2CValue::Ptr(inv_loop as *const () as _));
+    }
+    pump_afficher(w, true, None);
     liberer(w, B[e][2]);
     placer(w, B[e][0], B[e][1]);
     visible(w);
@@ -1179,6 +1202,11 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
         tuer(weapon);
         return 0.into();
     };
+    if PUMP_MODE[e] != 0 {
+        // v0.37 : une autre invocation a pris le J.E.T.
+        tuer(weapon);
+        return 0.into();
+    }
     let [mut x, mut y, lr, mut t, mut lache, mut tl] = B[e];
     // v0.35 (le joueur : il disparaît juste après le 1er pot) : le J.E.T. a une durée de vie au bout de laquelle le jeu
     // le retire : remise à plein à chaque image (c'est la boucle qui décide quand il part)
@@ -1273,6 +1301,8 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     placer(w, x, y);
     orienter(w, lr);
     visible(w);
+    pump_afficher(w, true, None);
+    pot_porte(w, lache < 0.5 || boum <= 0.0);
     0.into()
 }
 
