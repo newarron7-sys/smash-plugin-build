@@ -1055,7 +1055,8 @@ unsafe fn cymul_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
         if let Some((_, dx, dy)) = cible {
             let (ax, ay) = (x + dx, y + dy + 9.0);
             vise(x, y, &mut vx, &mut vy, ax, ay, 0.75);
-            if ph < 1.5 && att <= 0.0 && dx.abs() < 18.0 && (dy + 9.0).abs() < 14.0 {
+            // v0.40 (le joueur : « agrandis beaucoup ses hitbox ») : coups de 18 / 20 (avant 11 / 12), il tourne de plus loin
+            if ph < 1.5 && att <= 0.0 && dx.abs() < 24.0 && (dy + 9.0).abs() < 18.0 {
                 ph = 2.0;
                 Q[e][0] = 0.0;
                 vx = 0.0;
@@ -1090,13 +1091,13 @@ unsafe fn cymul_pas(fighter: &mut L2CFighterCommon, e: usize) -> (usize, f32) {
         if ti >= 4 && ti < 50 {
             if ti % 8 == 4 {
                 AttackModule::clear(boma, 7, false);
-                inv_coup(fighter, x, y, 1.2, 80, 20, 25, 11.0, 0.0);
+                inv_coup(fighter, x, y, 1.2, 80, 20, 25, 18.0, 0.0);
             } else if ti % 8 == 7 {
                 AttackModule::clear(boma, 7, false);
             }
         } else if ti == 52 {
             AttackModule::clear(boma, 7, false);
-            inv_coup(fighter, x, y, 2.5, 85, 110, 55, 12.0, 0.0);
+            inv_coup(fighter, x, y, 2.5, 85, 110, 55, 20.0, 0.0);
         } else if ti == 56 {
             AttackModule::clear(boma, 7, false);
         } else if ti > 60 {
