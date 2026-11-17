@@ -30,8 +30,15 @@ unsafe fn atk(agent: &mut L2CAgentBase, e: &Ev) {
 unsafe fn throw_abs(agent: &mut L2CAgentBase, s: &Sub, id: u64, kind: i32) {
     // dans le PSA, le dernier réglage donné l'emporte (lancer bas de Primid : 89° puis 304°, vers le bas)
     if let Some(t) = s.throws.iter().rev().find(|t| t.id == id) {
-        let attr = t.attr;
-        smash_script::macros::ATTACK_ABS(agent, kind, 0, t.dmg, t.angle, t.kbg, t.fkb, t.bkb, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
+        let mut attr = t.attr;
+        let mut angle = t.angle;
+        if s.name == "ThrowLw" && id == 0 {
+            // v0.40 (le joueur : « fais en sorte que sa down throw enterre l'adversaire ») : projection qui enterre
+            // (comme le lancer bas de King K. Rool : collision_attr_bury), vers le bas
+            attr = "collision_attr_bury";
+            angle = 270;
+        }
+        smash_script::macros::ATTACK_ABS(agent, kind, 0, t.dmg, angle, t.kbg, t.fkb, t.bkb, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true,
                    Hash40::new(attr), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_PUNCH, *ATTACK_REGION_NONE);
     }
 }
