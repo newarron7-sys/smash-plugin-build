@@ -462,8 +462,37 @@ unsafe fn fumee_violette(boma: *mut BattleObjectModuleAccessor, x: f32, y: f32, 
     }
 }
 
+/// v0.36 : coup du pot de Botron, porté par Primid : actif (0 non, 1 chute, 2 explosion), x, y, dégâts, taille, kbg, bkb
+static mut POT: [[f32; 7]; 8] = [[0.0; 7]; 8];
+static mut POT_AVANT: [f32; 8] = [0.0; 8];
+const ID_POT: u64 = 5;
+
+unsafe fn pot_frappe(fighter: &mut L2CFighterCommon, e: usize) {
+    let boma = fighter.module_accessor;
+    if !ArticleModule::is_exist(boma, *FIGHTER_MARIO_GENERATE_ARTICLE_PUMP) {
+        POT[e][0] = 0.0;
+    }
+    let [on, x, y, dmg, taille, kbg, bkb] = POT[e];
+    if on != POT_AVANT[e] {
+        // changement (début, explosion, fin) : nouveau coup (peut retoucher)
+        AttackModule::clear(boma, ID_POT as i32, false);
+        POT_AVANT[e] = on;
+    }
+    if on < 0.5 {
+        return;
+    }
+    let (px, py) = pos(boma);
+    let lr = PostureModule::lr(boma);
+    macros::ATTACK(fighter, ID_POT, 0, Hash40::new("top"), dmg, 70, kbg as i32, 0, bkb as i32, taille, 0.0, y - py,
+                   (x - px) * lr, None, None, None, 1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0,
+                   0, true, true, false, false, false, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL,
+                   *COLLISION_PART_MASK_ALL, false, Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_L,
+                   *COLLISION_SOUND_ATTR_BOMB, *ATTACK_REGION_OBJECT);
+}
+
 pub unsafe fn update(fighter: &mut L2CFighterCommon) {
     let e = e_of(fighter.module_accessor);
+    pot_frappe(fighter, e);
     inv_pas(fighter, e);
     armes(fighter);
     portail_afficher(fighter.module_accessor, e);
@@ -1099,6 +1128,7 @@ unsafe extern "C" fn pump_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
         return 0.into();
     };
     P[e] = [0.0, 0.0, 0.0, 0.0];
+    POT[e][0] = 0.0;
     liberer(w, B[e][2]);
     placer(w, B[e][0], B[e][1]);
     visible(w);
@@ -1129,6 +1159,7 @@ unsafe extern "C" fn pump_exec(weapon: &mut L2CWeaponCommon) -> L2CValue {
 /// v0.9 : le pot reste dans le modèle de Botron ; lâché, son os (HachiN, sous Hip à -6) descend (set_joint_translate)
 /// et frappe depuis cet os ; Botron reste sur place jusqu'à l'explosion. (v0.3 : pot sur l'eau du J.E.T. = plantage ;
 /// v0.4 : sur Cappy, que le jeu ne crée sans doute pas non plus pendant le match.)
+#[allow(dead_code)]
 unsafe fn pot_coup(weapon: &mut L2CWeaponCommon, dmg: f32, taille: f32, kbg: i32, bkb: i32) {
     ATTACK(weapon, 1, 0, Hash40::new("hachin"), dmg, 70, kbg, 0, bkb, taille, 0.0, -4.0, 0.0, None, None, None, 1.0, 1.0,
            *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, true, true, false, false, false,
@@ -1194,12 +1225,12 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
             vy = (vy + 0.22).min(4.5);
             chute += vy;
             pot_os(w, chute);
-            pot_coup(weapon, 6.0, 5.0, 60, 40);
             let py = y - 6.0 - chute - 8.0;
-            let touche = AttackModule::is_infliction(w, *COLLISION_KIND_MASK_HIT) || AttackModule::is_infliction(w, *COLLISION_KIND_MASK_SHIELD);
+            // v0.36 : le coup du pot est porté par Primid (le J.E.T. disparaissait dès que son propre coup touchait)
+            POT[e] = [1.0, x, py + 4.0, 6.0, 5.0, 60.0, 40.0];
+            let touche = adversaire(e, x, py + 4.0).map_or(false, |(dx, dy)| dx.abs() < 8.0 && dy > -24.0 && dy < 3.0);
             if touche || sol(w, x, py + 4.0, vy.max(1.0)).is_some() || chute > 150.0 {
-                AttackModule::clear_all(w);
-                pot_coup(weapon, 13.0, 13.0, 80, 55);
+                POT[e] = [2.0, x, py + 4.0, 13.0, 13.0, 80.0, 55.0];
                 eff(w, "sys_bomb_a", x, py + 4.0, 0.9);
                 eff(w, "sys_fireflower_shot", x, py + 6.0, 1.5);
                 PLAY_SE(weapon, Hash40::new("se_common_bomb_l"));
@@ -1211,7 +1242,7 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
             boum += 1.0;
             pot_os(w, chute);
             if boum > 6.0 {
-                AttackModule::clear_all(w);
+                POT[e][0] = 0.0;
             }
             if boum > 24.0 && lances < 2.0 {
                 // pot suivant : il en reprend un et repart vers l'adversaire
