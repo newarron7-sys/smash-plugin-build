@@ -3,7 +3,7 @@
 Le joueur (v0.36) : les invocations collées à l'os Throw de Primid buguaient au demi-tour et aux prises (le jeu tourne
 le modèle de Primid et prend Throw pour tenir l'adversaire). Le J.E.T. est un objet à part : elles y sont cuites
 (mêmes poses que invocs_primid.py), sur l'os racine Trans du J.E.T. (immobile dans ses animations). Le plugin place
-l'objet et le tourne (rot Y 0 ou 180) : un seul exemplaire par pose (pr_<nom><pose>).
+l'objet ; v0.40 : deux exemplaires par pose (pr_<nom><pose> et pr_<nom><pose>r, demi-tour), pas de rotation.
 Repère du J.E.T. tourné de 0 : x = droite de l'écran (devant de l'invocation), y haut, z = plan.
 Retire aussi les anciennes poses du modèle de Primid (body/c00) et leurs textures.
 
@@ -162,7 +162,9 @@ for c in confs:
             out = os.path.join(D, f[:-4] + '.nutexb')
             subprocess.run(['ultimate_tex_cli', os.path.join(pd, f), out, '--format', fmt], check=True, capture_output=True)
             textures.append(f[:-4] + '.nutexb')
-    ex = {'': (1, 1)}
+    # v0.40 (le joueur : Mite n'est pas dans le bon sens) : plus de rotation de l'objet par le plugin ; deux
+    # exemplaires déjà tournés (s = +1 : pr_<nom><pose>, s = -1 : pr_<nom><pose>r), sauf Cymul (symétrique)
+    ex = {'': (1, 1)} if c.get('sym') else {'': (1, 1), 'r': (1, -1)}
     nv = 0
     for kp, fp in enumerate(c['poses']):
         P = iv.pose(fp)

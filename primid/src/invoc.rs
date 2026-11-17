@@ -626,14 +626,23 @@ unsafe fn pump_la(boma: *mut BattleObjectModuleAccessor, e: usize) -> bool {
 }
 
 /// objets du J.E.T. : Botron (polygon0 à 9) et les poses des invocations (pr_<nom><pose>)
-unsafe fn pump_afficher(w: *mut BattleObjectModuleAccessor, botron: bool, quoi: Option<(u8, usize)>) {
+/// v0.40 (le joueur : Mite n'est pas dans le bon sens) : l'objet n'est plus tourné ; deux exemplaires par pose
+/// (pr_<nom><pose> : s = +1, pr_<nom><pose>r : s = -1 ; Cymul, symétrique : un seul)
+unsafe fn pump_afficher(w: *mut BattleObjectModuleAccessor, botron: bool, quoi: Option<(u8, usize, f32)>) {
     for k in 0..10 {
         ModelModule::set_mesh_visibility(w, Hash40::new(&format!("polygon{}", k)), botron);
     }
-    for (k, (nom, np, _)) in INV_OBJ.iter().enumerate() {
+    for (k, (nom, np, sym)) in INV_OBJ.iter().enumerate() {
         for p in 0..*np {
-            let on = quoi.map_or(false, |(kind, pose)| kind as usize == k + 1 && pose.min(np - 1) == p);
-            ModelModule::set_mesh_visibility(w, Hash40::new(&format!("pr_{}{}", nom, p)), on);
+            for (suf, sens) in [("", 1.0f32), ("r", -1.0)] {
+                if *sym && sens < 0.0 {
+                    continue;
+                }
+                let on = quoi.map_or(false, |(kind, pose, s)| {
+                    kind as usize == k + 1 && pose.min(np - 1) == p && (*sym || (s >= 0.0) == (sens > 0.0))
+                });
+                ModelModule::set_mesh_visibility(w, Hash40::new(&format!("pr_{}{}{}", nom, p, suf)), on);
+            }
         }
     }
 }
@@ -654,9 +663,9 @@ unsafe extern "C" fn inv_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     WorkModule::set_int(w, 9999, *WEAPON_INSTANCE_WORK_ID_INT_INIT_LIFE);
     let (kind, pose, s) = VUE[e];
     placer(w, M[e][0], M[e][1]);
-    orienter(w, s);
+    orienter(w, 1.0);
     visible(w);
-    pump_afficher(w, false, Some((kind, pose)));
+    pump_afficher(w, false, Some((kind, pose, s)));
     0.into()
 }
 
@@ -1157,11 +1166,11 @@ unsafe extern "C" fn pump_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
             tuer(weapon);
             return 0.into();
         }
-        liberer(w, VUE[e].2);
+        liberer(w, 1.0);
         placer(w, M[e][0], M[e][1]);
         visible(w);
         MotionModule::change_motion(w, Hash40::new("wait"), 0.0, 0.0, false, 0.0, false, false);
-        pump_afficher(w, false, Some((VUE[e].0, VUE[e].1)));
+        pump_afficher(w, false, Some(VUE[e]));
         return weapon.fastshift(L2CValue::Ptr(inv_loop as *const () as _));
     }
     pump_afficher(w, true, None);
