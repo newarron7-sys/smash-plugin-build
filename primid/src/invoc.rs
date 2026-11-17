@@ -635,6 +635,8 @@ unsafe fn pump_la(boma: *mut BattleObjectModuleAccessor, e: usize) -> bool {
 /// objets du J.E.T. : Botron (polygon0 à 9) et les poses des invocations (pr_<nom><pose>)
 /// v0.40 (le joueur : Mite n'est pas dans le bon sens) : l'objet n'est plus tourné ; deux exemplaires par pose
 /// (pr_<nom><pose> : s = +1, pr_<nom><pose>r : s = -1 ; Cymul, symétrique : un seul)
+/// v0.43 (vidéo du joueur : Mite de profil mais tête en arrière) : sur le J.E.T., lr 1 montre son +z vers la gauche :
+/// exemplaires échangés (s = +1 -> ...r)
 unsafe fn pump_afficher(w: *mut BattleObjectModuleAccessor, botron: bool, quoi: Option<(u8, usize, f32)>) {
     for k in 0..10 {
         ModelModule::set_mesh_visibility(w, Hash40::new(&format!("polygon{}", k)), botron);
@@ -646,7 +648,7 @@ unsafe fn pump_afficher(w: *mut BattleObjectModuleAccessor, botron: bool, quoi: 
                     continue;
                 }
                 let on = quoi.map_or(false, |(kind, pose, s)| {
-                    kind as usize == k + 1 && pose.min(np - 1) == p && (*sym || (s >= 0.0) == (sens > 0.0))
+                    kind as usize == k + 1 && pose.min(np - 1) == p && (*sym || (s >= 0.0) == (sens < 0.0))
                 });
                 ModelModule::set_mesh_visibility(w, Hash40::new(&format!("pr_{}{}{}", nom, p, suf)), on);
             }
