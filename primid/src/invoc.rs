@@ -434,9 +434,16 @@ unsafe fn armes(fighter: &mut L2CFighterCommon) {
     }
     // v0.34 : l'ombre du dos (Kagemushi de Brawl : grand carré noir ici, retiré du modèle) -> fumée violette qui s'en
     // échappe comme dans REX
-    if (f as i32) % 9 == 0 && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_DEAD
+    // v0.41 (le joueur : « beaucoup plus violet, vraiment foncé ») : plus foncée, plus grosse et plus souvent
+    if (f as i32) % 6 == 0 && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_DEAD
         && VisibilityModule::is_visible(boma) {
-        fumee_violette(boma, x - lr * 2.6, y + 8.5, 0.3);
+        for (dx, dy, ech) in [(2.6f32, 8.5f32, 0.45f32), (3.4, 10.5, 0.35)] {
+            let h = EffectModule::req(boma, Hash40::new("sys_erace_smoke"), &Vector3f { x: x - lr * dx, y: y + dy, z: 0.0 },
+                                      &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, ech, 0, 0, false, 0) as u32;
+            if h != 0 {
+                EffectModule::set_rgb(boma, h, 0.2, 0.0, 0.32);
+            }
+        }
     }
 }
 
