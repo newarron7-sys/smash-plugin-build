@@ -1136,6 +1136,7 @@ unsafe extern "C" fn pump_main(weapon: &mut L2CWeaponCommon) -> L2CValue {
     };
     P[e] = [0.0, 0.0, 0.0, 0.0];
     POT[e][0] = 0.0;
+    BOT_ATT[e] = 0.0;
     EffectModule::kill_all(w, 0, true, false);
     if PUMP_MODE[e] != 0 {
         // v0.37 : Mite, Boobas ou Cymul
@@ -1192,6 +1193,11 @@ unsafe fn pot_coup(weapon: &mut L2CWeaponCommon, dmg: f32, taille: f32, kbg: i32
     // l'objet qui le porte (le jeu retire le projectile, comme une bombe) : Botron disparaissait avec. Type OBJET.
 }
 
+/// v0.38 (le joueur : « comme Mite, après une attaque il attend un peu avant de réattaquer ») : images d'attente de
+/// Botron après chaque pot (il se tient à distance de l'adversaire avant de revenir au-dessus de lui)
+static mut BOT_ATT: [f32; 8] = [0.0; 8];
+const BOT_PAUSE: f32 = 90.0;
+
 unsafe fn pot_os(w: *mut BattleObjectModuleAccessor, chute: f32) {
     ModelModule::set_joint_translate(w, Hash40::new("hachin"), &Vector3f { x: 0.0, y: -6.0 - chute, z: 0.0 }, false, false);
 }
@@ -1219,21 +1225,34 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
     let mk = MotionModule::motion_kind(w);
     if lache < 0.5 {
         // vol (REX : StartFloat puis FloatFly) vers l'avant, à hauteur constante au-dessus du sol
-        match adversaire(e, x, y) {
-            // pots suivants : il se place au-dessus de l'adversaire
-            Some((dx, _)) if lances > 0.5 => x += (dx * 0.08).clamp(-1.3, 1.3),
-            _ => x += 1.1 * lr,
+        let attend = BOT_ATT[e] > 0.0;
+        if attend {
+            // v0.38 : pause après un pot : il s'écarte (au moins 20 de l'adversaire) et plane un peu plus haut
+            BOT_ATT[e] -= 1.0;
+            t = 0.0;
+            if let Some((dx, _)) = adversaire(e, x, y) {
+                if dx.abs() < 20.0 {
+                    let sens = if dx.abs() > 0.5 { -dx.signum() } else { -lr };
+                    x += 0.8 * sens;
+                }
+            }
+        } else {
+            match adversaire(e, x, y) {
+                // pots suivants : il se place au-dessus de l'adversaire
+                Some((dx, _)) if lances > 0.5 => x += (dx * 0.08).clamp(-1.3, 1.3),
+                _ => x += 1.1 * lr,
+            }
         }
         if let Some(g) = sol(w, x, y, 80.0) {
             // v0.10 : juste au-dessus des têtes (v0.9 : tout en haut de l'écran)
-            let cible = g + 22.0;
+            let cible = g + if attend { 30.0 } else { 22.0 };
             y += (cible - y).clamp(-0.6, 0.6);
         }
         if MotionModule::is_end(w) || (mk != smash::hash40("start") && mk != smash::hash40("wait")) {
             MotionModule::change_motion(w, Hash40::new("wait"), 0.0, 1.0, false, 0.0, false, false);
         }
         let au_dessus = adversaire(e, x, y).map_or(false, |(dx, dy)| dx.abs() < 7.0 && dy < 0.0 && dy > -70.0);
-        if au_dessus || t > (if lances > 0.5 { 70.0 } else { 150.0 }) {
+        if !attend && (au_dessus || t > (if lances > 0.5 { 70.0 } else { 150.0 })) {
             // il lâche son pot (REX : ShootStart + ShootFire)
             lache = 1.0;
             tl = 0.0;
@@ -1277,6 +1296,7 @@ unsafe extern "C" fn botron_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
                 lances += 1.0;
                 lache = 0.0;
                 t = 0.0;
+                BOT_ATT[e] = BOT_PAUSE;
                 boum = 0.0;
                 chute = 0.0;
                 vy = 0.0;
