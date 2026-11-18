@@ -42,10 +42,11 @@ jobs:
                   print('ERR', i, e); continue
               for f in prof.get('_aFiles', []):
                   try:
-                      t = get('https://gamebanana.com/apiv11/File/%d' % f['_idRow']).get('_aMetadata', {})
+                      r = urllib.request.Request('https://gamebanana.com/apiv11/File/%d/RawFileList' % f['_idRow'], headers={'User-Agent': 'Mozilla/5.0'})
+                      t = urllib.request.urlopen(r, timeout=60).read().decode('utf-8', 'replace').splitlines()
                   except Exception as e:
                       print('ERR', i, f['_idRow'], e); continue
-                  ok = [n for n in noms(t.get('_aArchiveFileTree', t)) if re.search(rx, n, re.I)]
+                  ok = [n for n in t if re.search(rx, n, re.I)]
                   print('MOD', i, prof.get('_sName'), f['_idRow'], f.get('_sFile'), f.get('_nFilesize'), len(ok))
                   for n in ok[:40]:
                       print('   ', n)
