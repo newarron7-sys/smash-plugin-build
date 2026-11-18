@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "arbre:0::TEST"
+      MOD: "filtre:727184,574838,433616,548055,417534,644874,430390,581986,527110,490341,663913,503276,519309::nusktb|motion_list|nuhlpb"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
@@ -18,6 +18,23 @@ jobs:
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
           mkdir -p /tmp/m /tmp/out && cd /tmp/m
+          if [ "${MOD%%:*}" = "filtre" ]; then
+            # plusieurs mods (« filtre:id,id,...::regex ») : on ne garde que les fichiers dont le chemin correspond
+            R="${MOD#filtre:}"; RX="${R#*::}"; mkdir -p x
+            for id in $(echo "${R%%::*}" | tr ',' ' '); do
+              curl -sSL -A "Mozilla/5.0" -o "i_$id.json" "https://gamebanana.com/apiv11/Mod/$id/ProfilePage" || true
+              python3 -c "import json,sys;[print(f['_idRow'],f['_sDownloadUrl']) for f in json.load(open(sys.argv[1])).get('_aFiles',[])]" "i_$id.json" > l.txt 2>/dev/null || true
+              while read fid url; do
+                curl -sSL -A "Mozilla/5.0" -o f.bin "$url"; rm -rf e; 7z x -y -oe f.bin >/dev/null 2>&1 || true
+                find e -type f | grep -iE "$RX" | while read f; do mkdir -p "x/$id/$(dirname "${f#e/}")"; cp "$f" "x/$id/${f#e/}"; done
+                find e -type f | sed "s|^e/|$id $fid |" >> x/liste.txt
+              done < l.txt
+            done
+            tar czf /tmp/mod.tgz -C /tmp/m x
+            printf '%s' "$CLE" > /tmp/k
+            openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -in /tmp/mod.tgz | split -b 90m - /tmp/out/mod.tgz.enc.
+            rm -f /tmp/k; exit 0
+          fi
           if [ "${MOD%%:*}" = "arbre" ]; then
             # arborescence des archives de plusieurs mods (« arbre:id,id,...::regex ») : fichiers qui correspondent
             python3 - "${MOD#arbre:}" <<'PY' > /tmp/m/recherche.txt 2>&1 || true
