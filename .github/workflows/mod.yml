@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "174387"
+      MOD: "cherche:young link moveset|young link animation|young link animations|over young link|young link model|young link custom skeleton"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
