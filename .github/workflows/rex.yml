@@ -36,9 +36,9 @@ jobs:
         run: |
           cd /tmp/w && mkdir -p /tmp/x /tmp/pub
           7z l -ba -slt sd.raw | awk '/^Path = /{p=substr($0,8)} /^Size = /{print $3"\t"p}' > /tmp/x/liste_sd.txt
-          7z x -y sd.raw "rex_/pf/Fighter/chief/*" "rex_/pf/module/ft_chief.rel" "rex_/pf/info/portrite/*" "rex_/pf/*/*/*hief*" "rex_/pf/*/*/*HIEF*" "rex_/pf/*/*hief*" "rex_/pf/sound/strm/Victory! 2/Master_Chief.brstm" -o/tmp/x >/dev/null || true
-          # sons de Chief : banque 155 (fiche BrawlEx FighterBF.dat, mot à 0x1C ; Super Shadow : 1BB au même endroit)
-          7z x -y sd.raw "rex_/pf/sfx/155.sawnd" -o/tmp/x >/dev/null || true
+          7z x -y sd.raw "rex_/pf/Fighter/shovel/*" "rex_/pf/module/ft_shovel.rel" "rex_/pf/info/portrite/*" "rex_/pf/BrawlEx/*" "rex_/pf/*/*/*hovel*" "rex_/pf/*/*/*HOVEL*" "rex_/pf/*/*hovel*" -o/tmp/x >/dev/null || true
+          # sons : toute la banque sfx (le numéro de la banque de Shovel Knight est dans sa fiche BrawlEx)
+          7z x -y sd.raw "rex_/pf/sfx/*" -o/tmp/x >/dev/null || true
           rm -f sd.raw
           echo "liste : $(wc -l < /tmp/x/liste_sd.txt) lignes"; echo "fichiers : $(find /tmp/x -type f | wc -l), taille : $(du -sh /tmp/x | cut -f1)"
           printf '%s' "$CLE" > /tmp/k
@@ -47,5 +47,5 @@ jobs:
       - name: Publier (branche rex, chiffre)
         run: |
           cd /tmp/pub && git init -q -b rex && git config user.name gha && git config user.email gha@users.noreply.github.com
-          git add -A && git commit -q -m "rex master chief chiffre"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" rex:rex_chief
+          git add -A && git commit -q -m "rex shovel knight chiffre"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" rex:rex_shovel
