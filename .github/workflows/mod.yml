@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "188589"
+      MOD: "Skin:188589"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
@@ -58,10 +58,10 @@ jobs:
             cp /tmp/m/recherche.txt /tmp/out/ ; cd /tmp/out && printf '%s' "$CLE" > /tmp/k && openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -in recherche.txt -out recherche.txt.enc && rm -f recherche.txt /tmp/k && exit 0
           fi
           # fiche du mod (nom, mises à jour, fichiers) puis tous ses fichiers ; rien n'est affiché
-          curl -sSL -A "Mozilla/5.0" -o info.json "https://gamebanana.com/apiv11/Mod/$MOD/ProfilePage" || true
-          curl -sSL -A "Mozilla/5.0" -o maj.json "https://gamebanana.com/apiv11/Mod/$MOD/Updates?_nPage=1&_nPerpage=20" || true
-          # anciens « skins » GameBanana (gamebanana.com/skins/<id>) : autre type d'élément
-          grep -q '_aFiles' info.json || curl -sSL -A "Mozilla/5.0" -o info.json "https://gamebanana.com/apiv11/Skin/$MOD/ProfilePage" || true
+          # « Type:id » (ex. Skin:188589 pour gamebanana.com/skins/188589), sinon un Mod
+          TYPE=Mod; case "$MOD" in *:*) TYPE="${MOD%%:*}"; MOD="${MOD#*:}";; esac
+          curl -sSL -A "Mozilla/5.0" -o info.json "https://gamebanana.com/apiv11/$TYPE/$MOD/ProfilePage" || true
+          curl -sSL -A "Mozilla/5.0" -o maj.json "https://gamebanana.com/apiv11/$TYPE/$MOD/Updates?_nPage=1&_nPerpage=20" || true
           mkdir -p x
           cp info.json maj.json x/ 2>/dev/null || true
           python3 - <<'PY' > liens.txt
