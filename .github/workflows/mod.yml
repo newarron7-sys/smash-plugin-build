@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "cherche:young link voice|young link voices|younglink voice|young link sound|young link sfx|young link voice pack|young link announcer"
+      MOD: "filtre:174373,545981,501807,483344,723639,404795,444768,572274,663913,687539,520335::vc_younglink|se_younglink"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
