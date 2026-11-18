@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "cherche:young link moveset|young link animation|young link animations|over young link|young link model|young link custom skeleton"
+      MOD: "arbre:727184,572274,399917,545981,483344,635435,174369,174368,407471,452963,174391,174367,663913,428204,503276,174373,723639,388568,412484,174376,435148,174381,314604,444768,715366,174374,174383,174372,174375,174386,430555,519309,27630,174382,363285,563243,501807,610752,174385,574838,644874,430390,628883,685511,453051,454976,490379,285446,564147,174384,174388,372512,433616,581986,527110,328597,490341,473357,548055,687539,417534,652372,713082,174387,340812,546161::nusktb|motion_list|motion/body/c00/a00wait1"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
@@ -18,6 +18,40 @@ jobs:
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
           mkdir -p /tmp/m /tmp/out && cd /tmp/m
+          if [ "${MOD%%:*}" = "arbre" ]; then
+            # arborescence des archives de plusieurs mods (« arbre:id,id,...::regex ») : fichiers qui correspondent
+            python3 - "${MOD#arbre:}" <<'PY' > /tmp/m/recherche.txt 2>&1 || true
+          import json, re, sys, urllib.request
+          ids, rx = sys.argv[1].split('::')
+          def get(u):
+              r = urllib.request.Request(u, headers={'User-Agent': 'Mozilla/5.0'})
+              return json.load(urllib.request.urlopen(r, timeout=60))
+          def noms(t, p=''):
+              if isinstance(t, dict):
+                  for k, v in t.items():
+                      yield from noms(v, p + '/' + k)
+              elif isinstance(t, list):
+                  for v in t:
+                      yield from noms(v, p)
+              else:
+                  yield p + '/' + str(t)
+          for i in ids.split(','):
+              try:
+                  prof = get('https://gamebanana.com/apiv11/Mod/%s/ProfilePage' % i)
+              except Exception as e:
+                  print('ERR', i, e); continue
+              for f in prof.get('_aFiles', []):
+                  try:
+                      t = get('https://gamebanana.com/apiv11/File/%d' % f['_idRow']).get('_aMetadata', {})
+                  except Exception as e:
+                      print('ERR', i, f['_idRow'], e); continue
+                  ok = [n for n in noms(t.get('_aArchiveFileTree', t)) if re.search(rx, n, re.I)]
+                  print('MOD', i, prof.get('_sName'), f['_idRow'], f.get('_sFile'), f.get('_nFilesize'), len(ok))
+                  for n in ok[:40]:
+                      print('   ', n)
+          PY
+            cp /tmp/m/recherche.txt /tmp/out/ ; cd /tmp/out && printf '%s' "$CLE" > /tmp/k && openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -in recherche.txt -out recherche.txt.enc && rm -f recherche.txt /tmp/k && exit 0
+          fi
           if [ "${MOD%%:*}" = "cherche" ]; then
             # recherche d'un mod qui contient une banque de sons du perso (modèle de banque), arborescences des archives
             python3 - "${MOD#cherche:}" <<'PY' > /tmp/m/recherche.txt 2>&1 || true
