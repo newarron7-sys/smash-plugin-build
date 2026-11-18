@@ -89,8 +89,10 @@ include!("generated.rs");
 
 /// perso de base : Link enfant
 pub const BASE: &str = "younglink";
-/// couleur 1 de Link enfant (c00) : le skin de Shovel Knight
-pub const SK_COSTUMES: [usize; 1] = [0];
+/// le skin de Shovel Knight est sur la couleur 1 (c00) ; les animations de Link enfant (motion/body/c00) sont
+/// partagées par toutes ses couleurs : le moveset vaut donc pour toutes (sinon coups de Link enfant sur les
+/// animations de Shovel Knight). Une couleur seule demanderait sa propre case (costume ajouté, reslotter)
+pub const SK_COSTUMES: [usize; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
 
 /// le 2e coup du smash avant de Link enfant rejoue le coup du smash avant de REX
 fn alias(script: &str) -> &str {

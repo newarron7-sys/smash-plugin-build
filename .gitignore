@@ -2,3 +2,5 @@ __pycache__/
 plugin_chunli/src/generated.rs
 plugin_chunli/target/
 partage_vol/target/
+plugin_shovel/src/generated.rs
+plugin_shovel/target/
