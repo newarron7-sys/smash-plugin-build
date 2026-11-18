@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "404416"
+      MOD: "188589"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
@@ -60,6 +60,8 @@ jobs:
           # fiche du mod (nom, mises à jour, fichiers) puis tous ses fichiers ; rien n'est affiché
           curl -sSL -A "Mozilla/5.0" -o info.json "https://gamebanana.com/apiv11/Mod/$MOD/ProfilePage" || true
           curl -sSL -A "Mozilla/5.0" -o maj.json "https://gamebanana.com/apiv11/Mod/$MOD/Updates?_nPage=1&_nPerpage=20" || true
+          # anciens « skins » GameBanana (gamebanana.com/skins/<id>) : autre type d'élément
+          grep -q '_aFiles' info.json || curl -sSL -A "Mozilla/5.0" -o info.json "https://gamebanana.com/apiv11/Skin/$MOD/ProfilePage" || true
           mkdir -p x
           cp info.json maj.json x/ 2>/dev/null || true
           python3 - <<'PY' > liens.txt
