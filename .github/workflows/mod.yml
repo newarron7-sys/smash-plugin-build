@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "arbre:174387,727184,452963::."
+      MOD: "arbre:0::TEST"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
@@ -35,6 +35,19 @@ jobs:
                       yield from noms(v, p)
               else:
                   yield p + '/' + str(t)
+          if rx == 'TEST':
+              for u in ['https://gamebanana.com/apiv11/File/1010242/RawFileList', 'https://gamebanana.com/apiv11/File/1010242',
+                        'https://gamebanana.com/apiv11/File/1010242?_csvProperties=_aMetadata',
+                        'https://api.gamebanana.com/Core/Item/Data?itemtype=File&itemid=1010242&fields=Metadata().aArchiveFileTree()',
+                        'https://api.gamebanana.com/Core/Item/Data?itemtype=File&itemid=1010242&fields=Metadata()',
+                        'https://gamebanana.com/apiv11/Mod/452963/Files', 'https://gamebanana.com/apiv11/Mod/452963?_csvProperties=_aFiles']:
+                  try:
+                      r = urllib.request.Request(u, headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'})
+                      b = urllib.request.urlopen(r, timeout=60).read()
+                      print('URL', u, len(b), b[:600])
+                  except Exception as e:
+                      print('URL', u, 'ERR', e)
+              sys.exit(0)
           for i in ids.split(','):
               try:
                   prof = get('https://gamebanana.com/apiv11/Mod/%s/ProfilePage' % i)
