@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MOD: "Skin:188589"
+      MOD: "174387"
     steps:
       - name: Telecharger, extraire, chiffrer (rien n'est affiche)
         env:
