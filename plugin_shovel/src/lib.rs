@@ -347,8 +347,16 @@ unsafe fn effet_coup(agent: &mut L2CAgentBase, script: &str) {
                                       Hash40::new("sword"), 1.0, 0, 0, Hash40::new("sword"), 12.5, 0, 0, true,
                                       Hash40::new("null"), Hash40::new("sword"), 0, 0, 0, 0, 0, 0, 1, 0,
                                       *EFFECT_AXIS_X, 0, *TRAIL_BLEND_ALPHA, 101, *TRAIL_CULL_NONE, 1.5, 0.2);
-                if script == "game_attacklw3" {
-                    LANDING_EFFECT(agent, Hash40::new("sys_atk_smoke"), Hash40::new("top"), 8, 0, 0, 0, 0, 0, 0.7, 0, 0, 0, 0, 0, 0, false);
+            }
+            if script == "game_attacklw3" {
+                // Dig Slash : la pelle racle le sol devant lui -> terre soulevée (fumée d'attaque, gerbe verticale,
+                // poussière) au moment du coup, au bout de la pelle
+                aller(agent, d, &mut cur);
+                if is_excute(agent) {
+                    LANDING_EFFECT(agent, Hash40::new("sys_atk_smoke"), Hash40::new("top"), 0, 0, 11, 0, 0, 0, 1.2, 0, 0, 0, 0, 0, 0, false);
+                    LANDING_EFFECT(agent, Hash40::new("sys_v_smoke_a"), Hash40::new("top"), 0, 0, 13, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
+                    FOOT_EFFECT(agent, Hash40::new("sys_dash_smoke"), Hash40::new("top"), 0, 0, 9, 0, 0, 0, 1.1, 0, 0, 0, 0, 0, 0, false);
+                    LAST_EFFECT_SET_COLOR(agent, 0.75, 0.6, 0.45);
                 }
             }
             aller(agent, f + 1.0, &mut cur);

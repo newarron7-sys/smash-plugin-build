@@ -3,14 +3,14 @@
 //! AttackAirF / FLoop1 / FLoop2) : sans nouvel appui, le coup s'arrête à la fin de l'élan en cours ; avec un appui
 //! pendant l'élan, il passe à l'élan suivant dès que ses coups sont finis.
 //! Les poings ne sont visibles que dans ces coups (la pelle est alors cachée), comme dans REX (changement de modèle
-//! 0B000200 2 2 au début de chaque élan). En l'air, il avance (et descend un peu) comme dans REX (table AVANCE_AIR).
+//! 0B000200 2 2 au début de chaque élan). En l'air, il avance tout droit (distance de REX, table AVANCE_AIR), sans monter ni descendre.
 
 use smash::app::lua_bind::*;
 use smash::app::*;
 use smash::hash40;
 use smash::lib::lua_const::*;
 use smash::lua2cpp::*;
-use smash::phx::Hash40;
+use smash::phx::{Hash40, Vector3f};
 use smash_script::*;
 
 /// image (dans l'élan) à partir de laquelle on peut passer au suivant : ses coups sont finis (effacés à 14-15)
@@ -51,34 +51,27 @@ pub unsafe fn dust_knuckles(fighter: &mut L2CFighterCommon) {
     ModelModule::set_mesh_visibility(boma, Hash40::new("dustknuckles"), poings);
     ModelModule::set_mesh_visibility(boma, Hash40::new("shovelr"), !poings);
 
-    // déplacement en l'air des élans (le statut aérien ne suit pas l'animation)
+    // déplacement en l'air des élans : tout droit devant, sans garder l'élan vertical (vidéo du joueur : il montait
+    // ou descendait avec son saut) ; mouvement « par l'animation » (MOTION_AIR : ni gravité ni contrôle, animation sur
+    // place) + avancée de REX vers l'avant seulement (table AVANCE_AIR, sans sa composante verticale)
     if air && StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR {
         let f = MotionModule::frame(boma);
         let (pm, pf) = AIR_PREC[id];
         AIR_PREC[id] = (m, f);
-        if let Some((_, tz, ty)) = crate::AVANCE_AIR.iter().find(|(n, _, _)| *n == "attack_air_f") {
-            if !AIR_ACTIF[id] {
-                AIR_ACTIF[id] = true;
-                KineticModule::suspend_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
-                KineticModule::suspend_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_CONTROL);
-                KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_STOP);
+        if !AIR_ACTIF[id] {
+            AIR_ACTIF[id] = true;
+            KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_MOTION_AIR);
+        }
+        if let Some((_, tz, _)) = crate::AVANCE_AIR.iter().find(|(n, _, _)| *n == "attack_air_f") {
+            if pm == m && f >= pf {
+                let dz = table(tz, f) - table(tz, pf);
+                let lr = PostureModule::lr(boma);
+                PostureModule::add_pos(boma, &Vector3f { x: dz * lr, y: 0.0, z: 0.0 });
             }
-            let (dz, dy) = if pm == m && f >= pf {
-                (table(tz, f) - table(tz, pf), table(ty, f) - table(ty, pf))
-            } else {
-                (0.0, 0.0)
-            };
-            let lr = PostureModule::lr(boma);
-            sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, dz * lr, dy);
         }
     } else {
         AIR_PREC[id] = (0, 0.0);
-        if AIR_ACTIF[id] {
-            AIR_ACTIF[id] = false;
-            sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0, 0.0);
-            KineticModule::resume_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
-            KineticModule::resume_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_CONTROL);
-        }
+        AIR_ACTIF[id] = false;
     }
 
     // enchaînement des élans
