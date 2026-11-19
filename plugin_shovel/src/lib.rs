@@ -397,6 +397,7 @@ unsafe fn son_coup(agent: &mut L2CAgentBase, script: &str, se: &str) {
 
 mod avance;
 mod poings;
+mod speciaux;
 
 unsafe extern "C" fn sk_frame(fighter: &mut L2CFighterCommon) {
     avance::suivre_animation(fighter);
@@ -416,6 +417,7 @@ macro_rules! scripts {
                 a.acmd($e, $ef, Priority::Low);
                 a.acmd($snd, $sf, Priority::Low);
             } )*
+            speciaux::install(&mut a);
             a.on_line(Main, sk_frame);
             a.install();
         }
@@ -439,6 +441,11 @@ scripts! {
     g_attackairb, e_attackairb, s_attackairb => "game_attackairb", "effect_attackairb", "sound_attackairb", "se_younglink_swing_m",
     g_attackairhi, e_attackairhi, s_attackairhi => "game_attackairhi", "effect_attackairhi", "sound_attackairhi", "se_younglink_swing_m",
     g_attackairlw, e_attackairlw, s_attackairlw => "game_attackairlw", "effect_attackairlw", "sound_attackairlw", "se_younglink_swing_l",
+    // up B (statut : speciaux.rs) : coups de REX sur ses animations
+    g_spehist, e_spehist, s_spehist => "game_specialhistart", "effect_specialhistart", "sound_specialhistart", "se_younglink_swing_l",
+    g_speairhi, e_speairhi, s_speairhi => "game_specialairhi", "effect_specialairhi", "sound_specialairhi", "se_younglink_swing_l",
+    g_spehi, e_spehi, s_spehi => "game_specialhi", "effect_specialhi", "sound_specialhi", "se_younglink_swing_m",
+    g_spehihold, e_spehihold, s_spehihold => "game_specialhihold", "effect_specialhihold", "sound_specialhihold", "se_younglink_swing_s",
 }
 
 #[skyline::main(name = "shovel_knight")]
