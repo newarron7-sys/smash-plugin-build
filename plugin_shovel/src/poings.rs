@@ -62,6 +62,11 @@ pub unsafe fn dust_knuckles(fighter: &mut L2CFighterCommon) {
             AIR_ACTIF[id] = true;
             KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_MOTION_AIR);
         }
+        // v6 encore : il gardait l'élan du saut (le statut aérien remet ses énergies) -> à chaque image : toutes les
+        // vitesses à zéro, gravité et contrôle suspendus ; seul le déplacement vers l'avant ci-dessous reste
+        KineticModule::clear_speed_all(boma);
+        KineticModule::suspend_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+        KineticModule::suspend_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_CONTROL);
         if let Some((_, tz, _)) = crate::AVANCE_AIR.iter().find(|(n, _, _)| *n == "attack_air_f") {
             if pm == m && f >= pf {
                 let dz = table(tz, f) - table(tz, pf);
@@ -71,7 +76,11 @@ pub unsafe fn dust_knuckles(fighter: &mut L2CFighterCommon) {
         }
     } else {
         AIR_PREC[id] = (0, 0.0);
-        AIR_ACTIF[id] = false;
+        if AIR_ACTIF[id] {
+            AIR_ACTIF[id] = false;
+            KineticModule::resume_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY);
+            KineticModule::resume_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_CONTROL);
+        }
     }
 
     // enchaînement des élans
