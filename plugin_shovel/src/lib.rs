@@ -127,15 +127,66 @@ fn charge(script: &str, mv: &Mv) -> f32 {
     }
 }
 
+
+/// Dust Knuckles (tilt avant, avant aérien) : 3 élans de REX à la suite dans la même animation ; chaque élan a son
+/// script de REX (AttackS3S / S3S1 / S3S2, AttackAirF / FLoop1 / FLoop2), posés au début de leur élan
+pub(crate) fn parties(script: &str) -> &'static [&'static str] {
+    match script {
+        "game_attacks3" => &["game_attacks3", "game_sk_s3s1", "game_sk_s3s2"],
+        "game_attackairf" => &["game_attackairf", "game_sk_airf1", "game_sk_airf2"],
+        _ => &[],
+    }
+}
+
+/// débuts des élans (images de l'animation) : 0, durée du 1er, durée des 2 premiers
+pub(crate) fn debuts(script: &str) -> [f32; 3] {
+    let p = parties(script);
+    let mut d = [0.0f32; 3];
+    let mut acc = 0.0;
+    for (i, s) in p.iter().enumerate() {
+        d[i] = acc;
+        acc += find(s).map(|m| m.total).unwrap_or(0.0);
+    }
+    d
+}
+
+/// événements du coup (élans à la suite pour les Dust Knuckles), images de l'animation
+fn evenements(script: &str) -> Vec<Ev> {
+    let p = parties(script);
+    if p.is_empty() {
+        return find(script).map(|m| m.evs.to_vec()).unwrap_or_default();
+    }
+    let d = debuts(script);
+    let mut v = Vec::new();
+    for (i, s) in p.iter().enumerate() {
+        if let Some(m) = find(s) {
+            for e in m.evs {
+                let mut e2 = *e;
+                e2.f += d[i];
+                v.push(e2);
+            }
+        }
+    }
+    v
+}
+
+/// vitesse d'animation : animations de REX, même longueur que ses scripts ; Shovel Drop (boucle répétée) et Dust
+/// Knuckles (3 élans) à vitesse 1
+unsafe fn vitesse(boma: *mut BattleObjectModuleAccessor, script: &str, mv: &Mv) -> f32 {
+    if script == "game_attackairlw" || !parties(script).is_empty() {
+        return 1.0;
+    }
+    let end = MotionModule::end_frame(boma);
+    if end > 1.0 && mv.total > 1.0 { (mv.total / end).clamp(0.25, 4.0) } else { 1.0 }
+}
+
 /// joue le coup de Shovel Knight (REX) sur son animation de REX
 pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     let mv: &Mv = match find(script) { Some(m) => m, None => return };
-    let evs = mv.evs;
+    let evs = evenements(script);
     let lua = agent.lua_state_agent;
     let boma = agent.module_accessor;
-    // les animations sont celles de REX, même longueur que ses scripts (Shovel Drop : boucle répétée, vitesse 1)
-    let end = MotionModule::end_frame(boma);
-    let r = if script == "game_attackairlw" { 1.0 } else if end > 1.0 && mv.total > 1.0 { (mv.total / end).clamp(0.25, 4.0) } else { 1.0 };
+    let r = vitesse(boma, script, mv);
     FT_MOTION_RATE(agent, r);
     let first_hit = evs.iter().find(|e| !e.clear && e.body < 0 && e.rate <= 0.0).map(|e| e.f).unwrap_or(1.0);
     let mut cur = 0.0f32;
@@ -146,7 +197,7 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     // le jeu passe à la charge une image après le drapeau : posé 2 images plus tôt que dans REX
     let hold_f = if hold > 0.0 { ((hold - 2.0) / r).max(1.0) } else { ((first_hit - 4.0) / r).max(1.0) };
     let mut last_hit = 0.0f32;
-    for e in evs {
+    for e in evs.iter() {
         let af = if e.rate > 0.0 { e.f / r } else { (e.f / r).max(1.0) };
         if mv.kind == 1 && !smash_hold_done && af >= hold_f {
             if hold_f > cur {
@@ -188,11 +239,11 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
         }
         let (x2, y2, z2) = if e.cap { (Some(e.x2), Some(e.y2), Some(e.z2)) } else { (None, None, None) };
         let lr = if script == "game_attackairlw" || script == "game_attacklw4" { *ATTACK_LR_CHECK_POS } else { lr_check };
+        let region = if poings(script) { *ATTACK_REGION_PUNCH } else { *ATTACK_REGION_SWORD };
         ATTACK(agent, e.id, 0, Hash40::new(e.bone), e.dmg, e.angle, e.kbg, e.fkb, e.bkb, e.size, e.x, e.y, e.z,
                x2, y2, z2, e.hitlag, e.sdi, *ATTACK_SETOFF_KIND_ON, lr, false, 0, e.trip, 0,
                false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL,
-               *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), *ATTACK_SOUND_LEVEL_M, son(e.attr),
-               *ATTACK_REGION_SWORD);
+               *COLLISION_PART_MASK_ALL, false, Hash40::new(e.attr), *ATTACK_SOUND_LEVEL_M, son(e.attr), region);
         last_hit = af;
     }
     // jabs : enchaînement vers le coup suivant après le dernier coup (comme les scripts de Link enfant)
@@ -206,7 +257,7 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
             WorkModule::on_flag(boma, *FIGHTER_STATUS_ATTACK_FLAG_ENABLE_COMBO);
         }
     }
-    if mv.kind == 2 && script != "game_attackairlw" {
+    if mv.kind == 2 && script != "game_attackairlw" && parties(script).is_empty() {
         let after = (evs.last().map(|e| e.f).unwrap_or(1.0) + 5.0) / r;
         if after > cur {
             frame(lua, after);
@@ -217,30 +268,96 @@ pub(crate) unsafe fn run(agent: &mut L2CAgentBase, script: &str) {
     }
 }
 
-/// effets de Link enfant (traînées de l'épée, à son rythme à lui) retirés des coups remplacés ; le coup de pelle
-/// garde un éclat au moment du coup (sys_attack_arc teinté, posé sur la main)
-unsafe extern "C" fn effet_vide(agent: &mut L2CAgentBase) {}
+/// coups aux poings (Dust Knuckles) : tilt avant, avant et arrière aériens (vidéo de REX)
+pub(crate) fn poings(script: &str) -> bool {
+    matches!(script, "game_attacks3" | "game_attackairf" | "game_attackairb")
+}
 
+/// coups sans arme : épaule (Shoulder Bash)
+fn corps(script: &str) -> bool {
+    matches!(script, "game_attackdash")
+}
+
+/// Effets, d'après ceux de REX (vidéo) : la pelle laisse une traînée bleue (celle de l'épée de Link enfant, posée sur
+/// l'os Sword = la pelle) ; Dust Knuckles : lignes de vitesse, poussière au départ au sol, éclat orangé au coup ;
+/// Shoulder Bash : lignes de vitesse et poussière ; Dig Slash : terre soulevée ; smash bas : poussière à la retombée
 unsafe fn effet_coup(agent: &mut L2CAgentBase, script: &str) {
     let mv: &Mv = match find(script) { Some(m) => m, None => return };
     let lua = agent.lua_state_agent;
     let boma = agent.module_accessor;
-    let end = MotionModule::end_frame(boma);
-    let r = if script == "game_attackairlw" { 1.0 } else if end > 1.0 && mv.total > 1.0 { (mv.total / end).clamp(0.25, 4.0) } else { 1.0 };
-    let mut cur = 0.0f32;
-    let mut prev = -10.0f32;
-    for e in mv.evs.iter().filter(|e| !e.clear && e.body < 0 && e.rate <= 0.0) {
-        if e.f - prev < 3.0 {
+    let r = vitesse(boma, script, mv);
+    let evs = evenements(script);
+    // séries de coups : (début, fin) en images de l'animation (une série s'arrête à l'effacement)
+    let mut series: Vec<(f32, f32, &'static str, f32, f32, f32)> = Vec::new();
+    let mut ouvert: Option<usize> = None;
+    for e in evs.iter() {
+        if e.rate > 0.0 || e.body >= 0 {
             continue;
         }
-        prev = e.f;
-        let af = ((e.f - 1.0) / r).max(1.0);
-        if af > cur {
-            frame(lua, af);
-            cur = af;
+        if e.clear {
+            if let Some(i) = ouvert {
+                series[i].1 = e.f;
+            }
+            ouvert = None;
+            continue;
         }
-        if is_excute(agent) {
-            EFFECT_FOLLOW(agent, Hash40::new("sys_attack_impact"), Hash40::new(e.bone), e.x, e.y, e.z, 0, 0, 0, 0.6, true);
+        match ouvert {
+            Some(i) => series[i].1 = e.f + 2.0,
+            None => {
+                series.push((e.f, e.f + 4.0, e.bone, e.x, e.y, e.z));
+                ouvert = Some(series.len() - 1);
+            }
+        }
+    }
+    let mut cur = 0.0f32;
+    let mut aller = |agent: &mut L2CAgentBase, f: f32, cur: &mut f32| {
+        let af = (f / r).max(1.0);
+        if af > *cur {
+            frame(agent.lua_state_agent, af);
+            *cur = af;
+        }
+    };
+    for (d, f, bone, x, y, z) in series {
+        if poings(script) {
+            aller(agent, d - 3.0, &mut cur);
+            if is_excute(agent) {
+                if StatusModule::situation_kind(boma) == *SITUATION_KIND_GROUND {
+                    FOOT_EFFECT(agent, Hash40::new("sys_dash_smoke"), Hash40::new("top"), -3, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, false);
+                }
+                EFFECT_FOLLOW(agent, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 6, -2, 0, 0, 0, 0.9, true);
+                LAST_EFFECT_SET_COLOR(agent, 1.0, 0.75, 0.35);
+            }
+            aller(agent, d, &mut cur);
+            if is_excute(agent) {
+                let zz = if script == "game_attackairb" { -z.abs().max(6.0) } else { z.max(6.0) };
+                EFFECT(agent, Hash40::new("sys_attack_impact"), Hash40::new("top"), 0, y.max(5.0), zz, 0, 0, 0, 0.75, 0, 0, 0, 0, 0, 0, true);
+                LAST_EFFECT_SET_COLOR(agent, 1.0, 0.55, 0.12);
+            }
+        } else if corps(script) {
+            aller(agent, d - 2.0, &mut cur);
+            if is_excute(agent) {
+                FOOT_EFFECT(agent, Hash40::new("sys_dash_smoke"), Hash40::new("top"), -4, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, false);
+                EFFECT_FOLLOW(agent, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 6, -3, 0, 0, 0, 1.0, true);
+            }
+        } else {
+            // coup de pelle : traînée de l'épée de Link enfant, le long de la pelle (os Sword)
+            aller(agent, d - 2.0, &mut cur);
+            if is_excute(agent) {
+                AFTER_IMAGE4_ON_arg29(agent, Hash40::new("tex_younglink_sword1"), Hash40::new("tex_younglink_sword2"), 4,
+                                      Hash40::new("sword"), 1.0, 0, 0, Hash40::new("sword"), 12.5, 0, 0, true,
+                                      Hash40::new("null"), Hash40::new("sword"), 0, 0, 0, 0, 0, 0, 1, 0,
+                                      *EFFECT_AXIS_X, 0, *TRAIL_BLEND_ALPHA, 101, *TRAIL_CULL_NONE, 1.5, 0.2);
+                if script == "game_attacklw3" {
+                    LANDING_EFFECT(agent, Hash40::new("sys_atk_smoke"), Hash40::new("top"), 8, 0, 0, 0, 0, 0, 0.7, 0, 0, 0, 0, 0, 0, false);
+                }
+            }
+            aller(agent, f + 1.0, &mut cur);
+            if is_excute(agent) {
+                AFTER_IMAGE_OFF(agent, 3);
+                if script == "game_attacklw4" {
+                    LANDING_EFFECT(agent, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
+                }
+            }
         }
     }
 }
@@ -250,11 +367,10 @@ unsafe fn son_coup(agent: &mut L2CAgentBase, script: &str, se: &str) {
     let mv: &Mv = match find(script) { Some(m) => m, None => return };
     let lua = agent.lua_state_agent;
     let boma = agent.module_accessor;
-    let end = MotionModule::end_frame(boma);
-    let r = if script == "game_attackairlw" { 1.0 } else if end > 1.0 && mv.total > 1.0 { (mv.total / end).clamp(0.25, 4.0) } else { 1.0 };
+    let r = vitesse(boma, script, mv);
     let mut cur = 0.0f32;
     let mut prev = -10.0f32;
-    for e in mv.evs.iter().filter(|e| !e.clear && e.body < 0 && e.rate <= 0.0) {
+    for e in evenements(script).iter().filter(|e| !e.clear && e.body < 0 && e.rate <= 0.0) {
         if e.f - prev < 6.0 {
             prev = e.f;
             continue;
@@ -272,9 +388,11 @@ unsafe fn son_coup(agent: &mut L2CAgentBase, script: &str, se: &str) {
 }
 
 mod avance;
+mod poings;
 
 unsafe extern "C" fn sk_frame(fighter: &mut L2CFighterCommon) {
     avance::suivre_animation(fighter);
+    poings::dust_knuckles(fighter);
 }
 
 macro_rules! scripts {
