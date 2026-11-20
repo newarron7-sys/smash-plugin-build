@@ -1,0 +1,47 @@
+name: Mario Ult S en echo - images d'interface manquantes (chiffre)
+on:
+  push:
+    branches: [ marioults ]
+    paths: [ '.github/workflows/gb-mario-ui.yml', 'rex/tools/ui_manquantes.py' ]
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache ultimate_tex_cli
+        id: tex
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/ultimate_tex_cli
+          key: ultimate-tex-cli-v1
+      - name: ultimate_tex_cli
+        if: steps.tex.outputs.cache-hit != 'true'
+        env:
+          RUSTFLAGS: -C link-arg=-lstdc++
+        run: cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli
+      - name: Skin 631188, images fournies en png, images manquantes
+        run: |
+          mkdir -p /tmp/o/png_src /tmp/dl
+          python3 - <<'PY'
+          import json, urllib.request
+          UA = {'User-Agent': 'Mozilla/5.0'}
+          get = lambda u: urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=600).read()
+          p = json.loads(get('https://gamebanana.com/apiv11/Mod/631188/ProfilePage'))
+          for f in p.get('_aFiles') or []:
+              open('/tmp/dl/' + f['_sFile'], 'wb').write(get(f['_sDownloadUrl']))
+          PY
+          for f in /tmp/dl/*; do 7z x -y -o/tmp/x "$f" >/dev/null; done
+          for n in 1 2 3 4; do f=$(find /tmp/x -name "chara_${n}_mario_*.bntx" | head -1); ultimate_tex_cli "$f" /tmp/o/png_src/chara_$n.png && echo "chara_$n ok"; done
+          python3 rex/tools/ui_manquantes.py /tmp/o/png_src cloudmario /tmp/o
+      - name: Chiffrer (cle de la session) et publier
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/o . > /tmp/o.tgz
+          openssl rand 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_mario_ui && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "mario ult s ui chiffree"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_mario_ui
