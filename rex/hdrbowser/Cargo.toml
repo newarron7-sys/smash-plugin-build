@@ -5,9 +5,9 @@ resolver = "2"
 
 [package]
 name = "hdr_dark_bowser"
-version = "1.0.0"
+version = "2.0.0"
 edition = "2021"
-description = "Moveset HDR v0.49.11 de Bowser sur le seul slot c55 (Dark Bowser), sans le moteur HDR global. Smash 13.0.4."
+description = "Moveset HDR v0.50.10 de Bowser sur le seul slot c55 (Dark Bowser), sans le moteur HDR global. Smash 13.0.4."
 
 [package.metadata.skyline]
 titleid = "01006A800016E000"

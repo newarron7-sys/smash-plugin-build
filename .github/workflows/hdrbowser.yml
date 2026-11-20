@@ -1,4 +1,4 @@
-name: Dark Bowser - moveset HDR v0.49.11 sur c55 (plugin)
+name: Dark Bowser - moveset HDR v0.50.10 sur c55 (plugin)
 on:
   push:
     branches: [ marioults ]

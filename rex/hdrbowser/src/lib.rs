@@ -1,4 +1,4 @@
-//! Moveset HDR (HewDraw Remix v0.49.11, Smash 13.0.4) de Bowser sur le seul slot c55 (Dark Bowser),
+//! Moveset HDR (HewDraw Remix v0.50.10, Smash 13.0.4) de Bowser sur le seul slot c55 (Dark Bowser),
 //! SANS le moteur commun HDR (les autres persos, les autres Bowser et les mécaniques globales restent ceux du jeu).
 //! Code HDR sous licence MIT (voir LICENSE-HDR). Même extraction que hdr4 (Lucario, Palutena, Terry, Ken).
 #![allow(unused)]
