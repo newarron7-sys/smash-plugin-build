@@ -34,7 +34,7 @@ jobs:
           openssl pkeyutl -decrypt -inkey "$RUNNER_TEMP/p.key" -pkeyopt rsa_padding_mode:oaep -in "$RUNNER_TEMP/k.enc" -out "$RUNNER_TEMP/k.bin"
           for f in $(git ls-tree --name-only FETCH_HEAD | grep '^d\.enc\.'); do git show FETCH_HEAD:$f; done | openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"$RUNNER_TEMP/k.bin" | tar x -C "$U/w"
           rm -f "$RUNNER_TEMP/k.bin"; ls -la "$RUNNER_TEMP/w"
-      - name: VGAudio (wav -> lopus, entete Namco, boucle)
+      - name: VGAudio (wav -> idsp, boucle)
         shell: pwsh
         run: |
           $zip = Join-Path $env:RUNNER_TEMP "VGAudioCli.zip"
@@ -46,12 +46,12 @@ jobs:
           $o = Join-Path $env:RUNNER_TEMP "o"; New-Item -ItemType Directory -Force -Path $o | Out-Null
           Get-ChildItem -Path $w -Filter "*.wav" | ForEach-Object {
             $boucle = Get-Content ([System.IO.Path]::ChangeExtension($_.FullName, ".boucle"))
-            $dst = Join-Path $o ($_.BaseName + ".lopus")
-            & $vgexe -i $_.FullName -o $dst --opusheader Namco -l $boucle 2>&1 | Out-String | Write-Host
-            if (-not (Test-Path $dst)) { & $vgexe -i $_.FullName -o $dst --opusheader namco --loop $boucle 2>&1 | Out-String | Write-Host }
+            # VGAudio 2.2.1 n'a pas l'Opus : IDSP (ADPCM, lu par Smash dans un nus3audio), boucle dans l'entête
+            $dst = Join-Path $o ($_.BaseName + ".idsp")
+            & $vgexe -i $_.FullName -o $dst -l $boucle 2>&1 | Out-String | Write-Host
             Get-Item $dst | Select-Object Name, Length | Out-String | Write-Host
+            & $vgexe -m $dst 2>&1 | Out-String | Write-Host
           }
-          & $vgexe --help 2>&1 | Select-String -Pattern "opus|loop|bitrate" | Out-String | Write-Host
       - name: Chiffrer (cle de la session) et publier
         shell: bash
         run: |
