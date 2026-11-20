@@ -1,0 +1,67 @@
+name: HDR - recuperer les animations/params de Bowser (0.50 pre-release, chiffre)
+on:
+  push:
+    branches: [ marioults ]
+    paths: [ '.github/workflows/hdr-assets.yml' ]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lister les versions et telecharger
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/o/dl /tmp/o/x
+          python3 - <<'PY'
+          import json, os, urllib.request
+          tok = os.environ['GH_TOKEN']
+          def api(u):
+              r = urllib.request.Request(u, headers={'Authorization': 'Bearer ' + tok, 'User-Agent': 'x'})
+              return json.loads(urllib.request.urlopen(r, timeout=120).read())
+          out = {}
+          for repo in ['HDR-Development/HewDraw-Remix', 'HDR-Development/romfs-release', 'HDR-Development/hdr-prereleases', 'HDR-Development/hdr-nightly', 'HDR-Development/hdr-releases']:
+              try:
+                  rel = api(f'https://api.github.com/repos/{repo}/releases?per_page=15')
+                  out[repo] = [[r['tag_name'], r['prerelease'], r['published_at'], r.get('target_commitish'), [[a['name'], a['size'], a['browser_download_url']] for a in r['assets']]] for r in rel]
+              except Exception as e:
+                  out[repo] = str(e)
+          json.dump(out, open('/tmp/o/releases.json', 'w'), indent=1)
+          # choisir : la plus recente version 0.50 (pre-release incluse) qui a hdr-switch.zip, et le romfs le plus recent
+          def pick(repo, asset, motif=None):
+              if not isinstance(out.get(repo), list): return None
+              for tag, pre, date, cm, assets in out[repo]:
+                  if motif and motif not in tag: continue
+                  for n, s, u in assets:
+                      if n == asset: return tag, u
+          sel = {}
+          for repo in ['HDR-Development/HewDraw-Remix', 'HDR-Development/hdr-prereleases', 'HDR-Development/hdr-nightly']:
+              p = pick(repo, 'hdr-switch.zip', '0.50') or None
+              if p: sel['hdr'] = [repo] + list(p); break
+          if 'hdr' not in sel:
+              p = pick('HDR-Development/HewDraw-Remix', 'hdr-switch.zip')
+              if p: sel['hdr'] = ['HDR-Development/HewDraw-Remix'] + list(p)
+          p = pick('HDR-Development/romfs-release', 'romfs.zip')
+          if p: sel['romfs'] = ['HDR-Development/romfs-release'] + list(p)
+          json.dump(sel, open('/tmp/o/choix.json', 'w'), indent=1)
+          print(json.dumps(sel))
+          for k, v in sel.items():
+              urllib.request.urlretrieve(v[2], f'/tmp/o/dl/{k}.zip')
+          PY
+          cd /tmp/o
+          for f in dl/*.zip; do b=$(basename $f .zip); unzip -l $f > liste_$b.txt; done
+          # tout ce qui concerne Bowser (koopa / koopa_breath / effets / sons), + fichiers communs HDR
+          for f in dl/*.zip; do b=$(basename $f .zip); mkdir -p x/$b; unzip -q -o $f -d x/$b '*fighter/koopa/*' '*koopa*' '*fighter/common/*' '*.nro' '*hdr_version*' '*config.json' 2>/dev/null || true; done
+          rm -rf dl; find x -type f | wc -l; du -sh x
+      - name: Chiffrer (cle de la session) et publier
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/o . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_hdr_assets && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "hdr assets" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_hdr_assets
