@@ -42,10 +42,12 @@ const G_RECUL: i32 = 28;
 #[derive(Clone, Copy)]
 struct St {
     g: i32,
+    /// v0.46 : images depuis le coup qui touche (ralenti + zoom) ; -1 : pas encore touché
+    coup: i32,
     air: bool,
     aura: u32,
 }
-static mut ST: [St; 8] = [St { g: 0, air: false, aura: 0 }; 8];
+static mut ST: [St; 8] = [St { g: 0, coup: -1, air: false, aura: 0 }; 8];
 /// lu par speciaux.rs : Final Smash en cours (canon en main)
 pub static mut EN_COURS: [bool; 8] = [false; 8];
 
@@ -104,7 +106,7 @@ unsafe extern "C" fn final_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     notify_event_msc_cmd!(fighter, Hash40::new_raw(0x201bc9217c));
     AreaModule::set_whole(boma, false);
     let air = StatusModule::situation_kind(boma) == *SITUATION_KIND_AIR;
-    ST[e] = St { g: 0, air, aura: 0 };
+    ST[e] = St { g: 0, coup: -1, air, aura: 0 };
     EN_COURS[e] = true;
     if air {
         fighter.set_situation(SITUATION_KIND_AIR.into());
@@ -118,6 +120,18 @@ unsafe extern "C" fn final_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
     // REX : intangible pendant tout le Final Smash
     HitModule::set_whole(boma, HitStatus(*HIT_STATUS_XLU), 0);
+    // v0.46 (le joueur : « t'as pas mis le zoom, le ralenti et les sfx ») : comme les Final Smash d'Ultimate S (déjà
+    // dans son jeu) : caméra de début (gros plan, REX : 1A040500 jusqu'à l'image 28), adversaires ralentis, aura retirée
+    CHECK_VALID_FINAL_START_CAMERA(fighter, 0, 7, 20, 0, 0, 0);
+    SLOW_OPPONENT(fighter, 5.0, 20.0);
+    if !WorkModule::is_flag(boma, *FIGHTER_INSTANCE_WORK_ID_FLAG_DISABLE_FINAL_START_CAMERA) {
+        FT_SET_FINAL_FEAR_FACE(fighter, 200);
+        REQ_FINAL_START_CAMERA_arg3(fighter, Hash40::new("d04finalcutin.nuanmb"), false, false);
+        fighter.clear_lua_stack();
+        lua_args!(fighter, true);
+        smash::app::sv_animcmd::FT_REMOVE_FINAL_AURA(fighter.lua_state_agent);
+        fighter.clear_lua_stack();
+    }
     let mot = if air { "final_air" } else { "final" };
     MotionModule::change_motion(boma, Hash40::new(mot), 0.0, VITESSE, false, 0.0, false, false);
     fighter.sub_shift_status_main(L2CValue::Ptr(final_loop as *const () as _))
@@ -136,6 +150,7 @@ unsafe extern "C" fn final_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         canon_montrer(boma, true);
     }
     evenement(fighter, g);
+    critique(fighter);
     if g >= G_FIN {
         let st = if ST[e].air { FIGHTER_STATUS_KIND_FALL } else { FIGHTER_STATUS_KIND_WAIT };
         fighter.change_status(st.into(), false.into());
@@ -175,6 +190,20 @@ unsafe fn evenement(fighter: &mut L2CFighterCommon, g: i32) {
         }
     }
     // charge : étincelles jaune-orange au bout du canon, de plus en plus grosses
+    // fin du gros plan de départ (REX : image 28 -> 35 ici)
+    if g == 35 {
+        CAM_ZOOM_OUT(fighter);
+    }
+    // sons de la charge
+    if g == G_TEINTE - 20 {
+        PLAY_SE(fighter, Hash40::new("se_common_smash_start_02"));
+    }
+    if g == G_TEINTE {
+        PLAY_SE(fighter, Hash40::new("se_common_frieze_l"));
+    }
+    if g >= G_TEINTE && g < G_TIR && g % 12 == 0 {
+        PLAY_SE(fighter, Hash40::new("se_common_electric_fire_s"));
+    }
     if g >= G_TEINTE - 20 && g < G_TIR && g % 3 == 0 {
         let (cx, cy) = canon(boma);
         let k = ((g - G_TEINTE + 20) as f32 / (G_TIR - G_TEINTE + 20) as f32).clamp(0.0, 1.0);
@@ -187,7 +216,7 @@ unsafe fn evenement(fighter: &mut L2CFighterCommon, g: i32) {
         // tir (REX : 40 %, angle 80, base 100, croissance 100) : rayon blanc-rose en forme de flèche
         let (cx, cy) = canon(boma);
         PLAY_SE(fighter, Hash40::new("se_common_bomb_l"));
-        PLAY_SE(fighter, Hash40::new("se_item_superscope_chargeshot"));
+        PLAY_SE(fighter, Hash40::new("se_common_bomb_ll"));
         QUAKE(fighter, *CAMERA_QUAKE_KIND_L);
         fx_w(boma, "sys_bomb_a", cx, cy, 1.6, 0.0, ROSE);
         fx_w(boma, "sys_smash_flash", cx, cy, 3.4, 0.0, BLANC);
@@ -237,18 +266,53 @@ unsafe fn evenement(fighter: &mut L2CFighterCommon, g: i32) {
             PostureModule::set_pos(boma, &Vector3f { x: nx, y: p.y, z: p.z });
             if g % 4 == 0 {
                 fx_w(boma, "sys_dash_smoke", p.x, p.y, 0.8, 0.0, BLANC);
+                if g % 8 == 0 {
+                    PLAY_SE(fighter, Hash40::new("se_common_step_sand"));
+                }
             }
         }
     }
     if g == G_FIN - 25 {
         let (x, y) = mains(boma);
         fx_w(boma, "sys_erace_smoke", x + 6.0 * lr, y, 1.4, 0.0, VIOLET_NOIR);
+        PLAY_SE(fighter, Hash40::new("se_item_magicball_warpout"));
         canon_montrer(boma, false);
         EN_COURS[e] = false;
         EFFECT_OFF_KIND(fighter, Hash40::new("sys_final_aura"), false, false);
         EffectModule::remove_screen(boma, Hash40::new("bg_mario_final"), 10);
         ST[e].aura = 0;
     }
+}
+
+/// coup qui touche : ralenti + zoom + fond « coup critique » (méthode du mode critique d'Ultimate S)
+unsafe fn critique(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    let e = e_of(boma);
+    let g = ST[e].g;
+    if ST[e].coup < 0 {
+        if g >= G_TIR && g <= G_TIR_FIN && AttackModule::is_infliction_status(boma, *COLLISION_KIND_MASK_HIT) {
+            ST[e].coup = 0;
+            SlowModule::set_whole(boma, 8, 80);
+            CAM_ZOOM_IN_arg5(fighter, 2.0, 0.0, 1.8, 0.0, 0.0);
+            EffectModule::req_follow(boma, Hash40::new("sys_bg_criticalhit"), Hash40::new("top"), &Vector3f { x: 0.0, y: 0.0, z: 0.0 },
+                                     &Vector3f { x: 0.0, y: 0.0, z: 0.0 }, 1.0, false, 0, 0, 0, 0, 0, false, false);
+            PLAY_SE(fighter, Hash40::new("se_common_criticalhit"));
+            QUAKE(fighter, *CAMERA_QUAKE_KIND_XL);
+        }
+        return;
+    }
+    ST[e].coup += 1;
+    if ST[e].coup == 8 {
+        critique_fin(fighter);
+    }
+}
+
+unsafe fn critique_fin(fighter: &mut L2CFighterCommon) {
+    let boma = fighter.module_accessor;
+    SlowModule::clear_whole(boma);
+    CameraModule::reset_all(boma);
+    EffectModule::kill_kind(boma, Hash40::new("sys_bg_criticalhit"), false, false);
+    CAM_ZOOM_OUT(fighter);
 }
 
 unsafe extern "C" fn final_end(fighter: &mut L2CFighterCommon) -> L2CValue {
@@ -261,6 +325,10 @@ unsafe extern "C" fn final_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     COL_NORMAL(fighter);
     canon_montrer(boma, false);
     EffectModule::remove_screen(boma, Hash40::new("bg_mario_final"), 10);
+    if ST[e].coup >= 0 && ST[e].coup < 8 {
+        critique_fin(fighter);
+    }
+    ST[e].coup = -1;
     EN_COURS[e] = false;
     ST[e].aura = 0;
     smashline::original_status(End, fighter, *FIGHTER_STATUS_KIND_FINAL)(fighter)
