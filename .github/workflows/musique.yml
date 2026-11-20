@@ -1,0 +1,62 @@
+name: Musique - wav vers lopus Smash (VGAudio, boucle, echange de cle, chiffre)
+on:
+  push:
+    branches: [ marioults ]
+    paths: [ '.github/workflows/musique.yml' ]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cle de ce passage (la publique est publiee, la privee reste ici)
+        shell: bash
+        run: |
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$RUNNER_TEMP/p.key" 2>/dev/null
+          mkdir -p "$RUNNER_TEMP/c" && openssl pkey -in "$RUNNER_TEMP/p.key" -pubout -out "$RUNNER_TEMP/c/pub.pem"
+          echo "$GITHUB_RUN_ID" > "$RUNNER_TEMP/c/run.txt"
+          cd "$RUNNER_TEMP/c" && git init -q -b cle_musique && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m cle && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" cle_musique
+      - name: Attendre le fichier audio chiffre (branche entree_musique)
+        shell: bash
+        run: |
+          for i in $(seq 1 90); do
+            if git fetch -q origin entree_musique 2>/dev/null && [ "$(git show FETCH_HEAD:run.txt 2>/dev/null)" = "$GITHUB_RUN_ID" ]; then break; fi
+            sleep 10
+          done
+          mkdir -p "$RUNNER_TEMP/w"
+          git show FETCH_HEAD:k.enc > "$RUNNER_TEMP/k.enc"
+          openssl pkeyutl -decrypt -inkey "$RUNNER_TEMP/p.key" -pkeyopt rsa_padding_mode:oaep -in "$RUNNER_TEMP/k.enc" -out "$RUNNER_TEMP/k.bin"
+          for f in $(git ls-tree --name-only FETCH_HEAD | grep '^d\.enc\.'); do git show FETCH_HEAD:$f; done | openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"$RUNNER_TEMP/k.bin" | tar x -C "$RUNNER_TEMP/w"
+          rm -f "$RUNNER_TEMP/k.bin"; ls -la "$RUNNER_TEMP/w"
+      - name: VGAudio (wav -> lopus, entete Namco, boucle)
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "VGAudioCli.zip"
+          Invoke-WebRequest "https://github.com/Thealexbarney/VGAudio/releases/download/v2.2.1/VGAudioCli.zip" -OutFile $zip
+          $vg = Join-Path $env:RUNNER_TEMP "VGAudio"
+          Expand-Archive -Path $zip -DestinationPath $vg -Force
+          $vgexe = (Get-ChildItem -Path $vg -Filter "VGAudioCli.exe" -Recurse | Select-Object -First 1).FullName
+          $w = Join-Path $env:RUNNER_TEMP "w"
+          $o = Join-Path $env:RUNNER_TEMP "o"; New-Item -ItemType Directory -Force -Path $o | Out-Null
+          Get-ChildItem -Path $w -Filter "*.wav" | ForEach-Object {
+            $boucle = Get-Content ([System.IO.Path]::ChangeExtension($_.FullName, ".boucle"))
+            $dst = Join-Path $o ($_.BaseName + ".lopus")
+            & $vgexe -i $_.FullName -o $dst --opusheader Namco -l $boucle 2>&1 | Out-String | Write-Host
+            if (-not (Test-Path $dst)) { & $vgexe -i $_.FullName -o $dst --opusheader namco --loop $boucle 2>&1 | Out-String | Write-Host }
+            Get-Item $dst | Select-Object Name, Length | Out-String | Write-Host
+          }
+          & $vgexe --help 2>&1 | Select-String -Pattern "opus|loop|bitrate" | Out-String | Write-Host
+      - name: Chiffrer (cle de la session) et publier
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/pub"; tar cz -C "$RUNNER_TEMP/o" . > "$RUNNER_TEMP/o.tgz"
+          openssl rand 32 > "$RUNNER_TEMP/s.bin"
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$RUNNER_TEMP/s.bin" -in "$RUNNER_TEMP/o.tgz" | split -b 90m - "$RUNNER_TEMP/pub/out.session.enc."
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in "$RUNNER_TEMP/s.bin" -out "$RUNNER_TEMP/pub/k.session.enc"; rm -f "$RUNNER_TEMP/s.bin"
+          cd "$RUNNER_TEMP/pub" && git init -q -b sortie_musique && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "musique chiffree"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_musique
