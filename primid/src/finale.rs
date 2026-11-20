@@ -3,8 +3,10 @@
 //! REX : caméra rapprochée au début, écran teinté violet à l'image 40, tir à l'image 83 (40 %, angle 80, base 100,
 //! croissance 100), effets du Light Arrow de Zelda (rayon en forme de flèche). Animation : Primid accroupi, le canon
 //! tenu à deux mains devant lui (images 27-82), tir, recul (110).
-//! Ici : le canon = son Super Scope agrandi ; charge violette au bout du canon, puis un rayon violet foncé qui traverse
-//! l'écran devant lui (un long coup en capsule pendant 12 images).
+//! v0.45 (vidéo de REX envoyée par le joueur) : le canon apparaît dans un éclair (étincelles jaunes), Primid le soulève
+//! puis le pose devant lui ; charge : étincelles jaune-orange au bout du canon, écran violet ; tir : gros rayon blanc-
+//! rose en forme de flèche (40 %) ; Primid recule en glissant ; le canon disparaît. Canon = modèle du Dark Cannon de
+//! Brawl (tools/canon_primid.py : objet pr_canon sur l'os Throw, placé entre ses mains à chaque image).
 
 use smash::app::lua_bind::*;
 use smash::app::*;
@@ -27,11 +29,15 @@ const G_TIR: i32 = 104;
 const G_TIR_FIN: i32 = 116;
 const G_FIN: i32 = 173;
 /// rayon : du bout du canon jusqu'à PORTEE devant Primid
-const CANON_Y: f32 = 6.0;
-const CANON_Z: f32 = 12.0;
 const PORTEE: f32 = 200.0;
 const VIOLET: (f32, f32, f32) = (0.55, 0.1, 0.9);
 const VIOLET_NOIR: (f32, f32, f32) = (0.25, 0.0, 0.42);
+const JAUNE: (f32, f32, f32) = (1.0, 0.8, 0.25);
+const ROSE: (f32, f32, f32) = (1.0, 0.65, 0.9);
+const BLANC: (f32, f32, f32) = (1.0, 1.0, 1.0);
+/// recul après le tir (vidéo : il glisse loin en arrière)
+const RECUL: f32 = 40.0;
+const G_RECUL: i32 = 28;
 
 #[derive(Clone, Copy)]
 struct St {
@@ -63,21 +69,32 @@ unsafe fn fx_os(boma: *mut BattleObjectModuleAccessor, name: &str, os: &str, sc:
     h
 }
 
-/// bout du canon dans le monde
-unsafe fn canon(boma: *mut BattleObjectModuleAccessor) -> (f32, f32) {
-    let p = *PostureModule::pos(boma);
-    let lr = PostureModule::lr(boma);
-    (p.x + CANON_Z * lr, p.y + CANON_Y)
+/// mains de Primid (milieu des deux os de prise)
+unsafe fn mains(boma: *mut BattleObjectModuleAccessor) -> (f32, f32) {
+    let mut a = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let mut b = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    ModelModule::joint_global_position(boma, Hash40::new("havel"), &mut a, true);
+    ModelModule::joint_global_position(boma, Hash40::new("haver"), &mut b, true);
+    ((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
 }
 
-unsafe fn canon_taille(boma: *mut BattleObjectModuleAccessor, s: f32) {
-    for os in ["havel", "haver"] {
-        if s == 1.0 {
-            ModelModule::clear_joint_srt(boma, Hash40::new(os));
-        } else {
-            ModelModule::set_joint_scale(boma, Hash40::new(os), &Vector3f { x: s, y: s, z: s });
-        }
+/// bout du canon dans le monde (modèle : bouche à 15 devant la poignée)
+unsafe fn canon(boma: *mut BattleObjectModuleAccessor) -> (f32, f32) {
+    let lr = PostureModule::lr(boma);
+    let (x, y) = mains(boma);
+    (x + 17.0 * lr, y + 1.5)
+}
+
+/// canon (pr_canon, os Throw) entre ses mains, ou rangé
+unsafe fn canon_montrer(boma: *mut BattleObjectModuleAccessor, on: bool) {
+    if on {
+        let (x, y) = mains(boma);
+        ModelModule::set_joint_translate(boma, Hash40::new("throw"), &Vector3f { x, y, z: 0.0 }, true, false);
+        ModelModule::set_joint_scale(boma, Hash40::new("throw"), &Vector3f { x: 1.0, y: 1.0, z: 1.0 });
+    } else {
+        ModelModule::clear_joint_srt(boma, Hash40::new("throw"));
     }
+    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_canon"), on);
 }
 
 unsafe extern "C" fn final_main(fighter: &mut L2CFighterCommon) -> L2CValue {
@@ -115,6 +132,9 @@ unsafe extern "C" fn final_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         MotionModule::set_rate(boma, 0.0);
     }
     sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
+    if EN_COURS[e] {
+        canon_montrer(boma, true);
+    }
     evenement(fighter, g);
     if g >= G_FIN {
         let st = if ST[e].air { FIGHTER_STATUS_KIND_FALL } else { FIGHTER_STATUS_KIND_WAIT };
@@ -128,80 +148,105 @@ unsafe fn evenement(fighter: &mut L2CFighterCommon, g: i32) {
     let e = e_of(boma);
     let lr = PostureModule::lr(boma);
     if g == 1 {
-        ST[e].aura = fx_os(boma, "sys_final_aura", "hip", 1.1, VIOLET);
+        ST[e].aura = fx_os(boma, "sys_final_aura", "hip", 1.1, (0.3, 0.9, 1.0));
         FLASH(fighter, 0.45, 0.1, 0.75, 0.35);
         PLAY_SE(fighter, Hash40::new("se_common_final_cutin"));
     }
     if g == 8 {
         COL_NORMAL(fighter);
     }
-    // le canon sort (REX : il le prend en main en s'accroupissant)
-    if g == 20 {
-        canon_taille(boma, 1.7);
-        fx_os(boma, "sys_erace_smoke", "havel", 0.8, VIOLET_NOIR);
+    // le canon apparaît dans un éclair (vidéo : étincelles jaunes)
+    if g == 2 {
+        let (x, y) = mains(boma);
+        fx_w(boma, "sys_smash_flash", x + 8.0 * lr, y, 2.4, 0.0, JAUNE);
+        fx_w(boma, "sys_item_arrival", x + 8.0 * lr, y, 1.6, 0.0, BLANC);
+        PLAY_SE(fighter, Hash40::new("se_item_item_get"));
     }
-    // REX image 40 : écran teinté violet ; ici : fumée violet foncé autour de lui et éclat
+    // REX image 40 : écran teinté violet (fond du Final Smash de Mario recoloré)
     if g == G_TEINTE {
+        let h = EffectModule::req_screen(boma, Hash40::new("bg_mario_final"), false, false, false) as u32;
+        if h != 0 {
+            EffectModule::set_rgb(boma, h, 0.6, 0.15, 0.9);
+        }
         let p = *PostureModule::pos(boma);
-        fx_w(boma, "sys_smash_flash", p.x, p.y + 8.0, 3.0, 0.0, VIOLET);
-        for (dx, dy) in [(-10.0, 4.0), (10.0, 4.0), (0.0, 14.0)] {
+        fx_w(boma, "sys_smash_flash", p.x, p.y + 8.0, 2.6, 0.0, VIOLET);
+        for (dx, dy) in [(-12.0, 4.0), (12.0, 4.0), (0.0, 16.0)] {
             fx_w(boma, "sys_erace_smoke", p.x + dx, p.y + dy, 2.2, 0.0, VIOLET_NOIR);
         }
     }
-    // charge au bout du canon (de plus en plus grosse)
-    if g >= G_TEINTE && g < G_TIR && g % 4 == 0 {
+    // charge : étincelles jaune-orange au bout du canon, de plus en plus grosses
+    if g >= G_TEINTE - 20 && g < G_TIR && g % 3 == 0 {
         let (cx, cy) = canon(boma);
-        let k = (g - G_TEINTE) as f32 / (G_TIR - G_TEINTE) as f32;
-        fx_w(boma, "sys_smash_flash_s", cx, cy, 0.6 + 1.6 * k, 0.0, VIOLET);
-        if g % 8 == 0 {
-            fx_w(boma, "sys_erace_smoke", cx, cy, 0.3 + 0.6 * k, 0.0, VIOLET_NOIR);
+        let k = ((g - G_TEINTE + 20) as f32 / (G_TIR - G_TEINTE + 20) as f32).clamp(0.0, 1.0);
+        fx_w(boma, "sys_smash_flash_s", cx, cy, 0.6 + 1.8 * k, 0.0, JAUNE);
+        if g % 9 == 0 {
+            fx_w(boma, "sys_hit_elec_s", cx, cy, 0.5 + 0.8 * k, 0.0, JAUNE);
         }
     }
     if g == G_TIR {
-        // tir (REX : 40 %, angle 80, base 100, croissance 100) : rayon qui traverse l'écran
+        // tir (REX : 40 %, angle 80, base 100, croissance 100) : rayon blanc-rose en forme de flèche
         let (cx, cy) = canon(boma);
         PLAY_SE(fighter, Hash40::new("se_common_bomb_l"));
-        PLAY_SE(fighter, Hash40::new("se_common_final_shot"));
+        PLAY_SE(fighter, Hash40::new("se_item_superscope_chargeshot"));
         QUAKE(fighter, *CAMERA_QUAKE_KIND_L);
-        fx_w(boma, "sys_bomb_a", cx, cy, 1.8, 0.0, VIOLET);
-        fx_w(boma, "sys_smash_flash", cx, cy, 3.2, 0.0, (0.8, 0.5, 1.0));
-        ATTACK(fighter, 0, 0, Hash40::new("top"), 40.0, 80, 100, 0, 100, 14.0, 0.0, CANON_Y, CANON_Z,
-               Some(0.0), Some(CANON_Y), Some(CANON_Z + PORTEE), 2.0, 1.0,
+        fx_w(boma, "sys_bomb_a", cx, cy, 1.6, 0.0, ROSE);
+        fx_w(boma, "sys_smash_flash", cx, cy, 3.4, 0.0, BLANC);
+        let p = *PostureModule::pos(boma);
+        let dy = cy - p.y;
+        let dz = (cx - p.x) * lr;
+        ATTACK(fighter, 0, 0, Hash40::new("top"), 40.0, 80, 100, 0, 100, 14.0, 0.0, dy, dz,
+               Some(0.0), Some(dy), Some(dz + PORTEE), 2.0, 1.0,
                *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, false, false, false, false, true,
                *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false,
                Hash40::new("collision_attr_purple"), *ATTACK_SOUND_LEVEL_LL, *COLLISION_SOUND_ATTR_BOMB, *ATTACK_REGION_ENERGY);
     }
-    // rayon : éclats violets et traînées le long de la ligne de tir
+    // rayon : pointe de flèche qui file, éclats blanc-rose le long de la ligne de tir
     if g >= G_TIR && g < G_TIR_FIN {
         let (cx, cy) = canon(boma);
+        let t = (g - G_TIR) as f32 / (G_TIR_FIN - G_TIR) as f32;
         let n = 10;
         for k in 0..n {
-            if (k + g) % 2 != 0 {
+            let d = (k as f32) * PORTEE / n as f32;
+            if d > PORTEE * (t * 2.0).min(1.0) || (k + g) % 2 != 0 {
                 continue;
             }
-            let x = cx + lr * (k as f32) * PORTEE / n as f32;
-            let c = if k % 4 == 0 { VIOLET } else { VIOLET_NOIR };
-            fx_w(boma, "sys_smash_flash", x, cy, 1.7, 0.0, c);
+            let c = if k % 3 == 0 { BLANC } else { ROSE };
+            fx_w(boma, "sys_smash_flash", cx + lr * d, cy, 1.8, 0.0, c);
         }
+        // pointe
+        let tete = cx + lr * PORTEE * (t * 2.0).min(1.0);
+        fx_w(boma, "sys_smash_flash", tete, cy, 3.0, 0.0, BLANC);
         if g % 3 == 0 {
             for k in 0..5 {
                 let x = cx + lr * (10.0 + k as f32 * 40.0);
-                // traînée couchée le long du rayon (rotation en radians)
-                fx_w(boma, "sys_attack_speedline", x, cy, 2.0, if lr > 0.0 { -1.5708 } else { 1.5708 }, VIOLET);
+                fx_w(boma, "sys_attack_speedline", x, cy, 2.2, if lr > 0.0 { -1.5708 } else { 1.5708 }, ROSE);
             }
         }
     }
     if g == G_TIR_FIN {
         AttackModule::clear_all(boma);
     }
-    // recul de l'animation (REX image 110) : fumée au canon
-    if g == G_TIR_FIN + 8 {
-        fx_os(boma, "sys_erace_smoke", "havel", 1.0, VIOLET_NOIR);
+    // recul : il glisse en arrière (vidéo de REX), sans tomber du bord
+    if g > G_TIR && g <= G_TIR + G_RECUL && !ST[e].air {
+        let k = (g - G_TIR) as f32 / G_RECUL as f32;
+        let v = RECUL * 2.0 / G_RECUL as f32 * (1.0 - k);
+        let p = *PostureModule::pos(boma);
+        let nx = p.x - v * lr;
+        let sol = GroundModule::ray_check(boma, &smash::phx::Vector2f { x: nx, y: p.y + 3.0 }, &smash::phx::Vector2f { x: 0.0, y: -8.0 }, true) == 1;
+        if sol {
+            PostureModule::set_pos(boma, &Vector3f { x: nx, y: p.y, z: p.z });
+            if g % 4 == 0 {
+                fx_w(boma, "sys_dash_smoke", p.x, p.y, 0.8, 0.0, BLANC);
+            }
+        }
     }
     if g == G_FIN - 25 {
-        canon_taille(boma, 1.0);
+        let (x, y) = mains(boma);
+        fx_w(boma, "sys_erace_smoke", x + 6.0 * lr, y, 1.4, 0.0, VIOLET_NOIR);
+        canon_montrer(boma, false);
         EN_COURS[e] = false;
         EFFECT_OFF_KIND(fighter, Hash40::new("sys_final_aura"), false, false);
+        EffectModule::remove_screen(boma, Hash40::new("bg_mario_final"), 10);
         ST[e].aura = 0;
     }
 }
@@ -214,7 +259,8 @@ unsafe extern "C" fn final_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     AttackModule::clear_all(boma);
     EFFECT_OFF_KIND(fighter, Hash40::new("sys_final_aura"), false, false);
     COL_NORMAL(fighter);
-    canon_taille(boma, 1.0);
+    canon_montrer(boma, false);
+    EffectModule::remove_screen(boma, Hash40::new("bg_mario_final"), 10);
     EN_COURS[e] = false;
     ST[e].aura = 0;
     smashline::original_status(End, fighter, *FIGHTER_STATUS_KIND_FINAL)(fighter)
