@@ -32,6 +32,10 @@ const G_FIN: i32 = 173;
 const PORTEE: f32 = 200.0;
 const VIOLET: (f32, f32, f32) = (0.55, 0.1, 0.9);
 const VIOLET_NOIR: (f32, f32, f32) = (0.25, 0.0, 0.42);
+/// sons du Dark Cannon de REX (0xA323 / 0xA324 / 0xA325), mis dans des pistes de cris rarement jouées
+const SON_CHARGE: &str = "vc_mario_heavyget";
+const SON_TIR: &str = "vc_mario_swimup";
+const SON_RAYON: &str = "vc_mario_furasleep";
 const JAUNE: (f32, f32, f32) = (1.0, 0.8, 0.25);
 const ROSE: (f32, f32, f32) = (1.0, 0.65, 0.9);
 const BLANC: (f32, f32, f32) = (1.0, 1.0, 1.0);
@@ -120,18 +124,10 @@ unsafe extern "C" fn final_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
     // REX : intangible pendant tout le Final Smash
     HitModule::set_whole(boma, HitStatus(*HIT_STATUS_XLU), 0);
-    // v0.46 (le joueur : « t'as pas mis le zoom, le ralenti et les sfx ») : comme les Final Smash d'Ultimate S (déjà
-    // dans son jeu) : caméra de début (gros plan, REX : 1A040500 jusqu'à l'image 28), adversaires ralentis, aura retirée
-    CHECK_VALID_FINAL_START_CAMERA(fighter, 0, 7, 20, 0, 0, 0);
-    SLOW_OPPONENT(fighter, 5.0, 20.0);
-    if !WorkModule::is_flag(boma, *FIGHTER_INSTANCE_WORK_ID_FLAG_DISABLE_FINAL_START_CAMERA) {
-        FT_SET_FINAL_FEAR_FACE(fighter, 200);
-        REQ_FINAL_START_CAMERA_arg3(fighter, Hash40::new("d04finalcutin.nuanmb"), false, false);
-        fighter.clear_lua_stack();
-        lua_args!(fighter, true);
-        smash::app::sv_animcmd::FT_REMOVE_FINAL_AURA(fighter.lua_state_agent);
-        fighter.clear_lua_stack();
-    }
+    // v0.47 (le joueur : « t'aurais juste pu faire le même zoom que Rock ») : zoom et ralenti du Final Smash de Rock
+    // (gros plan de l'image 5 au tir, adversaires ralentis x4 jusqu'au tir)
+    SLOW_OPPONENT(fighter, 4.0, G_TIR as f32);
+    slow_others(boma, 4, G_TIR + 60);
     let mot = if air { "final_air" } else { "final" };
     MotionModule::change_motion(boma, Hash40::new(mot), 0.0, VITESSE, false, 0.0, false, false);
     fighter.sub_shift_status_main(L2CValue::Ptr(final_loop as *const () as _))
@@ -175,7 +171,8 @@ unsafe fn evenement(fighter: &mut L2CFighterCommon, g: i32) {
         let (x, y) = mains(boma);
         fx_w(boma, "sys_smash_flash", x + 8.0 * lr, y, 2.4, 0.0, JAUNE);
         fx_w(boma, "sys_item_arrival", x + 8.0 * lr, y, 1.6, 0.0, BLANC);
-        PLAY_SE(fighter, Hash40::new("se_item_item_get"));
+        // v0.47 : vrais sons du canon de REX (dans les pistes de cris, cf. build_vc_primid.py) : la charge (image 0)
+        PLAY_SE(fighter, Hash40::new(SON_CHARGE));
     }
     // REX image 40 : écran teinté violet (fond du Final Smash de Mario recoloré)
     if g == G_TEINTE {
@@ -190,19 +187,12 @@ unsafe fn evenement(fighter: &mut L2CFighterCommon, g: i32) {
         }
     }
     // charge : étincelles jaune-orange au bout du canon, de plus en plus grosses
-    // fin du gros plan de départ (REX : image 28 -> 35 ici)
-    if g == 35 {
+    if g == 5 {
+        let sc = PostureModule::scale(boma);
+        CAM_ZOOM_IN_arg5(fighter, 5.0, 0.0, sc * 2.6, 0.0, 0.0);
+    }
+    if g == G_TIR {
         CAM_ZOOM_OUT(fighter);
-    }
-    // sons de la charge
-    if g == G_TEINTE - 20 {
-        PLAY_SE(fighter, Hash40::new("se_common_smash_start_02"));
-    }
-    if g == G_TEINTE {
-        PLAY_SE(fighter, Hash40::new("se_common_frieze_l"));
-    }
-    if g >= G_TEINTE && g < G_TIR && g % 12 == 0 {
-        PLAY_SE(fighter, Hash40::new("se_common_electric_fire_s"));
     }
     if g >= G_TEINTE - 20 && g < G_TIR && g % 3 == 0 {
         let (cx, cy) = canon(boma);
@@ -215,8 +205,10 @@ unsafe fn evenement(fighter: &mut L2CFighterCommon, g: i32) {
     if g == G_TIR {
         // tir (REX : 40 %, angle 80, base 100, croissance 100) : rayon blanc-rose en forme de flèche
         let (cx, cy) = canon(boma);
-        PLAY_SE(fighter, Hash40::new("se_common_bomb_l"));
-        PLAY_SE(fighter, Hash40::new("se_common_bomb_ll"));
+        // REX image 83 : la charge s'arrête, le tir et le rayon
+        STOP_SE(fighter, Hash40::new(SON_CHARGE));
+        PLAY_SE(fighter, Hash40::new(SON_TIR));
+        PLAY_SE(fighter, Hash40::new(SON_RAYON));
         QUAKE(fighter, *CAMERA_QUAKE_KIND_L);
         fx_w(boma, "sys_bomb_a", cx, cy, 1.6, 0.0, ROSE);
         fx_w(boma, "sys_smash_flash", cx, cy, 3.4, 0.0, BLANC);
@@ -266,21 +258,36 @@ unsafe fn evenement(fighter: &mut L2CFighterCommon, g: i32) {
             PostureModule::set_pos(boma, &Vector3f { x: nx, y: p.y, z: p.z });
             if g % 4 == 0 {
                 fx_w(boma, "sys_dash_smoke", p.x, p.y, 0.8, 0.0, BLANC);
-                if g % 8 == 0 {
-                    PLAY_SE(fighter, Hash40::new("se_common_step_sand"));
-                }
             }
         }
     }
     if g == G_FIN - 25 {
         let (x, y) = mains(boma);
         fx_w(boma, "sys_erace_smoke", x + 6.0 * lr, y, 1.4, 0.0, VIOLET_NOIR);
-        PLAY_SE(fighter, Hash40::new("se_item_magicball_warpout"));
         canon_montrer(boma, false);
         EN_COURS[e] = false;
         EFFECT_OFF_KIND(fighter, Hash40::new("sys_final_aura"), false, false);
         EffectModule::remove_screen(boma, Hash40::new("bg_mario_final"), 10);
         ST[e].aura = 0;
+    }
+}
+
+/// ralenti des autres combattants (copie de slow_others de Rock)
+unsafe fn slow_others(boma: *mut BattleObjectModuleAccessor, mag: u8, frames: i32) {
+    let me = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID);
+    for e in 0..8 {
+        if e == me {
+            continue;
+        }
+        let id = smash::app::Fighter::get_id_from_entry_id(e);
+        if id == 0 || id == *BATTLE_OBJECT_ID_INVALID as u32 {
+            continue;
+        }
+        let ob = smash::app::sv_battle_object::module_accessor(id);
+        if ob.is_null() {
+            continue;
+        }
+        SlowModule::set_whole(ob, mag, frames);
     }
 }
 
@@ -324,6 +331,7 @@ unsafe extern "C" fn final_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     EFFECT_OFF_KIND(fighter, Hash40::new("sys_final_aura"), false, false);
     COL_NORMAL(fighter);
     canon_montrer(boma, false);
+    STOP_SE(fighter, Hash40::new(SON_CHARGE));
     EffectModule::remove_screen(boma, Hash40::new("bg_mario_final"), 10);
     if ST[e].coup >= 0 && ST[e].coup < 8 {
         critique_fin(fighter);
