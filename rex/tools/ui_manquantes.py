@@ -24,17 +24,20 @@ def cadre(im, centre, w, h, size):
     return fond.resize(size, Image.LANCZOS)
 
 
-# portrait (chara_1) : le personnage cadré buste ; sa boîte donne le haut (tête) et la largeur
+# portrait (chara_1) : la tête = la partie opaque du haut de l'image (les bras tendus faussent le centre de tout le
+# corps) ; les cases sont centrées sur elle
 b = boite(c1)
-cx = (b[0] + b[2]) / 2
 haut = b[1]
-larg = b[2] - b[0]
+bande = c1.crop((0, haut, c1.width, haut + int(c1.height * 0.30)))
+bt = boite(bande)
+cx = (bt[0] + bt[2]) / 2
+tete = bt[2] - bt[0]                    # largeur de la tête (casquette comprise)
 imgs = {
     'chara_0': c4.resize((128, 128), Image.LANCZOS),
-    # case du CSS (456x300, 3:2) : tête et haut du corps
-    'chara_7': cadre(c1, (cx, haut + larg * 0.36), larg * 1.0, larg * 1.0 * 300 / 456, (456, 300)),
+    # case du CSS (456x300, 3:2) : tête entière et début du corps
+    'chara_7': cadre(c1, (cx, haut + tete * 0.72), tete * 1.7, tete * 1.7 * 300 / 456, (456, 300)),
     # bandeau (512x256, 2:1) : visage
-    'chara_6': cadre(c1, (cx, haut + larg * 0.30), larg * 0.95, larg * 0.95 / 2, (512, 256)),
+    'chara_6': cadre(c1, (cx, haut + tete * 0.55), tete * 1.45, tete * 1.45 / 2, (512, 256)),
 }
 os.makedirs(os.path.join(OUT, 'png'), exist_ok=True)
 for k, im in imgs.items():
