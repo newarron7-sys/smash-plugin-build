@@ -1,0 +1,8 @@
+# Cloud Mario (slot c120) : saut horizontal de Mario d'Ultimate S, appliqué par libparam_config
+kind = "mario"
+slots = [120]
+
+[[param_float]]
+param = "jump_speed_x_mul"
+subparam = ""
+value = 1.2

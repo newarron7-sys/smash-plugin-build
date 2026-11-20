@@ -51,9 +51,7 @@ pub unsafe fn bloquer_sideb(boma: *mut BattleObjectModuleAccessor) {
 }
 
 // ------------------------------------------------------------------ jump_speed_x_mul 1,2 (comme Ultimate S)
-// v7 : un hook de WorkModule::get_param_float faisait planter le jeu au début de chaque match (journal du 20/11 :
-// libparam_config hooke déjà cette fonction, plantage dans son hook). Comme Ultimate S, on passe par
-// libparam_config lui-même (déjà installé chez lui), limité au slot 120.
-pub fn install() {
-    param_config::update_float_2(*FIGHTER_KIND_MARIO, vec![SLOT as i32], (smash::hash40("jump_speed_x_mul"), 0, 1.2));
-}
+// Aucun hook de paramètres ici : libparam_config (installé chez lui) hooke déjà ces fonctions, et son README demande
+// qu'aucun autre plugin ne le fasse (v7 : plantage au début de chaque match). Le saut x1,2 passe par le fichier
+// config_param.toml à la racine du mod, que libparam_config lit lui-même.
+pub fn install() {}
