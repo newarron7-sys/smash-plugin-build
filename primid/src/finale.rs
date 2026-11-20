@@ -28,6 +28,9 @@ const G_TEINTE: i32 = 50;
 const G_TIR: i32 = 104;
 const G_TIR_FIN: i32 = 116;
 const G_FIN: i32 = 173;
+/// canon visible (images du jeu ; animation x 0,8 : image 8 -> 96 de l'animation)
+const G_CANON: i32 = 10;
+const G_CANON_FIN: i32 = 120;
 /// rayon : du bout du canon jusqu'à PORTEE devant Primid
 const PORTEE: f32 = 200.0;
 const VIOLET: (f32, f32, f32) = (0.55, 0.1, 0.9);
@@ -88,19 +91,16 @@ unsafe fn mains(boma: *mut BattleObjectModuleAccessor) -> (f32, f32) {
 unsafe fn canon(boma: *mut BattleObjectModuleAccessor) -> (f32, f32) {
     let lr = PostureModule::lr(boma);
     let (x, y) = mains(boma);
-    (x + 17.0 * lr, y + 1.5)
+    (x + 20.0 * lr, y + 2.0)
 }
 
 /// canon (pr_canon, os Throw) entre ses mains, ou rangé
+/// v0.48 (vidéo du joueur : le canon se téléportait) : le canon est tenu dans la main (HaveL, copie pr_canon_r sur
+/// HaveR quand il regarde à gauche, comme le Super Scope) : il suit l'animation, rien n'est placé à la main
 unsafe fn canon_montrer(boma: *mut BattleObjectModuleAccessor, on: bool) {
-    if on {
-        let (x, y) = mains(boma);
-        ModelModule::set_joint_translate(boma, Hash40::new("throw"), &Vector3f { x, y, z: 0.0 }, true, false);
-        ModelModule::set_joint_scale(boma, Hash40::new("throw"), &Vector3f { x: 1.0, y: 1.0, z: 1.0 });
-    } else {
-        ModelModule::clear_joint_srt(boma, Hash40::new("throw"));
-    }
-    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_canon"), on);
+    let gauche = PostureModule::lr(boma) > 0.0;
+    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_canon"), on && gauche);
+    ModelModule::set_mesh_visibility(boma, Hash40::new("pr_canon_r"), on && !gauche);
 }
 
 unsafe extern "C" fn final_main(fighter: &mut L2CFighterCommon) -> L2CValue {
@@ -126,8 +126,10 @@ unsafe extern "C" fn final_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     HitModule::set_whole(boma, HitStatus(*HIT_STATUS_XLU), 0);
     // v0.47 (le joueur : « t'aurais juste pu faire le même zoom que Rock ») : zoom et ralenti du Final Smash de Rock
     // (gros plan de l'image 5 au tir, adversaires ralentis x4 jusqu'au tir)
-    SLOW_OPPONENT(fighter, 4.0, G_TIR as f32);
-    slow_others(boma, 4, G_TIR + 60);
+    // v0.48 (le joueur : « ralentis encore plus l'adversaire, qu'il n'ait plus le temps de s'échapper ») : x12 au lieu
+    // de x4, jusqu'à la fin du rayon
+    SLOW_OPPONENT(fighter, 12.0, G_TIR_FIN as f32);
+    slow_others(boma, 12, G_TIR_FIN + 20);
     let mot = if air { "final_air" } else { "final" };
     MotionModule::change_motion(boma, Hash40::new(mot), 0.0, VITESSE, false, 0.0, false, false);
     fighter.sub_shift_status_main(L2CValue::Ptr(final_loop as *const () as _))
@@ -142,9 +144,8 @@ unsafe extern "C" fn final_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         MotionModule::set_rate(boma, 0.0);
     }
     sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0_f32, 0.0_f32);
-    if EN_COURS[e] {
-        canon_montrer(boma, true);
-    }
+    // canon visible de l'image 10 (avant : sa bouche est dans le sol) à la fin du recul
+    canon_montrer(boma, EN_COURS[e] && g >= G_CANON && g < G_CANON_FIN);
     evenement(fighter, g);
     critique(fighter);
     if g >= G_FIN {
@@ -167,10 +168,12 @@ unsafe fn evenement(fighter: &mut L2CFighterCommon, g: i32) {
         COL_NORMAL(fighter);
     }
     // le canon apparaît dans un éclair (vidéo : étincelles jaunes)
-    if g == 2 {
+    if g == G_CANON {
         let (x, y) = mains(boma);
         fx_w(boma, "sys_smash_flash", x + 8.0 * lr, y, 2.4, 0.0, JAUNE);
         fx_w(boma, "sys_item_arrival", x + 8.0 * lr, y, 1.6, 0.0, BLANC);
+    }
+    if g == 2 {
         // v0.47 : vrais sons du canon de REX (dans les pistes de cris, cf. build_vc_primid.py) : la charge (image 0)
         PLAY_SE(fighter, Hash40::new(SON_CHARGE));
     }
@@ -261,9 +264,11 @@ unsafe fn evenement(fighter: &mut L2CFighterCommon, g: i32) {
             }
         }
     }
-    if g == G_FIN - 25 {
+    if g == G_CANON_FIN {
         let (x, y) = mains(boma);
-        fx_w(boma, "sys_erace_smoke", x + 6.0 * lr, y, 1.4, 0.0, VIOLET_NOIR);
+        fx_w(boma, "sys_erace_smoke", x + 8.0 * lr, y, 1.6, 0.0, VIOLET_NOIR);
+    }
+    if g == G_FIN - 25 {
         canon_montrer(boma, false);
         EN_COURS[e] = false;
         EFFECT_OFF_KIND(fighter, Hash40::new("sys_final_aura"), false, false);

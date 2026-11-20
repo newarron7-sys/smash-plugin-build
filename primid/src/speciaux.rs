@@ -314,6 +314,7 @@ unsafe fn tirs(fighter: &mut L2CFighterCommon) {
     let fin = StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_FINAL && crate::finale::EN_COURS[e];
     if !fin {
         ModelModule::set_mesh_visibility(boma, Hash40::new("pr_canon"), false);
+        ModelModule::set_mesh_visibility(boma, Hash40::new("pr_canon_r"), false);
     }
     let gauche = PostureModule::lr(boma) > 0.0;
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_scope"), scope && gauche);
