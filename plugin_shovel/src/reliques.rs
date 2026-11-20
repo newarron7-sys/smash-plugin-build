@@ -227,7 +227,10 @@ unsafe fn modele(boma: *mut BattleObjectModuleAccessor, e: usize) {
     let lw = (m == hash40("special_lw") || m == hash40("special_air_lw")) && StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_SPECIAL_LW;
     let boit = lw && f >= D_DEB && f < D_DEB + D_LONG;
     let poings = m == hash40("attack_s3_s") || m == hash40("attack_air_f") || m == hash40("attack_air_b");
-    let pelle = !poings && !boit;
+    // side B (REX : pelle cachée, Propeller Dagger dans la main gauche)
+    let dague = m == hash40("special_s1") || m == hash40("special_air_s1") || m == hash40("special_s2") || m == hash40("special_air_s2");
+    vis(boma, "sk_dague", dague);
+    let pelle = !poings && !boit && !dague;
     vis(boma, "shovelbody", !dore);
     vis(boma, "goldbody", dore);
     vis(boma, "shovelr", pelle && !dore);

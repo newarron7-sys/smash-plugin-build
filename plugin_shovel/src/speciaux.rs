@@ -291,28 +291,44 @@ unsafe extern "C" fn s_end(fighter: &mut L2CFighterCommon) -> L2CValue {
 }
 
 // ------------------------------------------------------------------ up B : élan puis piqué
+// v10 (vidéo du joueur : « va beaucoup trop loin », il garde son élan) : trajectoire de REX refaite.
+// REX (SpecialHi, 12 images) : vitesse 0,68 jusqu'à l'image 7, coups 7-9, à l'image 10 élan (+2,25 avant, +5 haut) ;
+// fin de l'animation -> SpecialHi2 (piqué) : -0,1 par image tant que la chute est plus lente que 5 (main), et -0,1 de
+// plus par image dès l'image 25 (GFX) ; dirigeable : +-0,1 jusqu'à 1,1. Gravité de Shovel Knight dans REX : 0,125
+// (vitesse de chute max 2,3) ; vitesse en l'air max 0,95, freinage 0,016 (attributs de REX).
+const H_LANCE: f32 = 10.0;
 const H_VX: f32 = 2.25;
 const H_VY: f32 = 5.0;
+const H_G: f32 = 0.125;
+const H_CHUTE_MAX: f32 = 2.3;
+const H_VX_MAX: f32 = 0.95;
+const H_FREIN_X: f32 = 0.016;
 const H_ACC_PIQUE: f32 = 0.1;
 const H_VY_MIN: f32 = -5.0;
 const H_VX_STICK: f32 = 1.1;
-static mut H_PHASE: [u8; 8] = [0; 8];       // 0 élan, 1 piqué, 2 au sol
+static mut H_PHASE: [u8; 8] = [0; 8];       // 0 départ (avant l'élan), 1 élan, 2 piqué, 3 au sol
 static mut H_V: [(f32, f32); 8] = [(0.0, 0.0); 8];
+static mut H_T: [i32; 8] = [0; 8];
 
 unsafe extern "C" fn hi_main(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
     let e = slot(boma);
     H_PHASE[e] = 0;
+    H_T[e] = 0;
     let m = if sol(boma) { "special_hi_start" } else { "special_air_hi" };
-    StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
-    GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
-    KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_FALL);
-    KineticModule::suspend_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_CONTROL);
-    KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_STOP);
-    H_V[e] = (H_VX, H_VY);
+    if sol(boma) {
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_GROUND_STOP);
+        GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_GROUND_CLIFF_STOP));
+    } else {
+        KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_FALL);
+        GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
+        KineticModule::suspend_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_CONTROL);
+        KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_STOP);
+    }
+    // l'élan d'avant (saut, course) ne compte pas
+    KineticModule::clear_speed_all(boma);
+    H_V[e] = (0.0, 0.0);
     MotionModule::change_motion(boma, Hash40::new(m), 0.0, 1.0, false, 0.0, false, false);
-    EFFECT_FOLLOW(fighter, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 4, 0, -90, 0, 0, 1.0, true);
-    FOOT_EFFECT(fighter, Hash40::new("sys_v_smoke_a"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
     fighter.sub_shift_status_main(L2CValue::Ptr(hi_loop as *const () as _))
 }
 
@@ -320,40 +336,72 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
     let boma = fighter.module_accessor;
     let e = slot(boma);
     let lr = PostureModule::lr(boma);
-    if H_PHASE[e] < 2 {
-        // trajectoire de REX : gravité du perso (+ 0,1 en piqué jusqu'à -5), dirigeable en piqué
-        let g = WorkModule::get_param_float(boma, hash40("air_accel_y"), 0);
+    let f = MotionModule::frame(boma);
+    if H_PHASE[e] == 0 && f >= H_LANCE {
+        // élan de REX
+        H_PHASE[e] = 1;
+        if sol(boma) {
+            StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
+            GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
+            KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_FALL);
+            KineticModule::suspend_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_CONTROL);
+            KineticModule::enable_energy(boma, *FIGHTER_KINETIC_ENERGY_ID_STOP);
+        }
+        H_V[e] = (H_VX.min(H_VX_MAX), H_VY);
+        EFFECT_FOLLOW(fighter, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 4, 0, -90, 0, 0, 1.0, true);
+        FOOT_EFFECT(fighter, Hash40::new("sys_v_smoke_a"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
+    }
+    if H_PHASE[e] == 1 || H_PHASE[e] == 2 {
         let (mut vx, mut vy) = H_V[e];
-        vy -= g;
-        if H_PHASE[e] == 1 {
+        if vy > -H_CHUTE_MAX {
+            vy = (vy - H_G).max(-H_CHUTE_MAX);
+        }
+        let sx = ControlModule::get_stick_x(boma) * lr;
+        if H_PHASE[e] == 2 {
+            H_T[e] += 1;
             if vy > H_VY_MIN {
-                vy = (vy - H_ACC_PIQUE).max(H_VY_MIN);
+                vy -= H_ACC_PIQUE;
             }
-            let sx = ControlModule::get_stick_x(boma) * lr;
+            if H_T[e] >= 25 {
+                vy = (vy - H_ACC_PIQUE).max(-8.0);
+            }
             if sx > 0.3 && vx < H_VX_STICK {
                 vx += 0.1;
             } else if sx < -0.3 && vx > -H_VX_STICK {
                 vx -= 0.1;
             }
         }
+        if !(H_PHASE[e] == 2 && sx.abs() > 0.3) {
+            // freinage en l'air (REX)
+            vx = if vx > 0.0 { (vx - H_FREIN_X).max(0.0) } else { (vx + H_FREIN_X).min(0.0) };
+        }
         H_V[e] = (vx, vy);
         sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY, vy);
+        sv_kinetic_energy!(set_accel, fighter, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY, 0.0);
         sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, vx * lr, 0.0);
+    } else if H_PHASE[e] == 0 && !sol(boma) {
+        // avant l'élan, en l'air : il reste sur place
+        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY, 0.0);
+        sv_kinetic_energy!(set_accel, fighter, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY, 0.0);
+        sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0, 0.0);
     }
     match H_PHASE[e] {
-        0 => {
+        0 | 1 => {
             if MotionModule::is_end(boma) {
-                H_PHASE[e] = 1;
+                H_PHASE[e] = 2;
+                H_T[e] = 0;
                 MotionModule::change_motion(boma, Hash40::new("special_hi"), 0.0, 1.0, false, 0.0, false, false);
             }
         }
-        1 => {
+        2 => {
             if sol(boma) {
-                // atterrissage : onde des deux côtés (SpecialHiLand)
-                H_PHASE[e] = 2;
+                // atterrissage : onde des deux côtés (SpecialHiLand), il s'arrête net
+                H_PHASE[e] = 3;
                 energies_normales(fighter);
                 KineticModule::change_kinetic(boma, *FIGHTER_KINETIC_TYPE_GROUND_STOP);
                 GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_GROUND_CLIFF_STOP));
+                KineticModule::clear_speed_all(boma);
+                sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0, 0.0);
                 AttackModule::clear_all(boma);
                 MotionModule::change_motion(boma, Hash40::new("special_hi_hold"), 0.0, 1.0, false, 0.0, false, false);
                 LANDING_EFFECT(fighter, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 1.1, 0, 0, 0, 0, 0, 0, false);
@@ -364,6 +412,7 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
             }
         }
         _ => {
+            sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0, 0.0);
             if !sol(boma) {
                 fighter.change_status(FIGHTER_STATUS_KIND_FALL.into(), false.into());
             } else if MotionModule::is_end(boma) {
@@ -376,6 +425,11 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
 
 unsafe extern "C" fn hi_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     AttackModule::clear_all(fighter.module_accessor);
+    // gravité du jeu remise (coupée pendant l'élan : trajectoire de REX)
+    let g = WorkModule::get_param_float(fighter.module_accessor, hash40("air_accel_y"), 0);
+    if g > 0.0 {
+        sv_kinetic_energy!(set_accel, fighter, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY, -g);
+    }
     energies_normales(fighter);
     0.into()
 }

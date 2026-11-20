@@ -351,12 +351,26 @@ unsafe fn effet_coup(agent: &mut L2CAgentBase, script: &str) {
             if script == "game_attacklw3" {
                 // Dig Slash : la pelle racle le sol devant lui -> terre soulevée (fumée d'attaque, gerbe verticale,
                 // poussière) au moment du coup, au bout de la pelle
+                // v10 (vidéo du showcase) : grosse gerbe de terre beige projetée vers l'arrière et vers le haut
+                // (REX : effet 0x2140017 à 0.8), éclaboussure blanche au sol devant, traînée de terre le long de la
+                // pelle pendant 7 images (REX : 0x86 sur la pelle, chaque image)
                 aller(agent, d, &mut cur);
                 if is_excute(agent) {
-                    LANDING_EFFECT(agent, Hash40::new("sys_atk_smoke"), Hash40::new("top"), 0, 0, 11, 0, 0, 0, 1.2, 0, 0, 0, 0, 0, 0, false);
-                    LANDING_EFFECT(agent, Hash40::new("sys_v_smoke_a"), Hash40::new("top"), 0, 0, 13, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, false);
-                    FOOT_EFFECT(agent, Hash40::new("sys_dash_smoke"), Hash40::new("top"), 0, 0, 9, 0, 0, 0, 1.1, 0, 0, 0, 0, 0, 0, false);
-                    LAST_EFFECT_SET_COLOR(agent, 0.75, 0.6, 0.45);
+                    LANDING_EFFECT(agent, Hash40::new("sys_h_smoke_b"), Hash40::new("top"), 0, 1, 9, 0, 180, 0, 2.2, 0, 0, 0, 0, 0, 0, false);
+                    LAST_EFFECT_SET_COLOR(agent, 0.95, 0.78, 0.55);
+                    LANDING_EFFECT(agent, Hash40::new("sys_atk_smoke"), Hash40::new("top"), 0, 2, 7, 0, 0, 0, 2.0, 0, 0, 0, 0, 0, 0, false);
+                    LAST_EFFECT_SET_COLOR(agent, 0.95, 0.78, 0.55);
+                    LANDING_EFFECT(agent, Hash40::new("sys_v_smoke_b"), Hash40::new("top"), 0, 0, 10, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, false);
+                    LAST_EFFECT_SET_COLOR(agent, 0.95, 0.8, 0.6);
+                    LANDING_EFFECT(agent, Hash40::new("sys_landing_smoke"), Hash40::new("top"), 0, 0, 11, 0, 0, 0, 1.4, 0, 0, 0, 0, 0, 0, false);
+                    EFFECT_FOLLOW(agent, Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 5, 6, -35, 180, 0, 1.3, true);
+                }
+                for k in 1..7 {
+                    aller(agent, d + k as f32, &mut cur);
+                    if is_excute(agent) {
+                        FOOT_EFFECT(agent, Hash40::new("sys_dash_smoke"), Hash40::new("top"), 0, 0, 10.0 - k as f32, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, false);
+                        LAST_EFFECT_SET_COLOR(agent, 0.9, 0.72, 0.5);
+                    }
                 }
             }
             aller(agent, f + 1.0, &mut cur);
