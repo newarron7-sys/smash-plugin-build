@@ -1,0 +1,10 @@
+[package]
+name = "mlpatch"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hash40 = "1.3.0"
+motion-patch = { git = "https://github.com/blu-dev/motion-patch", version = "0.1.0" }
+motion_list_rs = "1.5.0"
+serde_yaml = "0.9.22"

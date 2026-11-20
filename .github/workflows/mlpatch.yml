@@ -1,0 +1,38 @@
+name: Dark Bowser - motion_list c55 (base + motion_patch HDR v0.50.10, chiffre)
+on:
+  push:
+    branches: [ marioults ]
+    paths: [ '.github/workflows/mlpatch.yml', 'rex/tools/mlpatch/**' ]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Construire l'outil
+        working-directory: rex/tools/mlpatch
+        run: cargo build --release 2>&1 | tail -30
+      - name: Sources (Ult S pour la base Bowser, HDR v0.50.10 pour le patch) et motion_list
+        run: |
+          mkdir -p /tmp/o
+          git clone -q --depth 1 https://github.com/chrispo-git/ult-s /tmp/ults
+          git clone -q --depth 1 -b v0.50.10 https://github.com/HDR-Development/HewDraw-Remix /tmp/hdr
+          T=rex/tools/mlpatch/target/release/mlpatch
+          for p in body breath; do
+            b=/tmp/ults/romfs/fighter/koopa/motion/$p/c00/motion_list.bin
+            [ -f $b ] || { echo "pas de base pour $p"; ls /tmp/ults/romfs/fighter/koopa/motion/; continue; }
+            $T $b /tmp/hdr/romfs/source/fighter/koopa/motion/$p/motion_patch.yaml /tmp/o/${p}_motion_list.bin /tmp/o/${p}_avant.yaml /tmp/o/${p}_apres.yaml 2>&1 | tail -5
+          done
+          ls -la /tmp/o
+      - name: Chiffrer (cle de la session) et publier
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/o . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_mlpatch && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "mlpatch" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_mlpatch
