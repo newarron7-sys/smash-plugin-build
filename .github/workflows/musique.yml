@@ -15,6 +15,7 @@ jobs:
       - name: Cle de ce passage (la publique est publiee, la privee reste ici)
         shell: bash
         run: |
+          RUNNER_TEMP=$(cygpath -u "$RUNNER_TEMP")
           openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$RUNNER_TEMP/p.key" 2>/dev/null
           mkdir -p "$RUNNER_TEMP/c" && openssl pkey -in "$RUNNER_TEMP/p.key" -pubout -out "$RUNNER_TEMP/c/pub.pem"
           echo "$GITHUB_RUN_ID" > "$RUNNER_TEMP/c/run.txt"
@@ -23,6 +24,7 @@ jobs:
       - name: Attendre le fichier audio chiffre (branche entree_musique)
         shell: bash
         run: |
+          RUNNER_TEMP=$(cygpath -u "$RUNNER_TEMP")
           for i in $(seq 1 90); do
             if git fetch -q origin entree_musique 2>/dev/null && [ "$(git show FETCH_HEAD:run.txt 2>/dev/null)" = "$GITHUB_RUN_ID" ]; then break; fi
             sleep 10
@@ -53,6 +55,7 @@ jobs:
       - name: Chiffrer (cle de la session) et publier
         shell: bash
         run: |
+          RUNNER_TEMP=$(cygpath -u "$RUNNER_TEMP")
           mkdir -p "$RUNNER_TEMP/pub"; tar cz -C "$RUNNER_TEMP/o" . > "$RUNNER_TEMP/o.tgz"
           openssl rand 32 > "$RUNNER_TEMP/s.bin"
           openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$RUNNER_TEMP/s.bin" -in "$RUNNER_TEMP/o.tgz" | split -b 90m - "$RUNNER_TEMP/pub/out.session.enc."
