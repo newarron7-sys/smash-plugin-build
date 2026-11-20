@@ -1,3 +1,4 @@
+use smash_script::macros::ATTACK_ABS;
 use super::*;
 
 unsafe extern "C" fn game_specialscatch(agent: &mut L2CAgentBase) {
