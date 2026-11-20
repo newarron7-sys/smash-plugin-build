@@ -1,0 +1,39 @@
+name: Mario Ult S en echo - skin GameBanana 436618 (chiffre)
+on:
+  push:
+    branches: [ marioults ]
+    paths: [ '.github/workflows/gb-bowser.yml' ]
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Telecharger le skin (fichiers du mod, rien n'est affiche)
+        run: |
+          mkdir -p /tmp/o/dl
+          python3 - <<'PY'
+          import json, urllib.request
+          UA = {'User-Agent': 'Mozilla/5.0'}
+          get = lambda u: urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=600).read()
+          p = json.loads(get('https://gamebanana.com/apiv11/Mod/436618/ProfilePage'))
+          info = {'nom': p.get('_sName'), 'desc': p.get('_sText') or p.get('_sDescription'), 'fichiers': []}
+          for f in p.get('_aFiles') or []:
+              open('/tmp/o/dl/' + f['_sFile'], 'wb').write(get(f['_sDownloadUrl']))
+              info['fichiers'].append([f['_sFile'], f.get('_nFilesize'), f.get('_sDescription')])
+          json.dump(info, open('/tmp/o/info.json', 'w'), indent=1)
+          print(len(info['fichiers']), 'fichier(s)')
+          PY
+          cd /tmp/o && for f in dl/*; do 7z l "$f" > "liste_$(basename "$f").txt" 2>&1 || true; 7z x -y -o/tmp/o/x "$f" >/dev/null 2>&1 || true; done
+          rm -rf /tmp/o/dl; find /tmp/o/x -type f | wc -l
+      - name: Chiffrer (cle de la session) et publier
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/o . > /tmp/o.tgz
+          openssl rand 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_skin_bowser && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "dark bowser"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_skin_bowser
