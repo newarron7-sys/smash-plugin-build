@@ -46,8 +46,7 @@ unsafe extern "C" fn effect_end(agent: &mut L2CAgentBase) {
 }
 
 pub fn install(agent: &mut Agent) {
-    agent.acmd("game_max", game_max, Priority::Low);
-    agent.acmd("effect_max", effect_max, Priority::Low);
+    // game_max / effect_max : faits dans status.rs (motion « max » absent du slot c55)
 
     agent.acmd("game_end", game_end, Priority::Low);
     agent.acmd("effect_end", effect_end, Priority::Low);

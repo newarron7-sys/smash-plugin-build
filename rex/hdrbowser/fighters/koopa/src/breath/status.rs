@@ -30,6 +30,11 @@ unsafe extern "C" fn breath_move_main(weapon: &mut L2CWeaponCommon) -> L2CValue 
         sv_kinetic_energy!(set_stable_speed, weapon, WEAPON_KINETIC_ENERGY_RESERVE_ID_NORMAL, -1.0, -1.0);
         sv_kinetic_energy!(set_accel, weapon, WEAPON_KINETIC_ENERGY_RESERVE_ID_NORMAL, 0.0, 0.0);
         
+        // Dark Bowser (c55) : la boule de feu ne dépend plus du motion « max » (absent du motion_list
+        // du slot c55) : hitbox et effets posés ici au lieu de game_max / effect_max.
+        boule_attaque(weapon, 18.0, 4.5);
+        boule_effets(weapon);
+
         weapon.global_table[SUB_STATUS].assign(&L2CValue::Ptr(breath_move_max_substatus as *const () as _));
         weapon.fastshift(L2CValue::Ptr(breath_move_max_main_loop as *const () as _));
     }
@@ -45,7 +50,28 @@ unsafe extern "C" fn breath_move_max_substatus(weapon: &mut L2CWeaponCommon, par
     0.into()
 }
 
+unsafe fn boule_attaque(weapon: &mut L2CWeaponCommon, degats: f32, taille: f32) {
+    ATTACK(weapon, 0, 0, Hash40::new("top"), degats, 361, 72, 0, 50, taille, 0.0, 0.0, 0.0, None, None, None, 1.0, 1.0, *ATTACK_SETOFF_KIND_OFF, *ATTACK_LR_CHECK_SPEED, false, 10, 0.0, 0, true, true, false, false, false, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_NO_FLOOR, *COLLISION_PART_MASK_ALL, false, Hash40::new("collision_attr_fire"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_NONE);
+    AttackModule::enable_safe_pos(weapon.module_accessor);
+}
+
+unsafe fn boule_effets(weapon: &mut L2CWeaponCommon) {
+    EFFECT_FOLLOW(weapon, Hash40::new("sys_damage_fire_fly"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.9, true);
+    EFFECT_FOLLOW(weapon, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 1.0, true);
+}
+
 unsafe extern "C" fn breath_move_max_main_loop(weapon: &mut L2CWeaponCommon) -> L2CValue {
+    // temps écoulé depuis le tir (la vie baisse d'1 par frame)
+    let ecoule = WorkModule::get_int(weapon.module_accessor, *WEAPON_INSTANCE_WORK_ID_INT_INIT_LIFE)
+        - WorkModule::get_int(weapon.module_accessor, *WEAPON_INSTANCE_WORK_ID_INT_LIFE);
+    if ecoule == 10 {
+        boule_attaque(weapon, 15.0, 4.0);
+    }
+    if ecoule > 0 && ecoule % 30 == 0 {
+        boule_effets(weapon);
+    } else if ecoule > 0 && ecoule % 15 == 0 {
+        EFFECT_FOLLOW(weapon, Hash40::new("sys_damage_fire_fly"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.9, true);
+    }
     if AttackModule::is_infliction(weapon.module_accessor, *COLLISION_KIND_MASK_HIT) {
         let param_hit_decrease = WorkModule::get_int(weapon.module_accessor, *WEAPON_KOOPA_BREATH_INSTANCE_WORK_ID_INT_HIT_FRAME);
         WorkModule::sub_int(weapon.module_accessor, param_hit_decrease, *WEAPON_INSTANCE_WORK_ID_INT_LIFE);
