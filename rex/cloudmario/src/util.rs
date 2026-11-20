@@ -51,19 +51,9 @@ pub unsafe fn bloquer_sideb(boma: *mut BattleObjectModuleAccessor) {
 }
 
 // ------------------------------------------------------------------ jump_speed_x_mul 1,2 (comme Ultimate S)
-#[skyline::hook(replace = smash::app::lua_bind::WorkModule::get_param_float)]
-pub unsafe fn get_param_float_hook(boma: &mut BattleObjectModuleAccessor, param_type: u64, param_hash: u64) -> f32 {
-    if param_hash == 0
-        && param_type == smash::hash40("jump_speed_x_mul")
-        && smash::app::utility::get_category(boma) == *BATTLE_OBJECT_CATEGORY_FIGHTER
-        && smash::app::utility::get_kind(boma) == *FIGHTER_KIND_MARIO
-        && WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_COLOR) as usize == SLOT
-    {
-        return 1.2;
-    }
-    original!()(boma, param_type, param_hash)
-}
-
+// v7 : un hook de WorkModule::get_param_float faisait planter le jeu au début de chaque match (journal du 20/11 :
+// libparam_config hooke déjà cette fonction, plantage dans son hook). Comme Ultimate S, on passe par
+// libparam_config lui-même (déjà installé chez lui), limité au slot 120.
 pub fn install() {
-    skyline::install_hooks!(get_param_float_hook);
+    param_config::update_float_2(*FIGHTER_KIND_MARIO, vec![SLOT as i32], (smash::hash40("jump_speed_x_mul"), 0, 1.2));
 }

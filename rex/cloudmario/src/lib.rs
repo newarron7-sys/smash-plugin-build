@@ -4,7 +4,7 @@
 //! - get_marked_costumes : toujours [120] (Ultimate S lit des fichiers .marker) ;
 //! - VariableModule : variables par combattant ;
 //! - transition_set / transition_reset (side B une fois par saut) : interdit le side B en l'air chaque image ;
-//! - param_cache (jump_speed_x_mul 1,2) : hook de WorkModule::get_param_float limité au slot 120.
+//! - param_cache (jump_speed_x_mul 1,2) : via libparam_config (comme Ultimate S), limité au slot 120.
 #![allow(unused, non_snake_case, non_upper_case_globals, static_mut_refs, unused_unsafe, unused_must_use)]
 #![feature(proc_macro_hygiene)]
 
