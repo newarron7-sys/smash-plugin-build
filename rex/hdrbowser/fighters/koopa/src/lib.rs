@@ -46,6 +46,20 @@ use smashline::*;
 
 pub const MAX_COOLDOWN : i32 = 900;
 
+// Dark Bowser : animations à la vitesse normale. HDR accélère beaucoup de coups (FT_MOTION_RATE < 1) :
+// ces accélérations sont annulées, les ralentissements d'HDR sont gardés.
+pub unsafe fn ralenti(agent: &mut L2CAgentBase, rate: f32) {
+    smash_script::macros::FT_MOTION_RATE(agent, rate.max(1.0));
+}
+pub unsafe fn ralenti_range(agent: &mut L2CAgentBase, debut: f32, fin: f32, frames: f32) {
+    if frames >= fin - debut {
+        smash_script::macros::FT_MOTION_RATE_RANGE(agent, debut, fin, frames);
+    } else {
+        smash_script::macros::FT_MOTION_RATE(agent, 1.0);
+    }
+}
+
+
 pub fn install() {
     let agent = &mut Agent::new("koopa");
     agent.set_costume(vec![55]);

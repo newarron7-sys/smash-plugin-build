@@ -53,7 +53,7 @@ unsafe extern "C" fn game_specialscatch(agent: &mut L2CAgentBase) {
         AttackModule::clear_all(boma);
     }
     frame(lua_state, 25.0);
-    FT_MOTION_RATE_RANGE(agent, 25.0, 60.0, 23.0);
+    crate::ralenti_range(agent, 25.0, 60.0, 23.0);
     frame(lua_state, 39.0); // f35
     if is_excute(agent) {
         notify_event_msc_cmd!(agent, Hash40::new_raw(0x2127e37c07), *GROUND_CLIFF_CHECK_KIND_ON_DROP);
@@ -62,7 +62,7 @@ unsafe extern "C" fn game_specialscatch(agent: &mut L2CAgentBase) {
         }
     }
     frame(lua_state, 60.0);
-    FT_MOTION_RATE(agent, 1.0);
+    crate::ralenti(agent, 1.0);
 }
 
 unsafe extern "C" fn effect_specialscatch(agent: &mut L2CAgentBase) {
@@ -139,9 +139,9 @@ unsafe extern "C" fn game_specialssquat(agent: &mut L2CAgentBase) {
         ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, 5.0, 70, 30, 0, 60, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true, Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_BODY);
     }
     frame(lua_state, 1.0);
-    FT_MOTION_RATE_RANGE(agent, 1.0, 16.0, 10.0);
+    crate::ralenti_range(agent, 1.0, 16.0, 10.0);
     frame(lua_state, 16.0);
-    FT_MOTION_RATE(agent, 1.0);
+    crate::ralenti(agent, 1.0);
 }
 
 unsafe extern "C" fn effect_specialssquat(agent: &mut L2CAgentBase) {
@@ -158,9 +158,9 @@ unsafe extern "C" fn game_specialsthrowf(agent: &mut L2CAgentBase) {
         ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, 3.0, 361, 100, 0, 40, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true, Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
     }
     frame(lua_state, 4.0);
-    FT_MOTION_RATE_RANGE(agent, 4.0, 14.0, 8.0);
+    crate::ralenti_range(agent, 4.0, 14.0, 8.0);
     frame(lua_state, 14.0);
-    FT_MOTION_RATE(agent, 1.0);
+    crate::ralenti(agent, 1.0);
     frame(lua_state, 19.0);
     if is_excute(agent) {
         WorkModule::on_flag(boma, *FIGHTER_KOOPA_STATUS_SPECIAL_S_FLAG_HIT);
@@ -215,9 +215,9 @@ unsafe extern "C" fn game_specialsthrowb(agent: &mut L2CAgentBase) {
         ATTACK_ABS(agent, *FIGHTER_ATTACK_ABSOLUTE_KIND_CATCH, 0, 3.0, 361, 100, 0, 40, 0.0, 1.0, *ATTACK_LR_CHECK_F, 0.0, true, Hash40::new("collision_attr_normal"), *ATTACK_SOUND_LEVEL_S, *COLLISION_SOUND_ATTR_NONE, *ATTACK_REGION_THROW);
     }
     frame(lua_state, 1.0);
-    FT_MOTION_RATE_RANGE(agent, 1.0, 11.0, 5.0);
+    crate::ralenti_range(agent, 1.0, 11.0, 5.0);
     frame(lua_state, 11.0);
-    FT_MOTION_RATE(agent, 1.0);
+    crate::ralenti(agent, 1.0);
     frame(lua_state, 18.0);
     if is_excute(agent) {
         WorkModule::on_flag(boma, *FIGHTER_INSTANCE_WORK_ID_FLAG_REVERSE_LR_FINISH_CAMERA_THROW_ORBIT);
@@ -293,11 +293,11 @@ unsafe extern "C" fn game_specialslanding(agent: &mut L2CAgentBase) {
         WorkModule::on_flag(boma, *FIGHTER_KOOPA_STATUS_SPECIAL_S_FLAG_HIT);
     }
     frame(lua_state, 10.0);
-    FT_MOTION_RATE_RANGE(agent, 10.0, 14.0, 8.0);
+    crate::ralenti_range(agent, 10.0, 14.0, 8.0);
     frame(lua_state, 14.0);
-    FT_MOTION_RATE_RANGE(agent, 14.0, 26.0, 16.0);
+    crate::ralenti_range(agent, 14.0, 26.0, 16.0);
     frame(lua_state, 26.0);
-    FT_MOTION_RATE(agent, 1.0)
+    crate::ralenti(agent, 1.0)
 }
 
 unsafe extern "C" fn effect_specialslanding(agent: &mut L2CAgentBase) {

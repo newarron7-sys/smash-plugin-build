@@ -14,16 +14,16 @@ unsafe extern "C" fn breath_move_main(weapon: &mut L2CWeaponCommon) -> L2CValue 
         PostureModule::set_scale(weapon.module_accessor, 1.0, false);
 
         MotionModule::change_motion(weapon.module_accessor, Hash40::new("max"), 0.0, 1.0, false, 0.0, false, false);
-        let param_life = WorkModule::get_param_float(weapon.module_accessor, hash40("param_breath"), hash40("life")) as i32;
+        let param_life = 60; // valeur HDR (vl.prcxml) : les params du jeu de base font disparaître la boule tout de suite
         WorkModule::set_int(weapon.module_accessor, param_life, *WEAPON_INSTANCE_WORK_ID_INT_LIFE);
         WorkModule::set_int(weapon.module_accessor, param_life, *WEAPON_INSTANCE_WORK_ID_INT_INIT_LIFE);
         
-        let param_hit_decrease = WorkModule::get_param_float(weapon.module_accessor, hash40("param_breath"), hash40("hit_frames")) as i32;
+        let param_hit_decrease = 60; // valeur HDR
         WorkModule::set_int(weapon.module_accessor, param_hit_decrease, *WEAPON_KOOPA_BREATH_INSTANCE_WORK_ID_INT_HIT_FRAME);
 
         KineticModule::enable_energy(weapon.module_accessor, *WEAPON_KINETIC_ENERGY_RESERVE_ID_NORMAL);
         let lr = PostureModule::lr(weapon.module_accessor);
-        let param_speed =  WorkModule::get_param_float(weapon.module_accessor, hash40("param_breath"), hash40("max_speed"));
+        let param_speed = 4.0f32; // valeur HDR
         WorkModule::set_float(weapon.module_accessor, param_speed, *WEAPON_KOOPA_BREATH_INSTANCE_WORK_ID_FLOAT_SPEED_MUL);
         
         sv_kinetic_energy!(set_speed, weapon, WEAPON_KINETIC_ENERGY_RESERVE_ID_NORMAL, param_speed * lr, 0.0);

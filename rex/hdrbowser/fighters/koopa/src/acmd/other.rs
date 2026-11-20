@@ -106,12 +106,12 @@ unsafe extern "C" fn game_passivestand(agent: &mut L2CAgentBase) {
     let boma = agent.boma();
     frame(lua_state, 1.0);
     sv_kinetic_energy!(set_speed_mul, agent, FIGHTER_KINETIC_ENERGY_ID_MOTION, 1.2);
-    FT_MOTION_RATE_RANGE(agent, 1.0, 24.0, 20.0);
+    crate::ralenti_range(agent, 1.0, 24.0, 20.0);
     frame(lua_state, 24.0);
     sv_kinetic_energy!(set_speed_mul, agent, FIGHTER_KINETIC_ENERGY_ID_MOTION, 1.0);
-    FT_MOTION_RATE_RANGE(agent, 24.0, 41.0, 20.0);
+    crate::ralenti_range(agent, 24.0, 41.0, 20.0);
     frame(lua_state, 41.0);
-    FT_MOTION_RATE(agent, 1.0);
+    crate::ralenti(agent, 1.0);
 }
 
 pub fn install(agent: &mut Agent) {
