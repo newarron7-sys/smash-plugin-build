@@ -1,0 +1,62 @@
+name: Mario - recherche d'une banque se_mario nus3bank (GameBanana, chiffre)
+on:
+  push:
+    branches: [ marioults ]
+    paths: [ '.github/workflows/gb-son-mario.yml' ]
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Chercher et extraire se_mario*.nus3bank
+        run: |
+          mkdir -p /tmp/o/bank
+          python3 - <<'PY'
+          import json, os, re, subprocess, urllib.parse, urllib.request
+          UA = {'User-Agent': 'Mozilla/5.0'}
+          get = lambda u, t=120: urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=t).read()
+          vus, cand = set(), []
+          for q in ['Mario sound', 'Mario voice', 'Mario SFX', 'Mario voice pack', 'Mario sounds slot', 'Mario reslot sound']:
+              for page in (1, 2):
+                  u = 'https://gamebanana.com/apiv11/Util/Search/Results?_sModelName=Mod&_sOrder=best_match&_idGameRow=6498&_sSearchString=%s&_nPage=%d&_nPerpage=50' % (urllib.parse.quote(q), page)
+                  try: res = json.loads(get(u)).get('_aRecords', [])
+                  except Exception as e: print('ERR', e); break
+                  for m in res:
+                      i = m['_idRow']
+                      if i in vus: continue
+                      vus.add(i)
+                      if 'mario' in m.get('_sName', '').lower(): cand.append((i, m.get('_sName')))
+          print(len(cand), 'candidats')
+          trouve = False
+          for i, nom in cand[:60]:
+              try: p = json.loads(get('https://gamebanana.com/apiv11/Mod/%d/ProfilePage' % i))
+              except Exception as e: print('ERRF', i, e); continue
+              for f in p.get('_aFiles') or []:
+                  if (f.get('_nFilesize') or 0) > 80e6: continue
+                  path = '/tmp/dl_' + re.sub(r'[^A-Za-z0-9._-]', '_', f['_sFile'])
+                  try: open(path, 'wb').write(get(f['_sDownloadUrl'], 600))
+                  except Exception as e: print('ERRD', e); continue
+                  l = subprocess.run(['7z', 'l', '-ba', path], capture_output=True, text=True).stdout
+                  banks = [x.split()[-1] for x in l.splitlines() if re.search(r'se_mario(_c\d+)?\.nus3bank', x)]
+                  print('MOD', i, nom, '|', f['_sFile'], '| banques :', banks[:5])
+                  if banks:
+                      subprocess.run(['7z', 'e', '-y', '-o/tmp/o/bank/%d' % i, path, '*se_mario*.nus3bank', '-r'], capture_output=True)
+                      json.dump({'mod': i, 'nom': nom, 'fichier': f['_sFile'], 'banques': banks}, open('/tmp/o/bank/%d/info.json' % i, 'w'))
+                      trouve = True
+                  os.remove(path)
+                  if trouve: break
+              if trouve: break
+          print('TROUVE' if trouve else 'RIEN')
+          PY
+          find /tmp/o -type f | head
+      - name: Chiffrer (cle de la session) et publier
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/o . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_son_mario && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "son mario" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_son_mario
