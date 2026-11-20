@@ -19,7 +19,7 @@ jobs:
           UA = {'User-Agent': 'Mozilla/5.0'}
           get = lambda u, t=120: urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=t).read()
           vus, cand = set(), []
-          for q in ['Mario sound', 'Mario voice', 'Mario SFX', 'Mario voice pack', 'Mario sounds slot', 'Mario reslot sound']:
+          for q in ['Mario voice', 'Mario sfx', 'Mario sounds', 'Mario voice clips', 'Mario one slot sound', 'Mario voice c08', 'Mario audio', 'Mario moveset sound']:
               for page in (1, 2):
                   u = 'https://gamebanana.com/apiv11/Util/Search/Results?_sModelName=Mod&_sOrder=best_match&_idGameRow=6498&_sSearchString=%s&_nPage=%d&_nPerpage=50' % (urllib.parse.quote(q), page)
                   try: res = json.loads(get(u)).get('_aRecords', [])
@@ -28,10 +28,12 @@ jobs:
                       i = m['_idRow']
                       if i in vus: continue
                       vus.add(i)
-                      if 'mario' in m.get('_sName', '').lower(): cand.append((i, m.get('_sName')))
+                      nom = m.get('_sName', '').lower(); cat = ((m.get('_aRootCategory') or {}).get('_sName') or '').lower()
+                      if 'mario' in nom and 'dr' not in nom.split() and any(w in cat + ' ' + nom for w in ('sound', 'audio', 'voice', 'sfx', 'moveset')):
+                          cand.append((i, m.get('_sName')))
           print(len(cand), 'candidats')
           trouve = False
-          for i, nom in cand[:60]:
+          for i, nom in cand[:45]:
               try: p = json.loads(get('https://gamebanana.com/apiv11/Mod/%d/ProfilePage' % i))
               except Exception as e: print('ERRF', i, e); continue
               for f in p.get('_aFiles') or []:
