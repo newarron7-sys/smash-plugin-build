@@ -1,0 +1,53 @@
+name: Cloud Mario - moveset Mario d'Ultimate S sur c120 (plugin)
+on:
+  push:
+    branches: [ metalsonic ]
+    paths: [ '.github/workflows/cloudmario.yml', 'rex/cloudmario/**' ]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: cloudmario
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache outils (cargo-skyline, toolchain Switch)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-skyline
+            ~/.cargo/skyline
+            ~/.rustup/toolchains/*skyline*
+            ~/.cargo/registry
+            ~/.cargo/git
+            rex/cloudmario/target
+          key: cloudmario-v1-${{ hashFiles('rex/cloudmario/Cargo.toml') }}
+          restore-keys: |
+            kjoe-
+            metal-
+      - name: Compiler le plugin
+        working-directory: rex/cloudmario
+        timeout-minutes: 40
+        run: |
+          mkdir -p /tmp/out
+          command -v cargo-skyline >/dev/null || cargo install cargo-skyline
+          if ! (rustup toolchain list | grep -qi skyline && [ -d ~/.cargo/skyline/toolchain ]); then for i in 1 2 3 4 5; do cargo skyline update-std && break; sleep 20; done; fi
+          set +o pipefail; yes | cargo skyline build --release > /tmp/out/compilation.txt 2>&1; set -o pipefail
+          sed 's/\x1b\[[0-9;]*m//g' /tmp/out/compilation.txt | grep -E -A8 "^error" | head -80 || true
+          cp target/aarch64-skyline-switch/release/libcloud_mario_ults.nro /tmp/out/plugin.nro
+      - name: Publier (chiffre, cle de la session)
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_cloudmario && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "cloud mario sortie" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_cloudmario

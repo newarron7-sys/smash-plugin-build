@@ -1,0 +1,30 @@
+mod status;
+mod frame;
+mod acmd;
+use crate::util::*;
+use smash::lib::lua_const::*;
+use smash::hash40;
+
+static FIGHTER_MARIO_INSTANCE_WORK_ID_FLAG_SIDEB : i32 = 0;
+static FIGHTER_MARIO_INSTANCE_WORK_ID_FLAG_SPIN : i32 = 1;
+static FIGHTER_MARIO_INSTANCE_WORK_ID_INT_SPIN_EFF : i32 = 2;
+static FIGHTER_MARIO_INSTANCE_WORK_ID_INT_RUNLOOPCOUNT : i32 = 3;
+static mut SPIN1 :  smash::phx::Vector3f =  smash::phx::Vector3f { x: 0.0, y: 8.25, z: 0.0 };
+static mut SPIN2 :  smash::phx::Vector3f =  smash::phx::Vector3f { x: 0.0, y: 8.2, z: 0.0 };
+static mut SPIN3 :  smash::phx::Vector3f =  smash::phx::Vector3f { x: 0.0, y: 8.15, z: 0.0 };
+static mut SPIN4 :  smash::phx::Vector3f =  smash::phx::Vector3f { x: 0.0, y: 8.3, z: 0.0 };
+static mut SPIN5 :  smash::phx::Vector3f =  smash::phx::Vector3f { x: 0.0, y: 8.1, z: 0.0 };
+static mut STAR1 :  smash::phx::Vector3f =  smash::phx::Vector3f { x: 0.0, y: 8.25, z: 0.0 };
+static mut STAR2 :  smash::phx::Vector3f =  smash::phx::Vector3f { x: 0.0, y: 8.25, z: 9.0 };
+static mut STAR3 :  smash::phx::Vector3f =  smash::phx::Vector3f { x: 0.0, y: 8.25, z: -9.0 };
+static mut STAR4 :  smash::phx::Vector3f =  smash::phx::Vector3f { x: 0.0, y: 8.25, z: 4.5 };
+static mut STAR5 :  smash::phx::Vector3f =  smash::phx::Vector3f { x: 0.0, y: 8.25, z: -4.5 };
+static mut NOSPIN :  smash::phx::Vector3f =  smash::phx::Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+
+pub fn install() {
+	frame::install();
+	status::install();
+	acmd::install();
+
+	// saut horizontal x1,2 (param_cache d'Ultimate S) : hook de get_param_float dans util.rs
+}
