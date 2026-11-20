@@ -96,6 +96,7 @@ mod prises;
 mod invoc;
 mod coups;
 mod speciaux;
+mod finale;
 
 /// perso de base (nom interne) : Mario
 pub const BASE: &str = "mario";
@@ -205,6 +206,7 @@ macro_rules! scripts {
             invoc::install(&mut a);
             coups::install(&mut a);
             speciaux::install(&mut a);
+            finale::install(&mut a);
             a.on_line(Main, primid_frame);
             a.install();
         }

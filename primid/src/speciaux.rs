@@ -309,7 +309,9 @@ unsafe fn tir_montrer(boma: *mut BattleObjectModuleAccessor, quel: u8, inverse: 
 unsafe fn tirs(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let e = e_of(boma);
-    let scope = StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_SPECIAL_N;
+    // Final Smash : le Super Scope agrandi sert de Dark Cannon (finale.rs)
+    let scope = StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_SPECIAL_N
+        || (StatusModule::status_kind(boma) == *FIGHTER_STATUS_KIND_FINAL && crate::finale::EN_COURS[e]);
     let gauche = PostureModule::lr(boma) > 0.0;
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_scope"), scope && gauche);
     ModelModule::set_mesh_visibility(boma, Hash40::new("pr_scope_r"), scope && !gauche);
