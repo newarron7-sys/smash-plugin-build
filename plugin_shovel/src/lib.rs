@@ -107,7 +107,7 @@ pub(crate) fn find(script: &str) -> Option<&'static Mv> {
     MOVES.iter().find(|m| m.script == s)
 }
 
-fn son(attr: &str) -> i32 {
+pub(crate) fn son(attr: &str) -> i32 {
     unsafe {
         match attr {
             "collision_attr_elec" | "collision_attr_paralyze" => *COLLISION_SOUND_ATTR_ELEC,
@@ -399,11 +399,17 @@ mod avance;
 mod poings;
 mod speciaux;
 mod prises;
+mod reliques;
 
 unsafe extern "C" fn sk_frame(fighter: &mut L2CFighterCommon) {
     avance::suivre_animation(fighter);
     poings::dust_knuckles(fighter);
+    reliques::image(fighter);
 }
+
+/// smash bas : début de la retombée (AttackLw4Start 4 + AttackLw4 23) ; bas aérien : fin du début (AttackAirLwStart 45)
+pub(crate) const LW42_DEBUT: f32 = 27.0;
+pub(crate) const AIRLW_DEBUT: f32 = 45.0;
 
 macro_rules! scripts {
     ($($f:ident, $ef:ident, $sf:ident => $s:literal, $e:literal, $snd:literal, $se:literal),* $(,)?) => {
@@ -420,6 +426,7 @@ macro_rules! scripts {
             } )*
             speciaux::install(&mut a);
             prises::install(&mut a);
+            reliques::install(&mut a);
             a.on_line(Main, sk_frame);
             a.install();
         }
