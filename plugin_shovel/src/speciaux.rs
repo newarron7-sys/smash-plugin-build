@@ -240,6 +240,14 @@ unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
                 AttackModule::clear_all(boma);
                 AFTER_IMAGE_OFF(fighter, 3);
                 MotionModule::set_frame(boma, S_TOUCHE, true);
+                // v11 (vidéo : fin bizarre, il glissait au sol à travers l'adversaire) : REX rebondit en l'air
+                // (action 0x119 : 0E000100 0x32), SpecialSHit monte de 18 en avançant de 31 : il quitte le sol
+                if sol(boma) {
+                    StatusModule::set_situation_kind(boma, SituationKind(*SITUATION_KIND_AIR), true);
+                    GroundModule::correct(boma, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
+                    MotionModule::change_motion_inherit_frame(boma, Hash40::new("special_air_s2"), -1.0, 1.0, 0.0, false, false);
+                }
+                physique_plugin(fighter);
             } else if S_COMPTEUR[e] < 0 {
                 S_PHASE[e] = 3;
                 AttackModule::clear_all(boma);
@@ -259,14 +267,24 @@ unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
             }
         }
         2 => {
-            suivre_situation(fighter, "special_s2", "special_air_s2");
-            if let Some((_, tz, _)) = crate::AVANCE_AIR.iter().find(|(n, _, _)| *n == "sk_s_hit") {
-                let g = (f - S_TOUCHE).max(0.0);
-                let d = table(tz, g) - table(tz, S_PREC[e]);
+            // rebond de REX (avancée + hauteur de SpecialSHit), sans gravité ; au sol en redescendant : fin
+            let g = (f - S_TOUCHE).max(0.0);
+            if let Some((_, tz, ty)) = crate::AVANCE_AIR.iter().find(|(n, _, _)| *n == "sk_s_hit") {
+                let dz = table(tz, g) - table(tz, S_PREC[e]);
+                let dy = table(ty, g) - table(ty, S_PREC[e]);
                 S_PREC[e] = g;
-                avancer(fighter, d);
+                let lr = PostureModule::lr(boma);
+                sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0, 0.0);
+                KineticModule::clear_speed_all(boma);
+                PostureModule::add_pos(boma, &Vector3f { x: dz * lr, y: dy, z: 0.0 });
+                if sol(boma) && g > 20.0 {
+                    energies_normales(fighter);
+                    fighter.change_status(FIGHTER_STATUS_KIND_LANDING.into(), false.into());
+                    return 0.into();
+                }
             }
             if f >= S_FIN - 1.0 {
+                energies_normales(fighter);
                 finir_sol_air(fighter);
             }
         }
