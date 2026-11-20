@@ -57,7 +57,7 @@ jobs:
         run: |
           RUNNER_TEMP=$(cygpath -m "$RUNNER_TEMP"); U=$(cygpath -u "$RUNNER_TEMP")
           mkdir -p "$U/pub"; tar cz -C "$U/o" . > "$U/o.tgz"
-          openssl rand 32 > "$RUNNER_TEMP/s.bin"
+          openssl rand -hex 32 > "$RUNNER_TEMP/s.bin"
           openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$RUNNER_TEMP/s.bin" -in "$RUNNER_TEMP/o.tgz" | split -b 90m - "$U/pub/out.session.enc."
           openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in "$RUNNER_TEMP/s.bin" -out "$RUNNER_TEMP/pub/k.session.enc"; rm -f "$RUNNER_TEMP/s.bin"
           cd "$U/pub" && git init -q -b sortie_musique && git config user.name gha && git config user.email gha@users.noreply.github.com
