@@ -188,6 +188,7 @@ unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
                 MotionModule::change_motion_inherit_frame(boma, Hash40::new(m), -1.0, 1.0, 0.0, false, false);
             }
             let tenu = ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_SPECIAL);
+            helice(fighter, f);
             if f >= S_CHARGE_DEBUT {
                 if tenu {
                     if S_COMPTEUR[e] < S_COMPTEUR_MAX {
@@ -218,6 +219,7 @@ unsafe extern "C" fn s_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         }
         1 => {
             suivre_situation(fighter, "special_s2", "special_air_s2");
+            helice(fighter, f);
             if f >= S_BOUCLE {
                 avancer(fighter, S_VITESSE);
                 s_coup(fighter);
@@ -288,6 +290,17 @@ unsafe extern "C" fn s_end(fighter: &mut L2CFighterCommon) -> L2CValue {
     AFTER_IMAGE_OFF(fighter, 3);
     energies_normales(fighter);
     0.into()
+}
+
+/// hélice de la Propeller Dagger (REX : effet 0x24, anneaux de plus en plus petits le long de la dague, toutes les 3
+/// images) : la dague est le long de X de l'os havel (dague_shovel.py : C . Y de LHaveN = X de HaveL)
+unsafe fn helice(fighter: &mut L2CFighterCommon, f: f32) {
+    if (f as i32) % 3 == 0 {
+        for (x, t) in [(4.0f32, 0.4f32), (6.0f32, 0.25f32), (8.0f32, 0.2f32)] {
+            EFFECT_FOLLOW(fighter, Hash40::new("sys_spin_wind"), Hash40::new("havel"), x, 0, 0, 0, 0, 90, t, true);
+            LAST_EFFECT_SET_RATE(fighter, 2.0);
+        }
+    }
 }
 
 // ------------------------------------------------------------------ up B : élan puis piqué
