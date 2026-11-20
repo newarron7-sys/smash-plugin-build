@@ -398,6 +398,7 @@ unsafe fn son_coup(agent: &mut L2CAgentBase, script: &str, se: &str) {
 mod avance;
 mod poings;
 mod speciaux;
+mod prises;
 
 unsafe extern "C" fn sk_frame(fighter: &mut L2CFighterCommon) {
     avance::suivre_animation(fighter);
@@ -418,6 +419,7 @@ macro_rules! scripts {
                 a.acmd($snd, $sf, Priority::Low);
             } )*
             speciaux::install(&mut a);
+            prises::install(&mut a);
             a.on_line(Main, sk_frame);
             a.install();
         }
