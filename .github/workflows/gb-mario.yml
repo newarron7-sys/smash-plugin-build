@@ -26,7 +26,8 @@ jobs:
           json.dump(info, open('/tmp/o/info.json', 'w'), indent=1)
           print(len(info['fichiers']), 'fichier(s)')
           PY
-          cd /tmp/o && for f in dl/*; do 7z l "$f" > "liste_$(basename "$f").txt" 2>&1 || true; done
+          cd /tmp/o && for f in dl/*; do 7z l "$f" > "liste_$(basename "$f").txt" 2>&1 || true; 7z x -y -o/tmp/o/x "$f" >/dev/null 2>&1 || true; done
+          rm -rf /tmp/o/dl; find /tmp/o/x -type f | wc -l
       - name: Chiffrer (cle de la session) et publier
         run: |
           mkdir -p /tmp/pub; tar cz -C /tmp/o . > /tmp/o.tgz
