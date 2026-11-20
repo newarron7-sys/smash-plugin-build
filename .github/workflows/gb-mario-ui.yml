@@ -35,6 +35,7 @@ jobs:
           PY
           for f in /tmp/dl/*; do 7z x -y -o/tmp/x "$f" >/dev/null; done
           for n in 1 2 3 4; do f=$(find /tmp/x -name "chara_${n}_mario_*.bntx" | head -1); ultimate_tex_cli "$f" /tmp/o/png_src/chara_$n.png && echo "chara_$n ok"; done
+          pip install -q pillow
           python3 rex/tools/ui_manquantes.py /tmp/o/png_src cloudmario /tmp/o
       - name: Chiffrer (cle de la session) et publier
         run: |
