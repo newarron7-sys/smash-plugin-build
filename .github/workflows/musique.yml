@@ -15,24 +15,24 @@ jobs:
       - name: Cle de ce passage (la publique est publiee, la privee reste ici)
         shell: bash
         run: |
-          RUNNER_TEMP=$(cygpath -u "$RUNNER_TEMP")
+          RUNNER_TEMP=$(cygpath -m "$RUNNER_TEMP"); U=$(cygpath -u "$RUNNER_TEMP")
           openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$RUNNER_TEMP/p.key" 2>/dev/null
-          mkdir -p "$RUNNER_TEMP/c" && openssl pkey -in "$RUNNER_TEMP/p.key" -pubout -out "$RUNNER_TEMP/c/pub.pem"
+          mkdir -p "$U/c" && openssl pkey -in "$RUNNER_TEMP/p.key" -pubout -out "$RUNNER_TEMP/c/pub.pem"
           echo "$GITHUB_RUN_ID" > "$RUNNER_TEMP/c/run.txt"
-          cd "$RUNNER_TEMP/c" && git init -q -b cle_musique && git config user.name gha && git config user.email gha@users.noreply.github.com
+          cd "$U/c" && git init -q -b cle_musique && git config user.name gha && git config user.email gha@users.noreply.github.com
           git add -A && git commit -q -m cle && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" cle_musique
       - name: Attendre le fichier audio chiffre (branche entree_musique)
         shell: bash
         run: |
-          RUNNER_TEMP=$(cygpath -u "$RUNNER_TEMP")
+          RUNNER_TEMP=$(cygpath -m "$RUNNER_TEMP"); U=$(cygpath -u "$RUNNER_TEMP")
           for i in $(seq 1 90); do
             if git fetch -q origin entree_musique 2>/dev/null && [ "$(git show FETCH_HEAD:run.txt 2>/dev/null)" = "$GITHUB_RUN_ID" ]; then break; fi
             sleep 10
           done
-          mkdir -p "$RUNNER_TEMP/w"
+          mkdir -p "$U/w"
           git show FETCH_HEAD:k.enc > "$RUNNER_TEMP/k.enc"
           openssl pkeyutl -decrypt -inkey "$RUNNER_TEMP/p.key" -pkeyopt rsa_padding_mode:oaep -in "$RUNNER_TEMP/k.enc" -out "$RUNNER_TEMP/k.bin"
-          for f in $(git ls-tree --name-only FETCH_HEAD | grep '^d\.enc\.'); do git show FETCH_HEAD:$f; done | openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"$RUNNER_TEMP/k.bin" | tar x -C "$RUNNER_TEMP/w"
+          for f in $(git ls-tree --name-only FETCH_HEAD | grep '^d\.enc\.'); do git show FETCH_HEAD:$f; done | openssl enc -d -aes-256-cbc -pbkdf2 -pass file:"$RUNNER_TEMP/k.bin" | tar x -C "$U/w"
           rm -f "$RUNNER_TEMP/k.bin"; ls -la "$RUNNER_TEMP/w"
       - name: VGAudio (wav -> lopus, entete Namco, boucle)
         shell: pwsh
@@ -55,11 +55,11 @@ jobs:
       - name: Chiffrer (cle de la session) et publier
         shell: bash
         run: |
-          RUNNER_TEMP=$(cygpath -u "$RUNNER_TEMP")
-          mkdir -p "$RUNNER_TEMP/pub"; tar cz -C "$RUNNER_TEMP/o" . > "$RUNNER_TEMP/o.tgz"
+          RUNNER_TEMP=$(cygpath -m "$RUNNER_TEMP"); U=$(cygpath -u "$RUNNER_TEMP")
+          mkdir -p "$U/pub"; tar cz -C "$U/o" . > "$U/o.tgz"
           openssl rand 32 > "$RUNNER_TEMP/s.bin"
-          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$RUNNER_TEMP/s.bin" -in "$RUNNER_TEMP/o.tgz" | split -b 90m - "$RUNNER_TEMP/pub/out.session.enc."
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:"$RUNNER_TEMP/s.bin" -in "$RUNNER_TEMP/o.tgz" | split -b 90m - "$U/pub/out.session.enc."
           openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in "$RUNNER_TEMP/s.bin" -out "$RUNNER_TEMP/pub/k.session.enc"; rm -f "$RUNNER_TEMP/s.bin"
-          cd "$RUNNER_TEMP/pub" && git init -q -b sortie_musique && git config user.name gha && git config user.email gha@users.noreply.github.com
+          cd "$U/pub" && git init -q -b sortie_musique && git config user.name gha && git config user.email gha@users.noreply.github.com
           git add -A && git commit -q -m "musique chiffree"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_musique
