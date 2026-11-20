@@ -39,7 +39,7 @@ unsafe extern "C" fn attack_lw3_main_loop(fighter: &mut L2CFighterCommon) -> L2C
                 Hash40::new_raw(mot),
                 -1
             );
-            WorkModule::set_int64(fighter.module_accessor, info, *FIGHTER_STATUS_WORK_ID_INT_RESERVE_LOG_ATTACK_KIND);
+            WorkModule::set_int64(fighter.module_accessor, info as u64, *FIGHTER_STATUS_WORK_ID_INT_RESERVE_LOG_ATTACK_KIND);
             fighter.change_status_jump_mini_attack(true.into());
             return 1.into();
         }
