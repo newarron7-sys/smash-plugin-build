@@ -1,0 +1,37 @@
+[workspace]
+exclude = ["vendor"]
+members = ["dynamic", "hdr-macros", "utils", "fighters/common", "fighters/koopa"]
+resolver = "2"
+
+[package]
+name = "hdr_dark_bowser"
+version = "1.0.0"
+edition = "2021"
+description = "Moveset HDR v0.49.11 de Bowser sur le seul slot c55 (Dark Bowser), sans le moteur HDR global. Smash 13.0.4."
+
+[package.metadata.skyline]
+titleid = "01006A800016E000"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+skyline = { git = "https://github.com/ultimate-research/skyline-rs" }
+smashline = { git = "https://github.com/HDR-Development/smashline", rev = "df194a03b918116adb7bda1c2b4565dcd82a4756" }
+runtime-motion-patcher = { path = "vendor/runtime-motion-patcher" }
+utils = { path = "utils" }
+common = { path = "fighters/common" }
+koopa = { path = "fighters/koopa" }
+
+[patch.crates-io]
+nnsdk = { git = "https://github.com/ultimate-research/nnsdk-rs" }
+
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+opt-level = 'z'
+panic = "abort"
+lto = true
+codegen-units = 1

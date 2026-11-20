@@ -1,0 +1,17 @@
+[package]
+name = "common"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+skyline = { git = "https://github.com/ultimate-research/skyline-rs" }
+skyline_smash = { git = "https://github.com/ultimate-research/skyline-smash", features = ["weak_l2cvalue"] }
+smash_script = { path = "../../vendor/smash-script" }
+smashline = { git = "https://github.com/HDR-Development/smashline", rev = "df194a03b918116adb7bda1c2b4565dcd82a4756" }
+utils = { package = "dynamic", path = "../../dynamic" }
+ninput = { git = "https://github.com/blu-dev/ninput", rev = "af26d4de5bb5f444985193b296ce65fe364e6a33" }
+interpolation = "0.2.0" # for f32::lerp
+smash_rs = { package = "smash", git = "https://github.com/WuBoytH/smash-rs" }
+rand = { git = "https://github.com/skyline-rs/rand", rev = "8e87ec2a30ef2283888b2456b8ea65ea5110f2bd" }
