@@ -873,6 +873,7 @@ pub mod vars {
         pub mod instance {
             // flags
             pub const ATTACK_S4_EXCELLENT_PUNCH: i32 = 0x0100; // determines if forward smash is an excellent punch
+            pub const SPECIAL_S_DISABLE_STALL: i32 = 0x0101;
 
             // ints
             pub const SPECIAL_N_FIREBALL_COOLDOWN: i32 = 0x0100;
