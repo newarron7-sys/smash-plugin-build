@@ -398,16 +398,28 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
         sv_kinetic_energy!(set_accel, fighter, *FIGHTER_KINETIC_ENERGY_ID_GRAVITY, 0.0);
         sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0, 0.0);
     }
+    // v11 (vidéo du joueur : il n'atterrit jamais, les coups recommencent sans fin) : is_end ne vient jamais sur ces
+    // animations (elles bouclent dans la liste de Link enfant) -> fin à la dernière image ; atterrissage aussi pendant
+    // l'élan (dès qu'il redescend)
+    let fin = f >= MotionModule::end_frame(boma) - 1.0;
+    let descend = H_V[e].1 <= 0.0;
     match H_PHASE[e] {
-        0 | 1 => {
-            if MotionModule::is_end(boma) {
+        0 => {
+            if fin {
                 H_PHASE[e] = 2;
                 H_T[e] = 0;
                 MotionModule::change_motion(boma, Hash40::new("special_hi"), 0.0, 1.0, false, 0.0, false, false);
             }
         }
-        2 => {
-            if sol(boma) {
+        1 if !(sol(boma) && descend) => {
+            if fin {
+                H_PHASE[e] = 2;
+                H_T[e] = 0;
+                MotionModule::change_motion(boma, Hash40::new("special_hi"), 0.0, 1.0, false, 0.0, false, false);
+            }
+        }
+        1 | 2 => {
+            if sol(boma) && descend {
                 // atterrissage : onde des deux côtés (SpecialHiLand), il s'arrête net
                 H_PHASE[e] = 3;
                 energies_normales(fighter);
@@ -420,15 +432,16 @@ unsafe extern "C" fn hi_loop(fighter: &mut L2CFighterCommon) -> L2CValue {
                 LANDING_EFFECT(fighter, Hash40::new("sys_down_smoke"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 1.1, 0, 0, 0, 0, 0, 0, false);
                 LANDING_EFFECT(fighter, Hash40::new("sys_crown"), Hash40::new("top"), 0, 0, 0, 0, 0, 0, 0.7, 0, 0, 0, 0, 0, 0, false);
                 QUAKE(fighter, *CAMERA_QUAKE_KIND_S);
-            } else if MotionModule::is_end(boma) {
-                MotionModule::change_motion(boma, Hash40::new("special_hi"), 0.0, 1.0, false, 0.0, false, false);
+            } else if fin {
+                // piqué : la boucle de SpecialHi2 continue sans relancer ses coups (image 26 : après eux)
+                MotionModule::set_frame(boma, 26.0, true);
             }
         }
         _ => {
             sv_kinetic_energy!(set_speed, fighter, *FIGHTER_KINETIC_ENERGY_ID_STOP, 0.0, 0.0);
             if !sol(boma) {
                 fighter.change_status(FIGHTER_STATUS_KIND_FALL.into(), false.into());
-            } else if MotionModule::is_end(boma) {
+            } else if fin {
                 fighter.change_status(FIGHTER_STATUS_KIND_WAIT.into(), false.into());
             }
         }
