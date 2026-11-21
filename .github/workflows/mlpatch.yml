@@ -22,6 +22,22 @@ jobs:
           git clone -q --depth 1 https://github.com/chrispo-git/ult-s /tmp/ults
           git clone -q --depth 1 -b v0.50.10 https://github.com/HDR-Development/HewDraw-Remix /tmp/hdr
           T=rex/tools/mlpatch/target/release/mlpatch
+          # Dark Bowser : un seul jab = le 2e jab vanilla (motion attack_11 -> animation et scripts d'attack_12, pas d'enchaînement)
+          python3 - <<'EOP'
+          p = '/tmp/hdr/romfs/source/fighter/koopa/motion/body/motion_patch.yaml'
+          s = open(p).read()
+          old = "attack_11:\n  flags:\n    move: false\n  extra:\n    cancel_frame: 20\n"
+          assert s.count(old) == 1, 'bloc attack_11 introuvable'
+          f = ''.join(f"    {k}: {'true' if k == 'unk_80' else 'false'}\n" for k in
+                      ['turn', 'loop', 'move', 'fix_trans', 'fix_rot', 'fix_scale', 'unk_40', 'unk_80', 'unk_100',
+                       'unk_200', 'unk_400', 'unk_800', 'unk_1000', 'unk_2000'])
+          new = ("attack_11:\n  game_script: game_attack12\n  flags:\n" + f + "  blend_frames: 0\n"
+                 "  animations:\n    - name: c00attack12.nuanmb\n"
+                 "  scripts:\n    - expression_attack12\n    - sound_attack12\n    - effect_attack12\n"
+                 "  extra:\n    xlu_start: 0\n    xlu_end: 0\n    cancel_frame: 26\n    no_stop_intp: false\n")
+          open(p, 'w').write(s.replace(old, new))
+          EOP
+          cp /tmp/hdr/romfs/source/fighter/koopa/motion/body/motion_patch.yaml /tmp/o/body_motion_patch.yaml
           for p in body breath; do
             b=/tmp/ults/romfs/fighter/koopa/motion/$p/c00/motion_list.bin
             [ -f $b ] || { echo "pas de base pour $p"; ls /tmp/ults/romfs/fighter/koopa/motion/; continue; }
