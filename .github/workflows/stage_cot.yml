@@ -24,20 +24,21 @@ jobs:
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
           mkdir -p /tmp/out/travail
-      - name: Grand Champ de bataille (stage/battlefield_l) dans des mods
+      - name: HDR - mecanique des variantes de terrain (L)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set +e +o pipefail
-          for q in "big battlefield" "big battlefield stage" "battlefield l" "large battlefield"; do
-            python3 -u outils/stage/gb_fetch.py cherche "$q" stage/battlefield_l /tmp/bl 8 2>&1 | tail -3
-          done
-          find /tmp/bl -type d -path "*stage/battlefield_l" -print0 | while IFS= read -r -d '' d; do
-            id=$(echo "$d" | sed -E 's#/tmp/bl/([0-9]+)/.*#\1#'); n=$(echo "$d" | md5sum | cut -c1-6)
-            mkdir -p "/tmp/out/travail/bl_${id}_$n" && cp -r "$d" "/tmp/out/travail/bl_${id}_$n/"
-            echo "$d" > "/tmp/out/travail/bl_${id}_$n/source.txt"
-            find "$d" -type f | sed "s#$d/##" | sort > "/tmp/out/travail/bl_${id}_$n/liste.txt"
-            echo "== bl $id $n : $(wc -l < "/tmp/out/travail/bl_${id}_$n/liste.txt") fichiers, lvd $(grep -c lvd "/tmp/out/travail/bl_${id}_$n/liste.txt") ($d)"
-          done
-          find /tmp/out/travail -name "*.nutexb" -delete; du -sh /tmp/out
+          mkdir -p /tmp/hdr && cd /tmp/hdr
+          gh release download -R HDR-Development/HewDraw-Remix -p "hdr-switch.zip" -D . 2>&1 | tail -2
+          ls -la
+          unzip -l hdr-switch.zip | grep -i -E "\.nro|stage_alt|alts|s01|config\.json|battlefield" | head -80
+          unzip -l hdr-switch.zip | awk '{print $4}' | grep -i -E "/stage/" | sed -E 's#(stage/[^/]+/[^/]+)/.*#\1#' | sort | uniq -c | head -60
+          mkdir -p /tmp/out/hdr
+          unzip -l hdr-switch.zip > /tmp/out/hdr/liste.txt
+          unzip -qo hdr-switch.zip "*config.json" "*.toml" "*stage/battlefield/*" -d /tmp/out/hdr/x 2>/dev/null
+          find /tmp/out/hdr/x -name "*.nutexb" -delete
+          du -sh /tmp/out/hdr
           true
       - name: Chiffrer et publier (branche sortie_stage_cot)
         if: always()
