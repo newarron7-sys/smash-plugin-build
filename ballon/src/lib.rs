@@ -16,6 +16,7 @@
 //!   prochaine frappe est plus forte ; pendant l'amorti elle n'élimine personne.
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
+//! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
 //! v0.1 : balle d'Ultimate normale au centre ; v0.2 : comportement Lethal League
 
 use smash::app::lua_bind::*;
@@ -27,7 +28,9 @@ use smashline::*;
 
 const DELAI: i32 = 90; // avant de (re)faire apparaître la balle
 const CENTRE: (f32, f32) = (0.0, 45.0);
-const R: f32 = 4.5; // rayon de la balle
+/// la balle de Brawl est beaucoup plus grosse que celle d'Ultimate : l'objet est agrandi (modèle ET zones de coup)
+const TAILLE: f32 = 2.0;
+const R: f32 = 2.75 * TAILLE + 0.3; // rayon de la balle (modèle 5,5 de diamètre × TAILLE)
 const MUR: f32 = 75.0;
 const SOL: f32 = 0.0;
 const PLAFOND: f32 = 81.4; // plafond de la boîte de Brawl (pour la balle seulement)
@@ -204,6 +207,7 @@ unsafe fn physique() {
         POS = (x, y);
     }
     PostureModule::set_pos(ib, &Vector3f { x: POS.0, y: POS.1, z: 0.0 });
+    PostureModule::set_scale(ib, TAILLE, false);
     KineticModule::clear_speed_all(ib);
     AttackModule::clear_all(ib); // la balle ne blesse pas d'elle-même : c'est nous qui gérons le contact
     if GRACE > 0 {
