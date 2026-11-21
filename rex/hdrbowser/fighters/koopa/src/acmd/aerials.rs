@@ -218,8 +218,8 @@ unsafe extern "C" fn game_attackairhi(agent: &mut L2CAgentBase) {
         ATTACK(agent, 1, 0, Hash40::new("top"), 15.0, 85, 82, 0, 45, 8.0, 0.0, 27.0, 0.0, Some(0.0), Some(38.0), Some(0.0), 1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false, Hash40::new("collision_attr_purple"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_NONE);
         ATTACK(agent, 2, 0, Hash40::new("top"), 14.0, 75, 82, 0, 45, 9.0, 0.0, 25.0, -14.0, Some(0.0), Some(25.0), Some(14.0), 1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false, Hash40::new("collision_attr_purple"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_NONE);
     }
-    // Dark Bowser : flammes du souffle vanilla crachées vers le haut, en éventail
-    for angle in [60.0f32, 45.0, 60.0, 30.0, 60.0] {
+    // Dark Bowser : flammes du souffle vanilla crachées tout droit vers le haut (et un peu derrière), en gerbe dense
+    for angle in [90.0f32, 75.0, 105.0, 90.0, 120.0, 60.0, 90.0, 110.0, 80.0] {
         if is_excute(agent) {
             WorkModule::set_float(boma, angle, *FIGHTER_KOOPA_STATUS_BREATH_WORK_FLOAT_GENE_ANGLE);
             ArticleModule::generate_article_enable(boma, *FIGHTER_KOOPA_GENERATE_ARTICLE_BREATH, false, -1);
@@ -248,7 +248,7 @@ unsafe extern "C" fn effect_attackairhi(agent: &mut L2CAgentBase) {
     // (les flammes = l'article du souffle, lancé depuis game_attackairhi)
     frame(lua_state, 7.0);
     if is_excute(agent) {
-        FLASH(agent, 0.85, 0.7, 1.0, 0.8);
+        FLASH(agent, 1.0, 0.92, 1.0, 0.95);
         EFFECT_FOLLOW(agent, Hash40::new("sys_damage_elec"), Hash40::new("head"), 0, 0, 0, 0, 0, 0, 1.4, true);
         LAST_EFFECT_SET_COLOR(agent, 0.6, 0.15, 1.0);
     }
