@@ -1,0 +1,44 @@
+name: Analyse de l'animation Koopa Punch (chiffre)
+on:
+  push:
+    branches: [ marioults ]
+    paths: [ '.github/workflows/animdump.yml', 'rex/tools/animdump/**' ]
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Outil
+        working-directory: rex/tools/animdump
+        run: cargo build --release 2>&1 | tail -5
+      - name: Telecharger le mod et analyser
+        run: |
+          mkdir -p /tmp/o /tmp/dl && cd /tmp/dl
+          python3 - <<'PY'
+          import json, urllib.request
+          UA = {'User-Agent': 'Mozilla/5.0'}
+          get = lambda u: urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=600).read()
+          p = json.loads(get('https://gamebanana.com/apiv11/Mod/608236/ProfilePage'))
+          for f in p['_aFiles']:
+              if 'select' in f['_sFile']:
+                  open('m.zip', 'wb').write(get(f['_sDownloadUrl']))
+          PY
+          7z x -y -ox m.zip >/dev/null
+          A=$(find x -name c03attacks4s.nuanmb | head -1)
+          T=$GITHUB_WORKSPACE/rex/tools/animdump/target/release/animdump
+          $T "$A" | head -3 > /tmp/o/os.txt
+          OS=$(sed -n 2p /tmp/o/os.txt | cut -d: -f2 | tr ' ' '\n' | grep -iE '^(trans|rot|hip|waist|bust|clavicler|shoulderr|armr|handr|clavicle_r|shoulder_r|arm_r|hand_r)$' | tr '\n' ',')
+          echo "os retenus : $OS"
+          $T "$A" "$OS" > /tmp/o/dump.txt; wc -l /tmp/o/dump.txt
+      - name: Chiffrer et publier
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/o . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_animdump && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "animdump" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_animdump

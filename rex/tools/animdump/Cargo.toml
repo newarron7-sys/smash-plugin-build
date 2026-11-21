@@ -1,0 +1,7 @@
+[package]
+name = "animdump"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ssbh_data = "0.18"
