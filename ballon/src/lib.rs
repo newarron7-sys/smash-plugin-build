@@ -69,7 +69,7 @@ unsafe extern "C" fn ballon_frame(fighter: &mut L2CFighterCommon) {
     if EST_HE == 0 {
         return;
     }
-    if item_manager::get_num_of_active_item(*ITEM_KIND_SOCCERBALL) > 0 {
+    if smash::app::lua_bind::ItemManager::get_num_of_active_item(*ITEM_KIND_SOCCERBALL) > 0 {
         ATTENTE = DELAI;
         return;
     }
