@@ -129,10 +129,27 @@ unsafe fn fastfall_specials(fighter: &mut L2CFighterCommon) {
     }
 }
 
+
+// Dark Bowser : grosse explosion quand la Bowser Bomb touche le sol (comme dans la vidéo)
+unsafe fn explosion_bomb(boma: &mut BattleObjectModuleAccessor) {
+    if boma.is_motion(Hash40::new("special_lw_landing")) && boma.status_frame() == 1 {
+        let pos = *PostureModule::pos(boma);
+        let p = Vector3f::new(pos.x, pos.y + 2.0, pos.z);
+        let r = Vector3f::zero();
+        EffectModule::req(boma, Hash40::new("sys_crown"), &p, &r, 2.4, 0, -1, false, 0);
+        EffectModule::req(boma, Hash40::new("sys_hit_elec"), &Vector3f::new(pos.x, pos.y + 6.0, pos.z), &r, 2.6, 0, -1, false, 0);
+        EffectModule::req(boma, Hash40::new("sys_hit_fire"), &Vector3f::new(pos.x, pos.y + 8.0, pos.z), &r, 2.2, 0, -1, false, 0);
+        EffectModule::req(boma, Hash40::new("sys_v_smoke_a"), &p, &r, 2.0, 0, -1, false, 0);
+        EffectModule::req(boma, Hash40::new("sys_atk_smoke"), &p, &r, 2.0, 0, -1, false, 0);
+        CameraModule::req_quake(boma, *CAMERA_QUAKE_KIND_L);
+    }
+}
+
 pub unsafe fn moveset(fighter: &mut smash::lua2cpp::L2CFighterCommon, boma: &mut BattleObjectModuleAccessor) {
     bowser_bomb(boma);
     flame_cancel(boma);
     fireball_cooldown(boma);
+    explosion_bomb(boma);
     ex_punch(fighter, boma);
     initialize_fireball(fighter);
     fastfall_specials(fighter);

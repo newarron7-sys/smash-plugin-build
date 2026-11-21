@@ -617,7 +617,7 @@ unsafe extern "C" fn special_s_landing_exit(fighter: &mut L2CFighterCommon) -> L
 }
 
 pub fn install(agent: &mut Agent) {
-    agent.status(Main, *FIGHTER_STATUS_KIND_SPECIAL_S, special_s_main);
+    // Dark Bowser : side B = Koopa Punch (voir koopa_punch.rs)
 
     agent.status(Main, *FIGHTER_KOOPA_STATUS_KIND_SPECIAL_S_SQUAT, special_s_squat_main);
     agent.status(Exec, *FIGHTER_KOOPA_STATUS_KIND_SPECIAL_S_SQUAT, special_s_squat_exec);

@@ -43,7 +43,13 @@ jobs:
                   "  animations:\n    - name: d02specialhi.nuanmb\n"
                   "  scripts:\n    - expression_attacklw4\n    - sound_specialhi\n    - effect_specialhi\n"
                   "  extra:\n    xlu_start: 0\n    xlu_end: 0\n    cancel_frame: 82\n    no_stop_intp: true\n")
-          open(p, 'w').write(s.replace(old2, new2))
+          s = s.replace(old2, new2)
+          # side B = Koopa Punch : la ruée est gérée par le plugin (pas de déplacement par l'animation)
+          for m in ['special_s_catch', 'special_s_air_catch']:
+              o = m + ":\n  flags:\n    move: true\n  extra:\n    cancel_frame: 60\n"
+              assert s.count(o) == 1, 'bloc ' + m + ' introuvable'
+              s = s.replace(o, m + ":\n  flags:\n    move: false\n  extra:\n    cancel_frame: 70\n")
+          open(p, 'w').write(s)
           EOP
           cp /tmp/hdr/romfs/source/fighter/koopa/motion/body/motion_patch.yaml /tmp/o/body_motion_patch.yaml
           for p in body breath; do

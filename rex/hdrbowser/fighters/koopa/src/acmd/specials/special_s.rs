@@ -413,15 +413,97 @@ unsafe extern "C" fn expression_specialsthrowlw(agent: &mut L2CAgentBase) {
     }
 }
 
+
+// ===== Dark Bowser : Koopa Punch (side B) =====
+unsafe extern "C" fn game_koopapunch(agent: &mut L2CAgentBase) {
+    let lua_state = agent.lua_state_agent;
+    let boma = agent.boma();
+    frame(lua_state, 16.0);
+    if is_excute(agent) {
+        ATTACK(agent, 0, 0, Hash40::new("top"), 15.0, 361, 82, 0, 55, 7.5, 0.0, 10.0, 15.0, None, None, None, 1.2, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false, Hash40::new("collision_attr_purple"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_PUNCH, *ATTACK_REGION_PUNCH);
+        ATTACK(agent, 1, 0, Hash40::new("top"), 15.0, 361, 82, 0, 55, 6.0, 0.0, 10.0, 6.0, None, None, None, 1.2, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_F, false, 0, 0.0, 0, false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false, Hash40::new("collision_attr_purple"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_PUNCH, *ATTACK_REGION_PUNCH);
+    }
+    frame(lua_state, 24.0);
+    if is_excute(agent) {
+        AttackModule::clear_all(boma);
+    }
+}
+
+unsafe extern "C" fn effect_koopapunch(agent: &mut L2CAgentBase) {
+    let lua_state = agent.lua_state_agent;
+    let boma = agent.boma();
+    frame(lua_state, 8.0);
+    if is_excute(agent) {
+        EFFECT_FOLLOW(agent, Hash40::new("sys_smash_flash"), Hash40::new("handr"), 0, 0, 0, 0, 0, 0, 1.2, true);
+        LAST_EFFECT_SET_COLOR(agent, 0.6, 0.2, 1.0);
+        FOOT_EFFECT(agent, Hash40::new("sys_dash_smoke"), Hash40::new("top"), -6, 0, 0, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, false);
+    }
+    frame(lua_state, 10.0);
+    if is_excute(agent) {
+        EFFECT_FOLLOW_FLIP(agent, Hash40::new("sys_attack_speedline"), Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 11, -8, 0, 0, 0, 1.8, true, *EF_FLIP_YZ);
+        LAST_PARTICLE_SET_COLOR(agent, 0.6, 0.3, 1.0);
+        EFFECT_FOLLOW(agent, Hash40::new("sys_damage_elec"), Hash40::new("handr"), 0, 0, 0, 0, 0, 0, 1.2, true);
+        LAST_EFFECT_SET_COLOR(agent, 0.6, 0.15, 1.0);
+    }
+    frame(lua_state, 14.0);
+    if is_excute(agent) {
+        EFFECT_FOLLOW_FLIP(agent, Hash40::new("sys_attack_speedline"), Hash40::new("sys_attack_speedline"), Hash40::new("top"), 0, 9, -10, 0, 0, 0, 2.0, true, *EF_FLIP_YZ);
+        LAST_PARTICLE_SET_COLOR(agent, 0.6, 0.3, 1.0);
+        FOOT_EFFECT(agent, Hash40::new("sys_dash_smoke"), Hash40::new("top"), -6, 0, 0, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, false);
+    }
+    frame(lua_state, 16.0);
+    if is_excute(agent) {
+        EFFECT(agent, Hash40::new("sys_attack_impact"), Hash40::new("top"), 0, 10, 16, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, true);
+        LAST_EFFECT_SET_COLOR(agent, 0.8, 0.5, 1.0);
+        EFFECT_FOLLOW_FLIP(agent, Hash40::new("koopa_smash_line"), Hash40::new("koopa_smash_line"), Hash40::new("top"), 0, 10, -20, 0, 0, 0, 2.0, true, *EF_FLIP_YZ);
+    }
+    frame(lua_state, 24.0);
+    if is_excute(agent) {
+        EFFECT_OFF_KIND(agent, Hash40::new("sys_damage_elec"), false, false);
+        EFFECT_OFF_KIND(agent, Hash40::new("koopa_smash_line"), true, true);
+    }
+}
+
+unsafe extern "C" fn sound_koopapunch(agent: &mut L2CAgentBase) {
+    let lua_state = agent.lua_state_agent;
+    frame(lua_state, 9.0);
+    if is_excute(agent) {
+        PLAY_SE(agent, Hash40::new("se_koopa_dash_start"));
+    }
+    frame(lua_state, 15.0);
+    if is_excute(agent) {
+        PLAY_SE(agent, Hash40::new("se_koopa_nailswing02"));
+        PLAY_SE(agent, Hash40::new("vc_koopa_attack06"));
+    }
+    frame(lua_state, 16.0);
+    if is_excute(agent) {
+        PLAY_SE(agent, Hash40::new("se_koopa_smash_h01"));
+    }
+}
+
+unsafe extern "C" fn expression_koopapunch(agent: &mut L2CAgentBase) {
+    let lua_state = agent.lua_state_agent;
+    let boma = agent.boma();
+    frame(lua_state, 9.0);
+    if is_excute(agent) {
+        ControlModule::set_rumble(boma, Hash40::new("rbkind_nohitll"), 0, false, *BATTLE_OBJECT_ID_INVALID as u32);
+    }
+    frame(lua_state, 16.0);
+    if is_excute(agent) {
+        RUMBLE_HIT(agent, Hash40::new("rbkind_attackll"), 0);
+    }
+}
+
 pub fn install(agent: &mut Agent) {
-    agent.acmd("game_specialscatch", game_specialscatch, Priority::Low);
-    agent.acmd("game_specialsaircatch", game_specialscatch, Priority::Low);
-    agent.acmd("effect_specialscatch", effect_specialscatch, Priority::Low);
-    agent.acmd("effect_specialsaircatch", effect_specialscatch, Priority::Low);
-    agent.acmd("sound_specialscatch", sound_specialscatch, Priority::Low);
-    agent.acmd("sound_specialsaircatch", sound_specialscatch, Priority::Low);
-    agent.acmd("expression_specialscatch", expression_specialscatch, Priority::Low);
-    agent.acmd("expression_specialsaircatch", expression_specialscatch, Priority::Low);
+    // Dark Bowser : les motions de prise du side B jouent le Koopa Punch
+    agent.acmd("game_specialscatch", game_koopapunch, Priority::Low);
+    agent.acmd("game_specialsaircatch", game_koopapunch, Priority::Low);
+    agent.acmd("effect_specialscatch", effect_koopapunch, Priority::Low);
+    agent.acmd("effect_specialsaircatch", effect_koopapunch, Priority::Low);
+    agent.acmd("sound_specialscatch", sound_koopapunch, Priority::Low);
+    agent.acmd("sound_specialsaircatch", sound_koopapunch, Priority::Low);
+    agent.acmd("expression_specialscatch", expression_koopapunch, Priority::Low);
+    agent.acmd("expression_specialsaircatch", expression_koopapunch, Priority::Low);
 
     agent.acmd("game_specialssquat", game_specialssquat, Priority::Low);
     agent.acmd("game_specialairssquat", game_specialssquat, Priority::Low);

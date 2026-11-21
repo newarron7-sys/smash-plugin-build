@@ -5,6 +5,7 @@ use globals::*;
 mod attack_lw3;
 mod special_n;
 mod special_s;
+mod koopa_punch;
 mod special_hi;
 mod attack_s4;
 mod fall_special;
@@ -38,6 +39,7 @@ pub fn install(agent: &mut Agent) {
     attack_lw3::install(agent);
     special_n::install(agent);
     special_s::install(agent);
+    koopa_punch::install(agent);
     special_hi::install(agent);
     attack_s4::install(agent);
     fall_special::install(agent);
