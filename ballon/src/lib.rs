@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.7 : correctif : le combattant qui « donne » la balle restait bloqué (objet lourd tenu) -> éjection + debout.
 //! v0.1 : balle d'Ultimate normale au centre ; v0.2 : comportement Lethal League
 
 use smash::app::lua_bind::*;
@@ -128,14 +129,26 @@ unsafe fn remettre_au_centre() {
 }
 
 unsafe fn apparaitre(boma: *mut BattleObjectModuleAccessor) {
-    if ItemModule::is_have_item(boma, 0) {
+    // v0.7 : le combattant ne doit JAMAIS rester avec la balle (c'est un objet lourd : il restait bloqué à la porter)
+    // -> seulement quand il est debout sans rien faire, puis la balle est éjectée de sa main et il est remis debout
+    if ItemModule::is_have_item(boma, 0) || StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_WAIT
+        || StatusModule::situation_kind(boma) != *SITUATION_KIND_GROUND {
         return;
     }
     ItemModule::have_item(boma, ItemKind(*ITEM_KIND_SOCCERBALL), 0, 0, false, false);
     let id = ItemModule::get_have_item_id(boma, 0) as u32;
-    ItemModule::drop_item(boma, 0.0, 0.0, 0);
+    ItemModule::eject_have_item(boma, 0, false, false);
+    if ItemModule::is_have_item(boma, 0) {
+        ItemModule::drop_item(boma, 0.0, 0.0, 0);
+    }
+    StatusModule::change_status_force(boma, *FIGHTER_STATUS_KIND_WAIT, false);
     BALLE = id;
     remettre_au_centre();
+    if let Some(ib) = boma_de(id) {
+        StatusModule::change_status_force(ib, *ITEM_STATUS_KIND_FALL, false);
+        PostureModule::set_pos(ib, &Vector3f { x: POS.0, y: POS.1, z: 0.0 });
+        KineticModule::clear_speed_all(ib);
+    }
 }
 
 unsafe fn milieu(o: *mut BattleObjectModuleAccessor) -> (f32, f32) {
@@ -163,6 +176,12 @@ unsafe fn plus_proche(x: f32, y: f32) -> i32 {
 
 unsafe fn physique() {
     let Some(ib) = boma_de(BALLE) else { return };
+    // tenue par quelqu'un (ne devrait plus arriver) : on la libère au lieu de la déplacer
+    if StatusModule::status_kind(ib) == *ITEM_STATUS_KIND_HAVE {
+        StatusModule::change_status_force(ib, *ITEM_STATUS_KIND_FALL, false);
+        PostureModule::set_pos(ib, &Vector3f { x: POS.0, y: POS.1, z: 0.0 });
+        return;
+    }
     // la balle a-t-elle été déplacée par le jeu (coup reçu) depuis l'image précédente ?
     let p = PostureModule::pos(ib);
     let (dx, dy) = ((*p).x - POS.0, (*p).y - POS.1);
