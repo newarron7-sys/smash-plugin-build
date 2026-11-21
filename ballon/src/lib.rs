@@ -14,13 +14,15 @@
 //!   stick haut = vers le haut, stick bas = vers le bas ; smash (coup chargé) = beaucoup plus rapide et arrêt sur
 //!   image plus court ; amorti (jab) = la balle monte doucement puis retombe (gravité), garde sa vitesse et la
 //!   prochaine frappe est plus forte ; pendant l'amorti elle n'élimine personne.
+//! - v0.4 (2e vidéo du mod Brawl) : élimination = grand rayon de lumière qui traverse l'écran dans la direction de
+//!   la balle (couleur du joueur éliminé) ; traînée derrière la balle quand elle va vite.
 //! v0.1 : balle d'Ultimate normale au centre ; v0.2 : comportement Lethal League
 
 use smash::app::lua_bind::*;
 use smash::app::*;
 use smash::lib::lua_const::*;
 use smash::lua2cpp::*;
-use smash::phx::{Vector2f, Vector3f};
+use smash::phx::{Hash40, Vector2f, Vector3f};
 use smashline::*;
 
 const DELAI: i32 = 90; // avant de (re)faire apparaître la balle
@@ -46,6 +48,45 @@ static mut VIT: f32 = 0.0;
 static mut PROPRIO: i32 = -1;
 static mut FIGE: i32 = 0;
 static mut GRACE: i32 = 0; // images sans contact mortel après un coup / un rebond sur bouclier
+/// rayon d'élimination en cours : (x, y, dx, dy, images restantes, couleur)
+static mut RAYON: (f32, f32, f32, f32, i32, (f32, f32, f32)) = (0.0, 0.0, 0.0, 0.0, 0, (1.0, 1.0, 1.0));
+static mut TRAINEE: i32 = 0;
+/// couleurs des joueurs pour le rayon (P1 rouge, P2 bleu, P3 jaune, P4 vert, …)
+const COULEURS: [(f32, f32, f32); 8] = [(1.0, 0.2, 0.2), (0.2, 0.9, 0.8), (1.0, 0.85, 0.1), (0.3, 1.0, 0.3),
+    (1.0, 0.55, 0.1), (0.3, 0.6, 1.0), (1.0, 0.4, 0.75), (0.6, 0.35, 1.0)];
+
+/// effet à une position du monde (rotation en radians, comme pour Primid)
+unsafe fn fx(boma: *mut BattleObjectModuleAccessor, name: &str, x: f32, y: f32, sc: f32, rot_z: f32, c: (f32, f32, f32)) {
+    let h = EffectModule::req(boma, Hash40::new(name), &Vector3f { x, y, z: 0.0 }, &Vector3f { x: 0.0, y: 0.0, z: rot_z }, sc, 0, 0, false, 0) as u32;
+    if h != 0 {
+        EffectModule::set_rgb(boma, h, c.0, c.1, c.2);
+    }
+}
+
+/// le rayon : des éclairs et des traits alignés qui traversent tout l'écran dans la direction de la balle
+unsafe fn rayon(boma: *mut BattleObjectModuleAccessor) {
+    let (x, y, dx, dy, n, c) = RAYON;
+    if n <= 0 {
+        return;
+    }
+    RAYON.4 -= 1;
+    if n % 2 != 0 {
+        return;
+    }
+    let ang = dy.atan2(dx) - 1.5708;
+    for k in -6..=6 {
+        let t = k as f32 * 30.0;
+        let (px, py) = (x + dx * t, y + dy * t);
+        if px.abs() > 160.0 || py < -40.0 || py > 200.0 {
+            continue;
+        }
+        fx(boma, "sys_smash_flash", px, py, 2.4, 0.0, if k % 2 == 0 { c } else { (1.0, 1.0, 1.0) });
+        if n % 4 == 0 {
+            fx(boma, "sys_attack_speedline", px, py, 2.6, ang, c);
+        }
+    }
+}
+
 static mut AMORTI: bool = false; // amorti : trajectoire en cloche, pas mortelle
 static mut VY_AMORTI: f32 = 0.0;
 static mut BONUS: f32 = 1.0; // frappe après un amorti : plus forte
@@ -181,6 +222,14 @@ unsafe fn physique() {
         POS = (x, y);
     }
     PostureModule::set_pos(ib, &Vector3f { x: POS.0, y: POS.1, z: 0.0 });
+    // traînée quand elle va vite
+    if !AMORTI && FIGE == 0 && VIT > 3.5 {
+        TRAINEE += 1;
+        if TRAINEE % 3 == 0 {
+            fx(ib, "sys_attack_speedline", POS.0 - DIR.0 * 6.0, POS.1 - DIR.1 * 6.0, (VIT / 6.0).min(1.6),
+               DIR.1.atan2(DIR.0) - 1.5708, (1.0, 1.0, 1.0));
+        }
+    }
     KineticModule::clear_speed_all(ib);
     AttackModule::clear_all(ib); // la balle ne blesse pas d'elle-même : c'est nous qui gérons le contact
     if GRACE > 0 {
@@ -210,7 +259,10 @@ unsafe fn physique() {
             GRACE = 10;
             continue;
         }
-        // éliminé d'un coup
+        // éliminé d'un coup, grand rayon dans la direction de la balle
+        let c = COULEURS[(e as usize).min(7)];
+        RAYON = (ox, oy, DIR.0, DIR.1, 24, c);
+        rayon(o);
         StatusModule::change_status_force(o, *FIGHTER_STATUS_KIND_DEAD, false);
         remettre_au_centre();
         return;
@@ -241,6 +293,7 @@ unsafe extern "C" fn ballon_frame(fighter: &mut L2CFighterCommon) {
     if EST_HE == 0 {
         return;
     }
+    rayon(boma);
     if boma_de(BALLE).is_some() {
         ATTENTE = DELAI;
         physique();
