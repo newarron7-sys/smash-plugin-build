@@ -24,16 +24,12 @@ jobs:
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
           mkdir -p /tmp/out/travail
-      - name: UI de l'ecran des terrains (Petit Champ de bataille) dans des mods
+      - name: Stage Brawl Royal Court (GameBanana 725841)
         run: |
-          for q in "small battlefield" "battlefield" "small battlefield stage"; do
-            python3 -u outils/stage/gb_fetch.py cherche "$q" ui/replace_patch/stage /tmp/ui 6 2>&1 | tail -3 || true
-            python3 -u outils/stage/gb_fetch.py cherche "$q" ui/replace/stage /tmp/ui 6 2>&1 | tail -3 || true
-          done
-          mkdir -p /tmp/out/ui
-          find /tmp/ui -ipath "*ui/replace*/stage/stage_*" -iname "*battlefields*" -type f -print0 | while IFS= read -r -d '' f; do
-            n=$(echo "$f" | md5sum | cut -c1-6); b=$(basename "$f"); mkdir -p /tmp/out/ui/$n; cp "$f" /tmp/out/ui/$n/; echo "$f" >> /tmp/out/ui/$n/source.txt; echo "== $n $f"
-          done
+          python3 -u outils/stage/gb_fetch.py mod 725841 /tmp/rc 2>&1 | tee /tmp/out/rc_fichiers.txt | head -20
+          find /tmp/rc -type f | head -50
+          find /tmp/rc -iname "*.pac" -print0 | while IFS= read -r -d '' f; do cp "$f" /tmp/out/travail/; done
+          find /tmp/rc -iname "*.txt" -print0 | while IFS= read -r -d '' f; do cp "$f" /tmp/out/travail/rc_$(basename "$f"); done
       - name: Chiffrer et publier (branche sortie_stage_cot)
         if: always()
         run: |
