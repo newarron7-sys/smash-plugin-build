@@ -35,7 +35,7 @@ jobs:
           command -v cargo-skyline >/dev/null || cargo install cargo-skyline
           if ! (rustup toolchain list | grep -qi skyline && [ -d ~/.cargo/skyline/toolchain ]); then for i in 1 2 3 4 5; do cargo skyline update-std && break; sleep 20; done; fi
           mkdir -p /tmp/out; rm -f target/aarch64-skyline-switch/release/*.nro
-          set +o pipefail; yes | CARGO_TERM_COLOR=never cargo skyline build --release > /tmp/build.log 2>&1; set -o pipefail
+          set +o pipefail; yes | CARGO_TERM_COLOR=never cargo skyline build --release > /tmp/build.log 2>&1 || true; set -o pipefail
           grep -E -A12 "^error" /tmp/build.log | head -120 || true
           ls target/aarch64-skyline-switch/release/*.nro >/dev/null 2>&1 || tail -60 /tmp/build.log
           N=$(ls target/aarch64-skyline-switch/release/*.nro | head -1); test -s "$N"; cp "$N" /tmp/out/plugin.nro
