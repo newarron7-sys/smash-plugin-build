@@ -16,8 +16,8 @@ unsafe extern "C" fn game_speciallw(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         AttackModule::clear_all(boma);
         WorkModule::on_flag(boma, *FIGHTER_KOOPA_STATUS_SPECIAL_LW_FLAG1);
-        // Dark Bowser : petit saut (35 % de la hauteur) et rapide, comme dans la vidéo
-        sv_kinetic_energy!(set_speed_mul, agent, FIGHTER_KINETIC_ENERGY_ID_MOTION, 0.35);
+        // Dark Bowser : saut moins haut (50 % de la hauteur) et rapide, comme dans la vidéo
+        sv_kinetic_energy!(set_speed_mul, agent, FIGHTER_KINETIC_ENERGY_ID_MOTION, 0.5);
     }
     smash_script::macros::FT_MOTION_RATE_RANGE(agent, 13.0, 32.0, 10.0);
     frame(lua_state, 32.0);
