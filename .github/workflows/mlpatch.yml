@@ -49,6 +49,17 @@ jobs:
               o = m + ":\n  flags:\n    move: true\n  extra:\n    cancel_frame: 60\n"
               assert s.count(o) == 1, 'bloc ' + m + ' introuvable'
               s = s.replace(o, m + ":\n  flags:\n    move: false\n  extra:\n    cancel_frame: 70\n")
+          # lancers normaux = les 3 lancers du side B HDR (avant, arrière, bas) ; le lancer haut reste celui d'HDR
+          for m, d, cf, mv in [('throw_f', 'f', 36, 'true'), ('throw_b', 'b', 44, 'false'), ('throw_lw', 'lw', 40, 'false')]:
+              o = {'throw_f': "throw_f:\n  extra:\n    cancel_frame: 49\n", 'throw_b': "throw_b:\n  extra:\n    cancel_frame: 32\n",
+                   'throw_lw': "throw_lw:\n  extra:\n    cancel_frame: 60\n"}[m]
+              assert s.count(o) == 1, 'bloc ' + m + ' introuvable'
+              fl = f.replace("    move: false\n", "    move: " + mv + "\n")
+              n = (m + ":\n  game_script: game_throw" + m.split('_')[1] + "\n  flags:\n" + fl + "  blend_frames: 0\n"
+                   "  animations:\n    - name: d01specialsthrow" + d + ".nuanmb\n"
+                   "  scripts:\n    - expression_specialsthrow" + d + "\n    - sound_specialsthrow" + d + "\n    - effect_specialsthrow" + d + "\n"
+                   "  extra:\n    xlu_start: 0\n    xlu_end: 0\n    cancel_frame: " + str(cf) + "\n    no_stop_intp: false\n")
+              s = s.replace(o, n)
           open(p, 'w').write(s)
           EOP
           cp /tmp/hdr/romfs/source/fighter/koopa/motion/body/motion_patch.yaml /tmp/o/body_motion_patch.yaml
