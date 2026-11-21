@@ -35,7 +35,15 @@ jobs:
                  "  animations:\n    - name: c00attack12.nuanmb\n"
                  "  scripts:\n    - expression_attack12\n    - sound_attack12\n    - effect_attack12\n"
                  "  extra:\n    xlu_start: 0\n    xlu_end: 0\n    cancel_frame: 26\n    no_stop_intp: false\n")
-          open(p, 'w').write(s.replace(old, new))
+          s = s.replace(old, new)
+          # smash bas : carapace qui tourne (animation du haut B au sol)
+          old2 = "attack_lw4:\n  extra:\n    cancel_frame: 58\n"
+          assert s.count(old2) == 1, 'bloc attack_lw4 introuvable'
+          new2 = ("attack_lw4:\n  game_script: game_attacklw4\n  flags:\n" + f + "  blend_frames: 0\n"
+                  "  animations:\n    - name: d02specialhi.nuanmb\n"
+                  "  scripts:\n    - expression_attacklw4\n    - sound_specialhi\n    - effect_specialhi\n"
+                  "  extra:\n    xlu_start: 0\n    xlu_end: 0\n    cancel_frame: 82\n    no_stop_intp: true\n")
+          open(p, 'w').write(s.replace(old2, new2))
           EOP
           cp /tmp/hdr/romfs/source/fighter/koopa/motion/body/motion_patch.yaml /tmp/o/body_motion_patch.yaml
           for p in body breath; do
