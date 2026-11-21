@@ -24,14 +24,18 @@ jobs:
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
           mkdir -p /tmp/out/travail
-      - name: Stage Brawl Hammer Express (GameBanana 149242)
+      - name: Ballon de foot d'Ultimate (item/soccerball) dans des mods
         run: |
           set +e +o pipefail
-          curl -sL "https://gamebanana.com/apiv11/Mod/149242?_csvProperties=_sName,_sText,_sVersion" | python3 -c "import json,sys,re,html;d=json.load(sys.stdin);print(d.get('_sName'));print(html.unescape(re.sub('<[^>]+>','\n',d.get('_sText',''))))"
-          python3 -u outils/stage/gb_fetch.py mod 149242 /tmp/he 2>&1 | head -40
-          find /tmp/he -type f | grep -v archives | head -60
-          mkdir -p /tmp/out/he && find /tmp/he -type f -not -path "*archives*" -not -iname "*.brstm" -not -iname "*.sawnd" -not -iname "mu_*" -print0 | while IFS= read -r -d '' f; do cp "$f" /tmp/out/he/; done
-          ls -la /tmp/out/he; true
+          for q in "soccer ball" "soccerball" "soccer ball item" "ball item"; do
+            python3 -u outils/stage/gb_fetch.py cherche "$q" item/soccerball /tmp/sb 6 2>&1 | tail -3
+          done
+          mkdir -p /tmp/out/sb
+          find /tmp/sb -type d -path "*item/soccerball" -print0 | while IFS= read -r -d '' d; do
+            n=$(echo "$d" | md5sum | cut -c1-6); mkdir -p /tmp/out/sb/$n; cp -r "$d" /tmp/out/sb/$n/; echo "$d" > /tmp/out/sb/$n/source.txt
+            echo "== $n $(find "$d" -type f | wc -l) fichiers ($d)"; find "$d" -type f | sed "s#$d/##" | head -20
+          done
+          du -sh /tmp/out; true
       - name: Chiffrer et publier (branche sortie_stage_cot)
         if: always()
         run: |
