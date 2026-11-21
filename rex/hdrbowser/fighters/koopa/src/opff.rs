@@ -151,11 +151,41 @@ unsafe fn explosion_bomb(boma: &mut BattleObjectModuleAccessor) {
     }
 }
 
+
+// Dark Bowser : smash haut = Bowser en boule qui s'illumine en violet (comme dans la vidéo),
+// en plus de l'animation vanilla (carapace qui tourne en sautant)
+unsafe fn boule_smash_haut(fighter: &mut L2CFighterCommon, boma: &mut BattleObjectModuleAccessor) {
+    if !boma.is_motion(Hash40::new("attack_hi4")) {
+        return;
+    }
+    let f = MotionModule::frame(boma);
+    let prev = MotionModule::prev_frame(boma);
+    if prev < 12.0 && f >= 12.0 {
+        let z = Vector3f::zero();
+        let h = EffectModule::req_follow(boma, Hash40::new("sys_level_up"), Hash40::new("rot"), &Vector3f::new(0.0, 3.0, 0.0), &z, 1.5, true, 0, 0, 0, 0, 0, false, false) as u32;
+        EffectModule::set_rgb(boma, h, 0.7, 0.4, 1.0);
+        EffectModule::req_follow(boma, Hash40::new("koopa_breath_m_fire"), Hash40::new("rot"), &Vector3f::new(0.0, 3.0, 0.0), &z, 1.8, true, 0, 0, 0, 0, 0, false, false);
+        let e = EffectModule::req_follow(boma, Hash40::new("sys_damage_elec"), Hash40::new("rot"), &Vector3f::new(0.0, 3.0, 0.0), &z, 1.9, true, 0, 0, 0, 0, 0, false, false) as u32;
+        EffectModule::set_rgb(boma, e, 0.6, 0.15, 1.0);
+        let s = EffectModule::req_follow(boma, Hash40::new("sys_smash_flash"), Hash40::new("rot"), &Vector3f::new(0.0, 3.0, 0.0), &z, 1.6, true, 0, 0, 0, 0, 0, false, false) as u32;
+        EffectModule::set_rgb(boma, s, 0.6, 0.2, 1.0);
+    }
+    if f >= 12.0 && f < 26.0 {
+        FLASH(fighter, 0.75, 0.5, 1.0, 0.85);
+    }
+    if prev < 26.0 && f >= 26.0 {
+        COL_NORMAL(fighter);
+        EffectModule::kill_kind(boma, Hash40::new("koopa_breath_m_fire"), false, false);
+        EffectModule::kill_kind(boma, Hash40::new("sys_damage_elec"), false, false);
+    }
+}
+
 pub unsafe fn moveset(fighter: &mut smash::lua2cpp::L2CFighterCommon, boma: &mut BattleObjectModuleAccessor) {
     bowser_bomb(boma);
     flame_cancel(boma);
     fireball_cooldown(boma);
     explosion_bomb(boma);
+    boule_smash_haut(fighter, boma);
     ex_punch(fighter, boma);
     initialize_fireball(fighter);
     fastfall_specials(fighter);
