@@ -32,11 +32,13 @@ jobs:
         run: |
           python3 -u outils/stage/gb_fetch.py cherche "small battlefield" stage/battlefield_s/normal/model /tmp/ref 4 2>&1 | tee /tmp/out/ref_bfs.txt | tail -30 || true
           python3 -u outils/stage/gb_fetch.py cherche "battlefield" stage/battlefield_s/normal/model /tmp/ref2 4 2>&1 | tee -a /tmp/out/ref_bfs.txt | tail -30 || true
-          for d in $(find /tmp/ref /tmp/ref2 -type d -path "*stage/battlefield_s" 2>/dev/null); do
+          find /tmp/ref /tmp/ref2 -type d -path "*stage/battlefield_s" -print0 2>/dev/null | while IFS= read -r -d '' d; do
             id=$(echo "$d" | sed -E 's#/tmp/ref2?/([0-9]+)/.*#\1#')
-            mkdir -p /tmp/out/travail/ref_$id && cp -r "$d" /tmp/out/travail/ref_$id/
-            find "$d" -type f | sed "s#$d/##" | sort > /tmp/out/travail/ref_$id/liste.txt
-            echo "== ref $id : $(wc -l < /tmp/out/travail/ref_$id/liste.txt) fichiers"
+            n=$(echo "$d" | md5sum | cut -c1-6)
+            mkdir -p "/tmp/out/travail/ref_${id}_$n" && cp -r "$d" "/tmp/out/travail/ref_${id}_$n/"
+            echo "$d" > "/tmp/out/travail/ref_${id}_$n/source.txt"
+            find "$d" -type f | sed "s#$d/##" | sort > "/tmp/out/travail/ref_${id}_$n/liste.txt"
+            echo "== ref $id $n : $(wc -l < "/tmp/out/travail/ref_${id}_$n/liste.txt") fichiers ($d)"
           done
           du -sh /tmp/out/travail
       - name: Chiffrer et publier (branche sortie_stage_cot)
