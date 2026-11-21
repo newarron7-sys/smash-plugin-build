@@ -42,7 +42,7 @@ jobs:
         run: |
           command -v cargo-skyline >/dev/null || cargo install cargo-skyline
           if ! (rustup toolchain list | grep -qi skyline && [ -d ~/.cargo/skyline/toolchain ]); then for i in 1 2 3 4 5; do cargo skyline update-std && break; sleep 20; done; fi
-          set +o pipefail; yes | CARGO_TERM_COLOR=never cargo skyline build --release > /tmp/log 2>&1; set -o pipefail
+          set +o pipefail; yes | CARGO_TERM_COLOR=never cargo skyline build --release > /tmp/log 2>&1 || true; set -o pipefail
           grep -E "^error|-->" /tmp/log | head -60; grep -vE "^\s*[0-9]*\s*\||^\s*=|^\s*$" /tmp/log | grep -vE "Compiling|Downloaded|Updating|Fetching|Locking|Adding" | tail -15
           N=$(ls target/aarch64-skyline-switch/release/*.nro | head -1); test -s "$N"
           printf '%s' "$CLE" > /tmp/cle && openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/cle -in "$N" -out /tmp/plugin.nro.enc && rm -f /tmp/cle
