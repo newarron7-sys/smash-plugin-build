@@ -1,0 +1,56 @@
+name: Plugin Black Shadow (code chiffre, sortie chiffree)
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'donnees/bs_src.tgz.enc', '.github/workflows/plugin_bs.yml' ]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: plugin_bs
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Code et donnees (dechiffres seulement ici, jamais affiches)
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          printf '%s' "$CLE" > /tmp/cle && openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/cle -in donnees/bs_src.tgz.enc | tar xz -C . && rm -f /tmp/cle
+          cd bs && python3 tools/recup.py /tmp/mod >/dev/null 2>&1
+          python3 tools/gen.py /tmp/mod/FitBlackShadow.pac /tmp/mod/FitBlackShadowMotionEtc.pac /tmp/mod/FitBlackShadow00.pac src/generated.rs >/dev/null 2>&1
+          test -s src/generated.rs && echo "donnees ok"
+      - name: Cache outils (cargo-skyline, toolchain Switch)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-skyline
+            ~/.cargo/skyline
+            ~/.rustup/toolchains/*skyline*
+            ~/.cargo/registry
+            ~/.cargo/git
+            plugin_chunli/target
+          # même cache que plugin_chunli.yml (outils déjà là : update-std échoue sur la limite de l'API GitHub)
+          key: skyline-cl-v1-${{ hashFiles('plugin_chunli/Cargo.toml') }}
+          restore-keys: skyline-
+      - name: Compiler
+        working-directory: bs
+        timeout-minutes: 35
+        run: |
+          command -v cargo-skyline >/dev/null || cargo install cargo-skyline
+          if ! (rustup toolchain list | grep -qi skyline && [ -d ~/.cargo/skyline/toolchain ]); then for i in 1 2 3 4 5; do cargo skyline update-std && break; sleep 20; done; fi
+          set +o pipefail; yes | CARGO_TERM_COLOR=never cargo skyline build --release 2>&1 | grep -E -A8 "^error" | grep -E "^error|-->|mappa.rs" | head -60; set -o pipefail
+          N=$(ls target/aarch64-skyline-switch/release/*.nro | head -1); test -s "$N"
+          printf '%s' "$CLE" > /tmp/cle && openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/cle -in "$N" -out /tmp/plugin.nro.enc && rm -f /tmp/cle
+          rm -rf src tools
+        env:
+          CLE: ${{ secrets.CLE }}
+      - name: Sortie chiffree (branche sortie_bs)
+        run: |
+          mkdir -p /tmp/sortie && cp /tmp/plugin.nro.enc /tmp/sortie/ && cd /tmp/sortie
+          git init -q -b sortie_bs && git config user.name "github-actions" && git config user.email "github-actions@users.noreply.github.com"
+          git add -A && git commit -q -m "plugin chiffre ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" sortie_bs
