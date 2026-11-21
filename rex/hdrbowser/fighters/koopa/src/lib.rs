@@ -44,7 +44,7 @@ use utils::{
 use smashline::*;
 #[macro_use] extern crate smash_script;
 
-pub const MAX_COOLDOWN : i32 = 900;
+pub const MAX_COOLDOWN : i32 = 0; // Dark Bowser : boule de feu toujours prête (HDR : 900 = 15 s)
 
 // Dark Bowser : animations à la vitesse normale. HDR accélère beaucoup de coups (FT_MOTION_RATE < 1) :
 // ces accélérations sont annulées, les ralentissements d'HDR sont gardés.

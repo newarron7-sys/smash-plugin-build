@@ -14,6 +14,12 @@ extern "Rust" {
 }
  
 unsafe fn bowser_bomb(boma: &mut BattleObjectModuleAccessor) {
+    // Dark Bowser : au sol, la Bowser Bomb avance loin vers l'avant pendant le petit saut
+    if boma.is_status(*FIGHTER_STATUS_KIND_SPECIAL_LW) && boma.is_motion(Hash40::new("special_lw"))
+    && boma.status_frame() >= 11 && boma.status_frame() < 30 {
+        let lr = PostureModule::lr(boma);
+        KineticModule::add_speed_outside(boma, *KINETIC_OUTSIDE_ENERGY_TYPE_WIND_NO_ADDITION, &Vector3f::new(2.3 * lr, 0.0, 0.0));
+    }
     if boma.is_status_one_of(&[*FIGHTER_STATUS_KIND_SPECIAL_LW, *FIGHTER_KOOPA_STATUS_KIND_SPECIAL_LW_G]) {
         if boma.status_frame() >= 14 && boma.status_frame() < 30 {
             let stick_x = boma.stick_x();

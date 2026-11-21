@@ -47,6 +47,9 @@ unsafe extern "C" fn effect_attackairn(agent: &mut L2CAgentBase) {
         EFFECT_FOLLOW(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("rot"), 0, 3, 0, 0, 0, 0, 1.7, true);
         EFFECT_FOLLOW(agent, Hash40::new("sys_damage_elec"), Hash40::new("rot"), 0, 3, 0, 0, 0, 0, 1.8, true);
         LAST_EFFECT_SET_COLOR(agent, 0.6, 0.15, 1.0);
+        EFFECT_FOLLOW(agent, Hash40::new("sys_level_up"), Hash40::new("rot"), 0, 3, 0, 0, 0, 0, 1.4, true);
+        LAST_EFFECT_SET_COLOR(agent, 0.7, 0.4, 1.0);
+        FLASH(agent, 0.75, 0.5, 1.0, 0.85);
     }
     frame(lua_state, 8.0);
     for i in 0..2 {
@@ -69,6 +72,7 @@ unsafe extern "C" fn effect_attackairn(agent: &mut L2CAgentBase) {
     if is_excute(agent) {
         EFFECT_OFF_KIND(agent, Hash40::new("koopa_breath_m_fire"), false, false);
         EFFECT_OFF_KIND(agent, Hash40::new("sys_damage_elec"), false, false);
+        COL_NORMAL(agent);
     }
 }
 
@@ -212,6 +216,7 @@ unsafe extern "C" fn game_attackairhi(agent: &mut L2CAgentBase) {
         ATTACK(agent, 0, 0, Hash40::new("head"), 17.0, 80, 82, 0, 45, 7.5, 2.4, 0.0, 0.0, None, None, None, 1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false, Hash40::new("collision_attr_purple"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_HEAD);
         // Dark Bowser : colonne de flammes crachée vers le haut
         ATTACK(agent, 1, 0, Hash40::new("top"), 15.0, 85, 82, 0, 45, 8.0, 0.0, 27.0, 0.0, Some(0.0), Some(38.0), Some(0.0), 1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false, Hash40::new("collision_attr_purple"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_NONE);
+        ATTACK(agent, 2, 0, Hash40::new("top"), 14.0, 75, 82, 0, 45, 9.0, 0.0, 25.0, -14.0, Some(0.0), Some(25.0), Some(14.0), 1.0, 1.0, *ATTACK_SETOFF_KIND_ON, *ATTACK_LR_CHECK_POS, false, 0, 0.0, 0, false, false, false, false, true, *COLLISION_SITUATION_MASK_GA, *COLLISION_CATEGORY_MASK_ALL, *COLLISION_PART_MASK_ALL, false, Hash40::new("collision_attr_purple"), *ATTACK_SOUND_LEVEL_L, *COLLISION_SOUND_ATTR_FIRE, *ATTACK_REGION_NONE);
     }
     frame(lua_state, 17.0); // f21
     crate::ralenti_range(agent, 17.0, 40.0, 21.0);
@@ -230,30 +235,57 @@ unsafe extern "C" fn game_attackairhi(agent: &mut L2CAgentBase) {
 unsafe extern "C" fn effect_attackairhi(agent: &mut L2CAgentBase) {
     let lua_state = agent.lua_state_agent;
     let boma = agent.boma();
-    // Dark Bowser : flammes crachées vers le haut (souffle violet de Dark Bowser), en plus de l'arc HDR
+    // Dark Bowser : gerbe de flammes violettes dans toutes les directions au-dessus de la tête
     frame(lua_state, 7.0);
     if is_excute(agent) {
-        EFFECT_FOLLOW(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 24, 0, 0, 0, 0, 1.6, true);
-        EFFECT(agent, Hash40::new("sys_damage_fire_fly"), Hash40::new("top"), 0, 26, 0, 0, 0, 0, 1.4, 0, 0, 0, 0, 0, 0, true);
+        EFFECT_FOLLOW(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 24, 0, 0, 0, 0, 1.8, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 24.4, 6.6, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 28.1, 3.5, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 29.0, 0.0, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 28.1, -3.5, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 24.4, -6.6, 0, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, true);
     }
     frame(lua_state, 9.0);
     if is_excute(agent) {
         EFFECT_FOLLOW_FLIP_ALPHA(agent, Hash40::new("sys_attack_arc"), Hash40::new("sys_attack_arc"), Hash40::new("top"), 1.5, 14.5, 2, -153, 90, -49, 1.5, true, *EF_FLIP_YZ, 0.7);
         LAST_EFFECT_SET_RATE(agent, 1);
-        EFFECT_FOLLOW(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 31, 0, 0, 0, 0, 1.9, true);
-        EFFECT_FOLLOW(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 38, 0, 0, 0, 0, 2.1, true);
-        EFFECT(agent, Hash40::new("sys_damage_fire_fly"), Hash40::new("top"), 0, 34, 0, 0, 0, 0, 1.6, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 22.0, 13.0, 0, 0, 0, 1.9, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 28.5, 11.3, 0, 0, 0, 1.9, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 33.3, 6.5, 0, 0, 0, 1.9, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 35.0, 0.0, 0, 0, 0, 1.9, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 33.3, -6.5, 0, 0, 0, 1.9, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 28.5, -11.3, 0, 0, 0, 1.9, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 22.0, -13.0, 0, 0, 0, 1.9, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("sys_damage_fire_fly"), Hash40::new("top"), 0, 26.7, 17.4, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("sys_damage_fire_fly"), Hash40::new("top"), 0, 36.7, 10.3, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("sys_damage_fire_fly"), Hash40::new("top"), 0, 40.0, 0.0, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("sys_damage_fire_fly"), Hash40::new("top"), 0, 36.7, -10.3, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("sys_damage_fire_fly"), Hash40::new("top"), 0, 26.7, -17.4, 0, 0, 0, 1.3, 0, 0, 0, 0, 0, 0, true);
         PLAY_SE(agent, Hash40::new("se_koopa_special_n01"));
+    }
+    frame(lua_state, 11.0);
+    if is_excute(agent) {
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 25.3, 18.7, 0, 0, 0, 2.2, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 34.2, 14.6, 0, 0, 0, 2.2, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 39.9, 6.5, 0, 0, 0, 2.2, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 41.0, 0.0, 0, 0, 0, 2.2, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 39.9, -6.5, 0, 0, 0, 2.2, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 34.2, -14.6, 0, 0, 0, 2.2, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 25.3, -18.7, 0, 0, 0, 2.2, 0, 0, 0, 0, 0, 0, true);
     }
     frame(lua_state, 13.0);
     if is_excute(agent) {
-        EFFECT(agent, Hash40::new("sys_damage_fire_fly"), Hash40::new("top"), 0, 40, 0, 0, 0, 0, 1.6, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 32.1, 21.8, 0, 0, 0, 1.8, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 42.8, 12.0, 0, 0, 0, 1.8, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 46.0, 0.0, 0, 0, 0, 1.8, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 42.8, -12.0, 0, 0, 0, 1.8, 0, 0, 0, 0, 0, 0, true);
+        EFFECT(agent, Hash40::new("koopa_breath_m_fire"), Hash40::new("top"), 0, 32.1, -21.8, 0, 0, 0, 1.8, 0, 0, 0, 0, 0, 0, true);
     }
     frame(lua_state, 17.0);
     if is_excute(agent) {
         EFFECT_OFF_KIND(agent, Hash40::new("sys_attack_arc_b"), true, true);
     }
-    frame(lua_state, 18.0);
+    frame(lua_state, 20.0);
     if is_excute(agent) {
         EFFECT_OFF_KIND(agent, Hash40::new("koopa_breath_m_fire"), false, false);
     }

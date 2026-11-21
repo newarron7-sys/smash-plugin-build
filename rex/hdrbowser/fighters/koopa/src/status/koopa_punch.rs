@@ -3,9 +3,9 @@
 //! Remplace le side B HDR (prise) pour le slot c55.
 use super::*;
 
-const DASH_DEBUT: f32 = 9.0;
-const DASH_FIN: f32 = 22.0;
-const DASH_VITESSE: f32 = 3.4;
+const DASH_DEBUT: f32 = 8.0;
+const DASH_FIN: f32 = 24.0;
+const DASH_VITESSE: f32 = 5.6;
 
 unsafe fn changer_cinetique(fighter: &mut L2CFighterCommon) {
     if fighter.is_situation(*SITUATION_KIND_GROUND) {
