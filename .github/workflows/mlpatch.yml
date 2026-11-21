@@ -60,6 +60,17 @@ jobs:
                    "  scripts:\n    - expression_specialsthrow" + d + "\n    - sound_specialsthrow" + d + "\n    - effect_specialsthrow" + d + "\n"
                    "  extra:\n    xlu_start: 0\n    xlu_end: 0\n    cancel_frame: " + str(cf) + "\n    no_stop_intp: false\n")
               s = s.replace(o, n)
+          # saut : HDR remplace l'accroupissement par l'animation d'atterrissage lourd (longue) -> on garde celle du jeu
+          o = "jump_squat:\n  blend_frames: 0\n  animations:\n  - name: a05landingheavy.nuanmb\n"
+          assert s.count(o) == 1, 'bloc jump_squat introuvable'
+          s = s.replace(o, "")
+          # smash haut : Bowser en boule (animation en boule du nair)
+          o = "attack_hi4:\n  extra:\n    cancel_frame: 60\n"
+          assert s.count(o) == 1, 'bloc attack_hi4 introuvable'
+          s = s.replace(o, "attack_hi4:\n  game_script: game_attackhi4\n  flags:\n" + f + "  blend_frames: 0\n"
+                        "  animations:\n    - name: c05attackairn.nuanmb\n"
+                        "  scripts:\n    - expression_attackhi4\n    - sound_attackhi4\n    - effect_attackhi4\n"
+                        "  extra:\n    xlu_start: 0\n    xlu_end: 0\n    cancel_frame: 46\n    no_stop_intp: false\n")
           open(p, 'w').write(s)
           EOP
           cp /tmp/hdr/romfs/source/fighter/koopa/motion/body/motion_patch.yaml /tmp/o/body_motion_patch.yaml
