@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.8 : crash (récursion infinie : changer le statut du combattant relançait ballon_frame) -> verrou anti ré-entrée.
 //! - v0.7 : correctif : le combattant qui « donne » la balle restait bloqué (objet lourd tenu) -> éjection + debout.
 //! v0.1 : balle d'Ultimate normale au centre ; v0.2 : comportement Lethal League
 
@@ -75,6 +76,7 @@ unsafe fn ejecter(o: *mut BattleObjectModuleAccessor, x: f32, y: f32, dx: f32, d
 
 static mut AMORTI: bool = false; // amorti : trajectoire en cloche, pas mortelle
 static mut VY_AMORTI: f32 = 0.0;
+static mut EN_COURS: bool = false; // v0.8 : anti ré-entrée (changer le statut relance la boucle du combattant -> récursion infinie)
 static mut BONUS: f32 = 1.0; // frappe après un amorti : plus forte
 
 /// comment le combattant a frappé : (direction, multiplicateur de vitesse, arrêt sur image ×, amorti)
@@ -136,6 +138,9 @@ unsafe fn apparaitre(boma: *mut BattleObjectModuleAccessor) {
         return;
     }
     ItemModule::have_item(boma, ItemKind(*ITEM_KIND_SOCCERBALL), 0, 0, false, false);
+    if !ItemModule::is_have_item(boma, 0) {
+        return;
+    }
     let id = ItemModule::get_have_item_id(boma, 0) as u32;
     ItemModule::eject_have_item(boma, 0, false, false);
     if ItemModule::is_have_item(boma, 0) {
@@ -264,6 +269,15 @@ unsafe fn physique() {
 }
 
 unsafe extern "C" fn ballon_frame(fighter: &mut L2CFighterCommon) {
+    if EN_COURS {
+        return;
+    }
+    EN_COURS = true;
+    ballon_frame_(fighter);
+    EN_COURS = false;
+}
+
+unsafe fn ballon_frame_(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let entree = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID);
     if !sv_information::is_ready_go() {
