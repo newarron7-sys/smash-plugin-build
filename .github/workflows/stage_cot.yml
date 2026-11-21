@@ -24,16 +24,14 @@ jobs:
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
           mkdir -p /tmp/out/travail
-      - name: Stage Alts (GameBanana 460711) - mode d'emploi
+      - name: Stage Brawl Hammer Express (GameBanana 149242)
         run: |
           set +e +o pipefail
-          curl -sL "https://gamebanana.com/apiv11/Mod/460711?_csvProperties=_sName,_sText,_sVersion" | python3 -c "import json,sys,re,html;d=json.load(sys.stdin);print(d.get('_sName'),d.get('_sVersion'));print(html.unescape(re.sub('<[^>]+>','\n',d.get('_sText',''))))"
-          curl -sL "https://gamebanana.com/apiv11/Mod/460711/Updates?_nPage=1&_nPerpage=5" | head -c 3000; echo
-          python3 -u outils/stage/gb_fetch.py mod 460711 /tmp/sa 2>&1 | head -30
-          find /tmp/sa -type f | grep -v archives | head -60
-          find /tmp/sa -type f \( -iname "*.txt" -o -iname "*.md" -o -iname "*.toml" -o -iname "*.json" \) -print0 | while IFS= read -r -d '' f; do echo "### $f"; head -80 "$f"; done
-          mkdir -p /tmp/out/sa && find /tmp/sa -type f -not -path "*archives*" -not -iname "*.nutexb" -print0 | xargs -0 -I{} cp --parents {} /tmp/out/sa/ 2>/dev/null
-          true
+          curl -sL "https://gamebanana.com/apiv11/Mod/149242?_csvProperties=_sName,_sText,_sVersion" | python3 -c "import json,sys,re,html;d=json.load(sys.stdin);print(d.get('_sName'));print(html.unescape(re.sub('<[^>]+>','\n',d.get('_sText',''))))"
+          python3 -u outils/stage/gb_fetch.py mod 149242 /tmp/he 2>&1 | head -40
+          find /tmp/he -type f | grep -v archives | head -60
+          mkdir -p /tmp/out/he && find /tmp/he -type f -not -path "*archives*" -print0 | while IFS= read -r -d '' f; do cp "$f" /tmp/out/he/; done
+          ls -la /tmp/out/he; true
       - name: Chiffrer et publier (branche sortie_stage_cot)
         if: always()
         run: |
