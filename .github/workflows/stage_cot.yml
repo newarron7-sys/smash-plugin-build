@@ -24,23 +24,16 @@ jobs:
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
           mkdir -p /tmp/out/travail
-      - name: Collisions d'origine du Petit Champ (battlefield_s_00.lvd) dans des mods
+      - name: UI de l'ecran des terrains (Petit Champ de bataille) dans des mods
         run: |
-          for q in "small battlefield" "small battlefield collision" "battlefield walk off" "small battlefield no platforms" "battlefield platforms" "battlefield ledge"; do
-            python3 -u outils/stage/gb_fetch.py cherche "$q" stage/battlefield_s/normal/param /tmp/lvd 6 2>&1 | tail -8 || true
+          for q in "small battlefield" "battlefield" "small battlefield stage"; do
+            python3 -u outils/stage/gb_fetch.py cherche "$q" ui/replace_patch/stage /tmp/ui 6 2>&1 | tail -3 || true
+            python3 -u outils/stage/gb_fetch.py cherche "$q" ui/replace/stage /tmp/ui 6 2>&1 | tail -3 || true
           done
-          find /tmp/lvd -iname "*.lvd" -ipath "*battlefield_s*" -print0 | while IFS= read -r -d '' f; do
-            n=$(md5sum "$f" | cut -c1-8); cp "$f" "/tmp/out/travail/lvd_$n.lvd"; echo "$f" > "/tmp/out/travail/lvd_$n.txt"; echo "== $n $f"
+          mkdir -p /tmp/out/ui
+          find /tmp/ui -ipath "*ui/replace*/stage/stage_*" -iname "*battlefields*" -type f -print0 | while IFS= read -r -d '' f; do
+            n=$(echo "$f" | md5sum | cut -c1-6); b=$(basename "$f"); mkdir -p /tmp/out/ui/$n; cp "$f" /tmp/out/ui/$n/; echo "$f" >> /tmp/out/ui/$n/source.txt; echo "== $n $f"
           done
-      - name: HDR (stage/battlefield_s)
-        run: |
-          mkdir -p /tmp/hdr && cd /tmp/hdr
-          curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/HDR-Development/HewDraw-Remix/releases/latest > rel.json
-          python3 -c "import json;d=json.load(open('rel.json'));print(d.get('tag_name'));[print(a['name'],a['size']) for a in d.get('assets',[])]"
-          for u in $(python3 -c "import json;d=json.load(open('rel.json'));[print(a['browser_download_url']) for a in d.get('assets',[]) if a['name'].endswith('.zip')]"); do
-            curl -sL -o a.zip "$u"; unzip -l a.zip | grep -i "battlefield_s" | head -20; unzip -qo a.zip "*battlefield_s*" -d x 2>/dev/null || true; rm -f a.zip
-          done
-          find x -iname "*.lvd" -print0 2>/dev/null | while IFS= read -r -d '' f; do n=$(md5sum "$f" | cut -c1-8); cp "$f" "/tmp/out/travail/hdr_$n.lvd"; echo "$f" > "/tmp/out/travail/hdr_$n.txt"; echo "== hdr $n $f"; done
       - name: Chiffrer et publier (branche sortie_stage_cot)
         if: always()
         run: |
