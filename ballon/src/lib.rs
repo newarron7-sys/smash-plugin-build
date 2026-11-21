@@ -6,10 +6,11 @@
 //! - la balle (Ballon de foot d'Ultimate) attend immobile en l'air au centre ;
 //! - frappée par une attaque, elle part tout droit, sans gravité ni frottement, et rebondit sur le sol, les murs
 //!   et le plafond (±75, 0, 81) sans jamais s'arrêter ; chaque coup la fait accélérer (et la fige un instant) ;
-//! - elle appartient au dernier qui l'a frappée : si elle touche un autre combattant qui ne la frappe pas,
-//!   il est éliminé d'un coup (sauf s'il bouclier : elle rebondit) ; la balle revient alors au centre.
+//! - si elle touche un combattant qui ne la frappe pas (n'importe lequel, comme dans le mod Brawl : pas de
+//!   couleur ni de protection pour celui qui l'a frappée), il est éliminé d'un coup (sauf bouclier : elle
+//!   rebondit) ; la balle revient alors au centre.
 //! Seulement sur Hammer Express : Petit Champ de bataille dont les murs invisibles sont à x ±75.
-//! - v0.3 (mécaniques du vrai jeu) : la balle prend la couleur de celui qui l'a frappée ; coups normaux = droit,
+//! - v0.3 (mécaniques du vrai jeu) : coups normaux = droit,
 //!   stick haut = vers le haut, stick bas = vers le bas ; smash (coup chargé) = beaucoup plus rapide et arrêt sur
 //!   image plus court ; amorti (jab) = la balle monte doucement puis retombe (gravité), garde sa vitesse et la
 //!   prochaine frappe est plus forte ; pendant l'amorti elle n'élimine personne.
@@ -19,7 +20,7 @@ use smash::app::lua_bind::*;
 use smash::app::*;
 use smash::lib::lua_const::*;
 use smash::lua2cpp::*;
-use smash::phx::{Vector2f, Vector3f, Vector4f};
+use smash::phx::{Vector2f, Vector3f};
 use smashline::*;
 
 const DELAI: i32 = 90; // avant de (re)faire apparaître la balle
@@ -48,10 +49,6 @@ static mut GRACE: i32 = 0; // images sans contact mortel après un coup / un reb
 static mut AMORTI: bool = false; // amorti : trajectoire en cloche, pas mortelle
 static mut VY_AMORTI: f32 = 0.0;
 static mut BONUS: f32 = 1.0; // frappe après un amorti : plus forte
-
-/// couleurs des joueurs (P1 rouge, P2 bleu, P3 jaune, P4 vert, puis orange, cyan, rose, violet)
-const COULEURS: [(f32, f32, f32); 8] = [(1.0, 0.15, 0.15), (0.2, 0.45, 1.0), (1.0, 0.85, 0.1), (0.2, 0.9, 0.3),
-    (1.0, 0.55, 0.1), (0.2, 0.9, 0.9), (1.0, 0.4, 0.75), (0.6, 0.35, 1.0)];
 
 /// comment le combattant a frappé : (direction, multiplicateur de vitesse, arrêt sur image ×, amorti)
 unsafe fn frappe(o: *mut BattleObjectModuleAccessor, d: (f32, f32)) -> ((f32, f32), f32, f32, bool) {
@@ -186,13 +183,6 @@ unsafe fn physique() {
     PostureModule::set_pos(ib, &Vector3f { x: POS.0, y: POS.1, z: 0.0 });
     KineticModule::clear_speed_all(ib);
     AttackModule::clear_all(ib); // la balle ne blesse pas d'elle-même : c'est nous qui gérons le contact
-    if PROPRIO >= 0 {                // couleur de celui qui l'a frappée
-        let (r, g, b) = COULEURS[(PROPRIO as usize).min(7)];
-        let c = Vector4f { x: r, y: g, z: b, w: 1.0 };
-        ColorBlendModule::set_main_color(ib, &c, &c, 0.7, 0.5, 1, true);
-    } else {
-        ColorBlendModule::cancel_main_color(ib, 0);
-    }
     if GRACE > 0 {
         GRACE -= 1;
         return;
@@ -202,9 +192,6 @@ unsafe fn physique() {
     }
     // contact avec un adversaire
     for e in 0..8 {
-        if e == PROPRIO {
-            continue;
-        }
         let Some(o) = boma_de(Fighter::get_id_from_entry_id(e)) else { continue };
         let st = StatusModule::status_kind(o);
         if st == *FIGHTER_STATUS_KIND_DEAD || st == *FIGHTER_STATUS_KIND_STANDBY || st == *FIGHTER_STATUS_KIND_REBIRTH {
