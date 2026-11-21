@@ -39,6 +39,7 @@ jobs:
             find "$d" -type f | sed "s#$d/##" | sort > "/tmp/out/travail/fd_${id}_$n/liste.txt"
             echo "== fd $id $n : $(wc -l < "/tmp/out/travail/fd_${id}_$n/liste.txt") fichiers ($d)"
           done
+          find /tmp/out/travail -name "*.nutexb" -delete; du -sh /tmp/out
           mkdir -p /tmp/out/ui
           find /tmp/fd /tmp/fdp -ipath "*ui/replace*/stage/stage_*" -iname "stage_*_end.bntx" -type f -print0 | while IFS= read -r -d '' f; do
             n=$(echo "$f" | md5sum | cut -c1-6); mkdir -p /tmp/out/ui/$n; cp "$f" /tmp/out/ui/$n/; echo "$f" > /tmp/out/ui/$n/source.txt; echo "== ui $n $f"
