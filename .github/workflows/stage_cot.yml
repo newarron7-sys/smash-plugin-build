@@ -1,0 +1,50 @@
+name: Stage COT (usage perso, sortie chiffree)
+on:
+  push:
+    branches: [ stage_cot ]
+    paths:
+      - '.github/workflows/stage_cot.yml'
+      - 'outils/stage/**'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: stage-cot
+  cancel-in-progress: true
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Outils
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
+          mkdir -p /tmp/out/travail
+      - name: Stage Brawl (GameBanana 722619)
+        run: |
+          python3 -u outils/stage/gb_fetch.py mod 722619 /tmp/cot 2>&1 | tee /tmp/out/cot_fichiers.txt | head -5
+          cp $(find /tmp/cot/722619 -iname "*.pac" | head -1) /tmp/out/travail/
+      - name: Reference Ultimate du Petit Champ de bataille (stage/battlefield_s)
+        run: |
+          python3 -u outils/stage/gb_fetch.py cherche "small battlefield" stage/battlefield_s/normal/model /tmp/ref 4 2>&1 | tee /tmp/out/ref_bfs.txt | tail -30 || true
+          python3 -u outils/stage/gb_fetch.py cherche "battlefield" stage/battlefield_s/normal/model /tmp/ref2 4 2>&1 | tee -a /tmp/out/ref_bfs.txt | tail -30 || true
+          for d in $(find /tmp/ref /tmp/ref2 -type d -path "*stage/battlefield_s" 2>/dev/null); do
+            id=$(echo "$d" | sed -E 's#/tmp/ref2?/([0-9]+)/.*#\1#')
+            mkdir -p /tmp/out/travail/ref_$id && cp -r "$d" /tmp/out/travail/ref_$id/
+            find "$d" -type f | sed "s#$d/##" | sort > /tmp/out/travail/ref_$id/liste.txt
+            echo "== ref $id : $(wc -l < /tmp/out/travail/ref_$id/liste.txt) fichiers"
+          done
+          du -sh /tmp/out/travail
+      - name: Chiffrer et publier (branche sortie_stage_cot)
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; openssl rand -out /tmp/k.bin 32
+          tar cz -C /tmp/out . | openssl enc -aes-256-cbc -pbkdf2 -pass file:/tmp/k.bin > /tmp/pub/out.tgz.enc
+          openssl pkeyutl -encrypt -pubin -inkey $GITHUB_WORKSPACE/cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc
+          cd /tmp/pub && git init -q -b s && git config user.name "github-actions" && git config user.email "github-actions@users.noreply.github.com"
+          git add -A && git commit -q -m "stage cot ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" s:sortie_stage_cot
