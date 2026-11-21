@@ -24,19 +24,20 @@ jobs:
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
           mkdir -p /tmp/out/travail
-      - name: HDR (lvd de la Destination Finale)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Grand Champ de bataille (stage/battlefield_l) dans des mods
         run: |
           set +e +o pipefail
-          mkdir -p /tmp/hdr && cd /tmp/hdr
-          for repo in HDR-Development/HewDraw-Remix HDR-Development/romfs-release; do
-            gh release view -R $repo --json tagName,assets -q '.tagName, (.assets[] | .name + " " + (.size|tostring))'
-            gh release download -R $repo -p "*.zip" -D $repo 2>&1 | tail -2
+          for q in "big battlefield" "big battlefield stage" "battlefield l" "large battlefield"; do
+            python3 -u outils/stage/gb_fetch.py cherche "$q" stage/battlefield_l /tmp/bl 8 2>&1 | tail -3
           done
-          find . -name "*.zip" | while read z; do unzip -l "$z" | grep -i "\.lvd" | head -40; unzip -qo "$z" "*end_00.lvd" "*stage/end/*" -d x 2>/dev/null; done
-          find x -iname "*.lvd" | head
-          find x -iname "end_00.lvd" -print0 | while IFS= read -r -d '' f; do n=$(md5sum "$f" | cut -c1-8); cp "$f" /tmp/out/travail/end_$n.lvd; echo "$f" > /tmp/out/travail/end_$n.txt; echo "== $n $f"; done
+          find /tmp/bl -type d -path "*stage/battlefield_l" -print0 | while IFS= read -r -d '' d; do
+            id=$(echo "$d" | sed -E 's#/tmp/bl/([0-9]+)/.*#\1#'); n=$(echo "$d" | md5sum | cut -c1-6)
+            mkdir -p "/tmp/out/travail/bl_${id}_$n" && cp -r "$d" "/tmp/out/travail/bl_${id}_$n/"
+            echo "$d" > "/tmp/out/travail/bl_${id}_$n/source.txt"
+            find "$d" -type f | sed "s#$d/##" | sort > "/tmp/out/travail/bl_${id}_$n/liste.txt"
+            echo "== bl $id $n : $(wc -l < "/tmp/out/travail/bl_${id}_$n/liste.txt") fichiers, lvd $(grep -c lvd "/tmp/out/travail/bl_${id}_$n/liste.txt") ($d)"
+          done
+          find /tmp/out/travail -name "*.nutexb" -delete; du -sh /tmp/out
           true
       - name: Chiffrer et publier (branche sortie_stage_cot)
         if: always()
