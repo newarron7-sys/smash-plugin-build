@@ -24,25 +24,13 @@ jobs:
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
           mkdir -p /tmp/out/travail
-      - name: References Ultimate Destination Finale (stage/end) dans des mods
+      - name: Collisions d'origine de la Destination Finale (end_00.lvd)
         run: |
-          for q in "final destination" "final destination stage" "omega" "final destination replacement" "fd"; do
-            python3 -u outils/stage/gb_fetch.py cherche "$q" stage/end/normal/model /tmp/fd 6 2>&1 | tail -4 || true
+          for q in "final destination walk off" "walk off" "walkoff" "final destination walls" "fd extended" "final destination lvd" "omega walk off" "final destination collision" "longer final destination" "big final destination"; do
+            python3 -u outils/stage/gb_fetch.py cherche "$q" stage/end/normal/param/end_00.lvd /tmp/lvd 8 2>&1 | tail -3 || true
           done
-          for q in "final destination" "final destination walk off" "final destination collision"; do
-            python3 -u outils/stage/gb_fetch.py cherche "$q" stage/end/normal/param /tmp/fdp 6 2>&1 | tail -3 || true
-          done
-          find /tmp/fd /tmp/fdp -type d -path "*stage/end" -print0 2>/dev/null | while IFS= read -r -d '' d; do
-            id=$(echo "$d" | sed -E 's#/tmp/fdp?/([0-9]+)/.*#\1#'); n=$(echo "$d" | md5sum | cut -c1-6)
-            mkdir -p "/tmp/out/travail/fd_${id}_$n" && cp -r "$d" "/tmp/out/travail/fd_${id}_$n/"
-            echo "$d" > "/tmp/out/travail/fd_${id}_$n/source.txt"
-            find "$d" -type f | sed "s#$d/##" | sort > "/tmp/out/travail/fd_${id}_$n/liste.txt"
-            echo "== fd $id $n : $(wc -l < "/tmp/out/travail/fd_${id}_$n/liste.txt") fichiers ($d)"
-          done
-          find /tmp/out/travail -name "*.nutexb" -delete; du -sh /tmp/out
-          mkdir -p /tmp/out/ui
-          find /tmp/fd /tmp/fdp -ipath "*ui/replace*/stage/stage_*" -iname "stage_*_end.bntx" -type f -print0 | while IFS= read -r -d '' f; do
-            n=$(echo "$f" | md5sum | cut -c1-6); mkdir -p /tmp/out/ui/$n; cp "$f" /tmp/out/ui/$n/; echo "$f" > /tmp/out/ui/$n/source.txt; echo "== ui $n $f"
+          find /tmp/lvd -iname "end_00.lvd" -print0 | while IFS= read -r -d '' f; do
+            n=$(md5sum "$f" | cut -c1-8); cp "$f" "/tmp/out/travail/end_$n.lvd"; echo "$f" >> "/tmp/out/travail/end_$n.txt"; echo "== $n $f"
           done
       - name: Chiffrer et publier (branche sortie_stage_cot)
         if: always()
