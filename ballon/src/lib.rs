@@ -9,13 +9,17 @@
 //! - elle appartient au dernier qui l'a frappée : si elle touche un autre combattant qui ne la frappe pas,
 //!   il est éliminé d'un coup (sauf s'il bouclier : elle rebondit) ; la balle revient alors au centre.
 //! Seulement sur Hammer Express : Petit Champ de bataille dont les murs invisibles sont à x ±75.
+//! - v0.3 (mécaniques du vrai jeu) : la balle prend la couleur de celui qui l'a frappée ; coups normaux = droit,
+//!   stick haut = vers le haut, stick bas = vers le bas ; smash (coup chargé) = beaucoup plus rapide et arrêt sur
+//!   image plus court ; amorti (jab) = la balle monte doucement puis retombe (gravité), garde sa vitesse et la
+//!   prochaine frappe est plus forte ; pendant l'amorti elle n'élimine personne.
 //! v0.1 : balle d'Ultimate normale au centre ; v0.2 : comportement Lethal League
 
 use smash::app::lua_bind::*;
 use smash::app::*;
 use smash::lib::lua_const::*;
 use smash::lua2cpp::*;
-use smash::phx::{Vector2f, Vector3f};
+use smash::phx::{Vector2f, Vector3f, Vector4f};
 use smashline::*;
 
 const DELAI: i32 = 90; // avant de (re)faire apparaître la balle
@@ -41,6 +45,32 @@ static mut VIT: f32 = 0.0;
 static mut PROPRIO: i32 = -1;
 static mut FIGE: i32 = 0;
 static mut GRACE: i32 = 0; // images sans contact mortel après un coup / un rebond sur bouclier
+static mut AMORTI: bool = false; // amorti : trajectoire en cloche, pas mortelle
+static mut VY_AMORTI: f32 = 0.0;
+static mut BONUS: f32 = 1.0; // frappe après un amorti : plus forte
+
+/// couleurs des joueurs (P1 rouge, P2 bleu, P3 jaune, P4 vert, puis orange, cyan, rose, violet)
+const COULEURS: [(f32, f32, f32); 8] = [(1.0, 0.15, 0.15), (0.2, 0.45, 1.0), (1.0, 0.85, 0.1), (0.2, 0.9, 0.3),
+    (1.0, 0.55, 0.1), (0.2, 0.9, 0.9), (1.0, 0.4, 0.75), (0.6, 0.35, 1.0)];
+
+/// comment le combattant a frappé : (direction, multiplicateur de vitesse, arrêt sur image ×, amorti)
+unsafe fn frappe(o: *mut BattleObjectModuleAccessor, d: (f32, f32)) -> ((f32, f32), f32, f32, bool) {
+    let st = StatusModule::status_kind(o);
+    let lr = PostureModule::lr(o);
+    let sy = ControlModule::get_stick_y(o);
+    let air = StatusModule::situation_kind(o) == *SITUATION_KIND_AIR;
+    if st == *FIGHTER_STATUS_KIND_ATTACK {
+        return ((0.0, 1.0), 1.0, 0.5, true); // jab = amorti
+    }
+    let smash = st == *FIGHTER_STATUS_KIND_ATTACK_S4 || st == *FIGHTER_STATUS_KIND_ATTACK_HI4 || st == *FIGHTER_STATUS_KIND_ATTACK_LW4
+        || (air && sy < -0.5);
+    let (mut ax, mut ay) = (lr, 0.0f32);
+    if sy > 0.5 { ay = 1.0; } else if sy < -0.5 { ay = -1.0; }
+    if st == *FIGHTER_STATUS_KIND_ATTACK_HI4 || st == *FIGHTER_STATUS_KIND_ATTACK_HI3 { ay = 1.0; }
+    let n = (ax * ax + ay * ay).sqrt();
+    let dir = if n > 0.0 { (ax / n, ay / n) } else { d };
+    if smash { (dir, 1.7, 0.5, false) } else { (dir, 1.0, 1.0, false) }
+}
 
 unsafe fn boma_de(id: u32) -> Option<*mut BattleObjectModuleAccessor> {
     if id == 0 || id == *BATTLE_OBJECT_ID_INVALID as u32 || !sv_battle_object::is_active(id) {
@@ -69,6 +99,9 @@ unsafe fn remettre_au_centre() {
     PROPRIO = -1;
     FIGE = 0;
     GRACE = 0;
+    AMORTI = false;
+    VY_AMORTI = 0.0;
+    BONUS = 1.0;
 }
 
 unsafe fn apparaitre(boma: *mut BattleObjectModuleAccessor) {
@@ -112,14 +145,34 @@ unsafe fn physique() {
     let (dx, dy) = ((*p).x - POS.0, (*p).y - POS.1);
     let d = (dx * dx + dy * dy).sqrt();
     if d > 0.6 && FIGE == 0 {
-        DIR = (dx / d, dy / d);
-        VIT = if VIT <= 0.0 { V0 } else { (VIT * ACCEL).min(VMAX) };
         PROPRIO = plus_proche(POS.0, POS.1);
-        FIGE = 3 + (VIT * 1.5) as i32; // arrêt sur image, plus long quand elle va vite
+        let o = boma_de(Fighter::get_id_from_entry_id(PROPRIO.max(0)));
+        let (dir, mult, fige, amorti) = match o { Some(o) => frappe(o, (dx / d, dy / d)), None => ((dx / d, dy / d), 1.0, 1.0, false) };
+        if VIT <= 0.0 { VIT = V0; }
+        if amorti {
+            AMORTI = true;                    // garde sa vitesse ; la prochaine frappe ira plus vite
+            VY_AMORTI = 2.2;
+            BONUS = 1.35;
+            DIR = dir;
+        } else {
+            AMORTI = false;
+            DIR = dir;
+            VIT = (VIT * ACCEL * mult * BONUS).min(VMAX);
+            BONUS = 1.0;
+        }
+        FIGE = ((3.0 + VIT * 1.5) * fige) as i32; // arrêt sur image, plus long quand elle va vite
         GRACE = 6;
     }
     if FIGE > 0 {
         FIGE -= 1;
+    } else if AMORTI {
+        // amorti : monte doucement puis retombe, rebondit sur les murs
+        VY_AMORTI -= 0.09;
+        let mut x = POS.0;
+        let mut y = POS.1 + VY_AMORTI;
+        if y < SOL + R { y = SOL + R; VY_AMORTI = VY_AMORTI.abs() * 0.5; }
+        if y > PLAFOND - R { y = PLAFOND - R; VY_AMORTI = -VY_AMORTI.abs(); }
+        POS = (x, y);
     } else if VIT > 0.0 {
         // avance en ligne droite, rebonds parfaits
         let mut x = POS.0 + DIR.0 * VIT;
@@ -133,11 +186,18 @@ unsafe fn physique() {
     PostureModule::set_pos(ib, &Vector3f { x: POS.0, y: POS.1, z: 0.0 });
     KineticModule::clear_speed_all(ib);
     AttackModule::clear_all(ib); // la balle ne blesse pas d'elle-même : c'est nous qui gérons le contact
+    if PROPRIO >= 0 {                // couleur de celui qui l'a frappée
+        let (r, g, b) = COULEURS[(PROPRIO as usize).min(7)];
+        let c = Vector4f { x: r, y: g, z: b, w: 1.0 };
+        ColorBlendModule::set_main_color(ib, &c, &c, 0.7, 0.5, 1, true);
+    } else {
+        ColorBlendModule::cancel_main_color(ib, 0);
+    }
     if GRACE > 0 {
         GRACE -= 1;
         return;
     }
-    if VIT <= 0.0 || FIGE > 0 {
+    if VIT <= 0.0 || FIGE > 0 || AMORTI {
         return;
     }
     // contact avec un adversaire
