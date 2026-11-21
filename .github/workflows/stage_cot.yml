@@ -24,14 +24,20 @@ jobs:
         run: |
           sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
           mkdir -p /tmp/out/travail
-      - name: Collisions d'origine de la Destination Finale (end_00.lvd)
+      - name: HDR (lvd de la Destination Finale)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          for q in "final destination walk off" "walk off" "walkoff" "final destination walls" "fd extended" "final destination lvd" "omega walk off" "final destination collision" "longer final destination" "big final destination"; do
-            python3 -u outils/stage/gb_fetch.py cherche "$q" stage/end/normal/param/end_00.lvd /tmp/lvd 8 2>&1 | tail -3 || true
+          set +e +o pipefail
+          mkdir -p /tmp/hdr && cd /tmp/hdr
+          for repo in HDR-Development/HewDraw-Remix HDR-Development/romfs-release; do
+            gh release view -R $repo --json tagName,assets -q '.tagName, (.assets[] | .name + " " + (.size|tostring))'
+            gh release download -R $repo -p "*.zip" -D $repo 2>&1 | tail -2
           done
-          find /tmp/lvd -iname "end_00.lvd" -print0 | while IFS= read -r -d '' f; do
-            n=$(md5sum "$f" | cut -c1-8); cp "$f" "/tmp/out/travail/end_$n.lvd"; echo "$f" >> "/tmp/out/travail/end_$n.txt"; echo "== $n $f"
-          done
+          find . -name "*.zip" | while read z; do unzip -l "$z" | grep -i "\.lvd" | head -40; unzip -qo "$z" "*end_00.lvd" "*stage/end/*" -d x 2>/dev/null; done
+          find x -iname "*.lvd" | head
+          find x -iname "end_00.lvd" -print0 | while IFS= read -r -d '' f; do n=$(md5sum "$f" | cut -c1-8); cp "$f" /tmp/out/travail/end_$n.lvd; echo "$f" > /tmp/out/travail/end_$n.txt; echo "== $n $f"; done
+          true
       - name: Chiffrer et publier (branche sortie_stage_cot)
         if: always()
         run: |
