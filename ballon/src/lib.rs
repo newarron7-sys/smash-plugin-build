@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.20 : freeze plus long à la frappe (10 + 3,5 × vitesse images, max 55).
 //! - v0.19 : effets de coup sur la balle : étincelle selon l'attribut, son d'impact, secousse de l'écran.
 //! - v0.18 : petite fumée blanche quand la balle rebondit sur le sol, un mur ou le plafond.
 //! - v0.17 : la balle ne disparaît plus (durée de vie remise à sa valeur de départ à chaque image).
@@ -425,7 +426,7 @@ unsafe fn physique() {
                 BONUS = 1.0;
             }
             // v0.15 : arrêt sur image de la balle ET du joueur qui frappe, plus long quand elle va vite
-            FIGE = (((6.0 + VIT * 2.5) * fige) as i32).min(40);
+            FIGE = (((10.0 + VIT * 3.5) * fige) as i32).min(55); // v0.20 : freeze plus long
             StopModule::set_hit_stop_frame(o, FIGE, false);
             impact(o, ib, attr);
             GRACE = 6;
