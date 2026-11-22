@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.19 : effets de coup sur la balle : étincelle selon l'attribut, son d'impact, secousse de l'écran.
 //! - v0.18 : petite fumée blanche quand la balle rebondit sur le sol, un mur ou le plafond.
 //! - v0.17 : la balle ne disparaît plus (durée de vie remise à sa valeur de départ à chaque image).
 //! - v0.16 : élimination visible : dégâts de feu, gel, vol en tournoyant à travers murs et sol jusqu'au K.O.
@@ -176,8 +177,8 @@ static mut BONUS: f32 = 1.0; // frappe après un amorti : plus forte
 
 /// comment le combattant a frappé : (direction, multiplicateur de vitesse, arrêt sur image ×, amorti)
 /// v0.14 : la hitbox active la plus proche de la balle -> (distance - portée, angle du coup en degrés)
-unsafe fn hitbox_touche(o: *mut BattleObjectModuleAccessor) -> Option<(f32, i32)> {
-    let mut best: Option<(f32, i32)> = None;
+unsafe fn hitbox_touche(o: *mut BattleObjectModuleAccessor) -> Option<(f32, i32, u64)> {
+    let mut best: Option<(f32, i32, u64)> = None;
     for i in 0..8 {
         if !AttackModule::is_attack(o, i, false) {
             continue;
@@ -193,7 +194,7 @@ unsafe fn hitbox_touche(o: *mut BattleObjectModuleAccessor) -> Option<(f32, i32)
         let portee = ad.size.max(2.0) + ol * 0.8 + R + 1.5;
         let d = ((POS.0 - jp.x).powi(2) + (POS.1 - jp.y).powi(2)).sqrt() - portee;
         if d < 0.0 && best.map_or(true, |b| d < b.0) {
-            best = Some((d, ad.vector));
+            best = Some((d, ad.vector, ad.attr));
         }
     }
     best
@@ -338,6 +339,41 @@ unsafe fn plus_proche(x: f32, y: f32) -> i32 {
     best.0
 }
 
+/// v0.19 : effets d'un vrai coup : étincelle selon l'attribut du coup, son d'impact, secousse de l'écran
+unsafe fn impact(o: *mut BattleObjectModuleAccessor, ib: *mut BattleObjectModuleAccessor, attr: u64) {
+    use smash::phx::Hash40;
+    let a = |n: &str| Hash40::new(n).hash == attr;
+    let niv = if VIT < 3.0 { "s" } else if VIT < 6.0 { "m" } else { "l" };
+    let (fx, se) = if a("collision_attr_fire") {
+        ("sys_hit_fire", "se_common_fire_m_damage".to_string())
+    } else if a("collision_attr_elec") {
+        ("sys_hit_elec", format!("se_common_electric_hit_{}", niv))
+    } else if a("collision_attr_cutup") {
+        ("sys_hit_cut", format!("se_common_sword_hit_{}", niv))
+    } else if a("collision_attr_ice") {
+        ("sys_hit_ice", format!("se_common_kick_hit_{}", niv))
+    } else if a("collision_attr_magic") {
+        ("sys_hit_magic", format!("se_common_magic_hit_{}", niv))
+    } else if a("collision_attr_purple") {
+        ("sys_hit_purple", format!("se_common_magic_hit_{}", niv))
+    } else if VIT >= 6.0 {
+        ("sys_hit_normal_l", format!("se_common_kick_hit_{}", niv))
+    } else {
+        ("sys_hit_normal", format!("se_common_kick_hit_{}", niv))
+    };
+    let rot = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    let sc = (0.7 + VIT * 0.08).min(1.6);
+    EffectModule::req(ib, Hash40::new(fx), &Vector3f { x: POS.0, y: POS.1, z: 0.0 }, &rot, sc, 0, 0, false, 0);
+    SoundModule::play_se(o, Hash40::new(&se), true, false, false, false, enSEType(0));
+    if VIT >= 9.5 {
+        CameraModule::req_quake(o, *CAMERA_QUAKE_KIND_L);
+    } else if VIT >= 7.0 {
+        CameraModule::req_quake(o, *CAMERA_QUAKE_KIND_M);
+    } else if VIT >= 4.0 {
+        CameraModule::req_quake(o, *CAMERA_QUAKE_KIND_S);
+    }
+}
+
 unsafe fn fumee(ib: *mut BattleObjectModuleAccessor, x: f32, y: f32, rz: f32) {
     let rot = Vector3f { x: 0.0, y: 0.0, z: rz };
     EffectModule::req(ib, smash::phx::Hash40::new("sys_landing_smoke_s"), &Vector3f { x, y, z: 0.0 }, &rot, 0.9, 0, 0, false, 0);
@@ -368,7 +404,7 @@ unsafe fn physique() {
             if DEJA[e as usize] {
                 continue; // un seul renvoi par coup
             }
-            let Some((_, angle)) = hitbox_touche(o) else { continue };
+            let Some((_, angle, attr)) = hitbox_touche(o) else { continue };
             DEJA[e as usize] = true;
             PROPRIO = e;
             let dir = direction_coup(o, angle);
@@ -391,6 +427,7 @@ unsafe fn physique() {
             // v0.15 : arrêt sur image de la balle ET du joueur qui frappe, plus long quand elle va vite
             FIGE = (((6.0 + VIT * 2.5) * fige) as i32).min(40);
             StopModule::set_hit_stop_frame(o, FIGE, false);
+            impact(o, ib, attr);
             GRACE = 6;
             break;
         }
