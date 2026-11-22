@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.13 : détection du stage : le booléen du rayon n'est pas fiable -> seulement les positions des murs (±74.2).
 //! - v0.12 : journal de diagnostic sd:/ballon_log.txt.
 //! - v0.11 : apparition par n'importe quel combattant au sol et libre (la balle n'apparaissait pas si P1 bougeait).
 //! - v0.10 : le joueur 1 (identifiant 0) était ignoré : il ne touchait jamais la balle et n'était jamais éliminé.
@@ -132,13 +133,15 @@ unsafe fn hammer_express(boma: *mut BattleObjectModuleAccessor) -> bool {
     if stage::get_stage_id() != *StageID::BattleField_S {
         return false;
     }
-    let mut hit = Vector2f { x: 0.0, y: 0.0 };
+    // v0.13 : le booléen renvoyé n'est pas fiable (droite=false alors que le mur est touché à x=74.2) :
+    // on ne regarde que la position touchée (initialisée hors stage pour repérer un vrai « rien touché »)
     let de = Vector2f { x: 0.0, y: 25.0 };
-    let droite = GroundModule::ray_check_hit_pos(boma, &de, &Vector2f { x: 100.0, y: 0.0 }, &mut hit, true);
-    let x_d = hit.x;
-    let gauche = GroundModule::ray_check_hit_pos(boma, &de, &Vector2f { x: -100.0, y: 0.0 }, &mut hit, true);
-    log(&format!("detection stage : droite={} x={:.1} gauche={} x={:.1}", droite, x_d, gauche, hit.x));
-    droite && gauche && (x_d - MUR).abs() < 8.0 && (hit.x + MUR).abs() < 8.0
+    let mut hd = Vector2f { x: 999.0, y: 0.0 };
+    let droite = GroundModule::ray_check_hit_pos(boma, &de, &Vector2f { x: 100.0, y: 0.0 }, &mut hd, true);
+    let mut hg = Vector2f { x: 999.0, y: 0.0 };
+    let gauche = GroundModule::ray_check_hit_pos(boma, &de, &Vector2f { x: -100.0, y: 0.0 }, &mut hg, true);
+    log(&format!("detection stage : droite={} x={:.1} gauche={} x={:.1}", droite, hd.x, gauche, hg.x));
+    (hd.x - MUR).abs() < 8.0 && (hg.x + MUR).abs() < 8.0
 }
 
 unsafe fn balle_boma() -> Option<*mut BattleObjectModuleAccessor> {
