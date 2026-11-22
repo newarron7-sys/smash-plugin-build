@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.21 : la balle tourne nettement sur elle-même quand elle se déplace.
 //! - v0.20 : freeze plus long à la frappe (10 + 3,5 × vitesse images, max 55).
 //! - v0.19 : effets de coup sur la balle : étincelle selon l'attribut, son d'impact, secousse de l'écran.
 //! - v0.18 : petite fumée blanche quand la balle rebondit sur le sol, un mur ou le plafond.
@@ -173,6 +174,7 @@ static mut VY_AMORTI: f32 = 0.0;
 static mut DEJA: [bool; 8] = [false; 8]; // ce combattant a déjà renvoyé la balle avec ce coup
 const PORTEE: f32 = 16.0; // portée d'un coup autour du point devant le combattant
 static mut VIE0: i32 = -1; // v0.17 : durée de vie de la balle à son apparition, remise chaque image (plus de clignotement / disparition)
+static mut ROT: f32 = 0.0; // v0.21 : rotation visuelle de la balle (degrés)
 static mut EN_COURS: bool = false; // v0.8 : anti ré-entrée (changer le statut relance la boucle du combattant -> récursion infinie)
 static mut BONUS: f32 = 1.0; // frappe après un amorti : plus forte
 
@@ -456,6 +458,13 @@ unsafe fn physique() {
     }
     PostureModule::set_pos(ib, &Vector3f { x: POS.0, y: POS.1, z: 0.0 });
     PostureModule::set_scale(ib, TAILLE, false);
+    // v0.21 : la balle tourne sur elle-même quand elle bouge, plus vite quand elle va vite
+    if FIGE == 0 && (VIT > 0.0 || AMORTI) {
+        let sens = if DIR.0 < -0.01 { 1.0 } else { -1.0 };
+        let v = if AMORTI { 6.0 } else { VIT };
+        ROT = (ROT + sens * (10.0 + v * 4.0).min(45.0)) % 360.0;
+    }
+    PostureModule::set_rot(ib, &Vector3f { x: 0.0, y: 0.0, z: ROT }, 0);
     if VIE0 >= 0 {
         if IMAGE % 600 == 0 {
             log(&format!("vie balle avant remise : {}", WorkModule::get_int(ib, *ITEM_INSTANCE_WORK_INT_LIFE_TIME)));
