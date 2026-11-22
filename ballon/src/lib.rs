@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.11 : apparition par n'importe quel combattant au sol et libre (la balle n'apparaissait pas si P1 bougeait).
 //! - v0.10 : le joueur 1 (identifiant 0) était ignoré : il ne touchait jamais la balle et n'était jamais éliminé.
 //! - v0.9 : la balle ne bougeait pas quand on la tapait -> détection des coups par le plugin (hitbox active + zone devant le combattant).
 //! - v0.8 : crash (récursion infinie : changer le statut du combattant relançait ballon_frame) -> verrou anti ré-entrée.
@@ -143,7 +144,12 @@ unsafe fn remettre_au_centre() {
 unsafe fn apparaitre(boma: *mut BattleObjectModuleAccessor) {
     // v0.7 : le combattant ne doit JAMAIS rester avec la balle (c'est un objet lourd : il restait bloqué à la porter)
     // -> seulement quand il est debout sans rien faire, puis la balle est éjectée de sa main et il est remis debout
-    if ItemModule::is_have_item(boma, 0) || StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_WAIT
+    // v0.11 : n'importe quel combattant au sol et libre (pas seulement le joueur 1 immobile)
+    let st = StatusModule::status_kind(boma);
+    let libre = [*FIGHTER_STATUS_KIND_WAIT, *FIGHTER_STATUS_KIND_WALK, *FIGHTER_STATUS_KIND_DASH, *FIGHTER_STATUS_KIND_RUN,
+        *FIGHTER_STATUS_KIND_RUN_BRAKE, *FIGHTER_STATUS_KIND_TURN, *FIGHTER_STATUS_KIND_TURN_DASH, *FIGHTER_STATUS_KIND_TURN_RUN,
+        *FIGHTER_STATUS_KIND_SQUAT, *FIGHTER_STATUS_KIND_SQUAT_WAIT, *FIGHTER_STATUS_KIND_SQUAT_RV, *FIGHTER_STATUS_KIND_LANDING];
+    if ItemModule::is_have_item(boma, 0) || !libre.contains(&st)
         || StatusModule::situation_kind(boma) != *SITUATION_KIND_GROUND {
         return;
     }
@@ -322,6 +328,13 @@ unsafe fn ballon_frame_(fighter: &mut L2CFighterCommon) {
     }
     if CHEF < 0 {
         CHEF = entree;
+    }
+    // apparition : le premier combattant libre s'en charge (avant : seulement le chef, et seulement immobile)
+    if EST_HE == 1 && ATTENTE <= 0 && balle_boma().is_none() {
+        apparaitre(boma);
+        if balle_boma().is_some() {
+            return;
+        }
     }
     if entree != CHEF {
         SANS_CHEF += 1;
