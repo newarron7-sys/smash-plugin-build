@@ -1,0 +1,23 @@
+[package]
+name = "soldiag"
+version = "0.1.0"
+edition = "2021"
+description = "Diagnostic : le plugin de Sol Badguy reconnaît-il la 13.0.4 ? (usage perso)"
+
+[package.metadata.skyline]
+titleid = "01006A800016E000"
+
+[lib]
+crate-type = ["cdylib"]
+
+[patch.crates-io]
+nnsdk = { git = "https://github.com/ultimate-research/nnsdk-rs" }
+
+[dependencies]
+skyline = { git = "https://github.com/ultimate-research/skyline-rs" }
+
+[profile.release]
+panic = "abort"
+lto = true
+
+[workspace]
