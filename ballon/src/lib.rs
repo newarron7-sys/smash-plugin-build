@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.23 : sons : rebond sur le décor, balle qui touche un joueur.
 //! - v0.22 : la balle ne clignote / disparaît plus : toujours en statut FALL, sans collision décor.
 //! - v0.21 : la balle tourne nettement sur elle-même quand elle se déplace.
 //! - v0.20 : freeze plus long à la frappe (10 + 3,5 × vitesse images, max 55).
@@ -109,6 +110,9 @@ unsafe fn eliminer(e: i32, o: *mut BattleObjectModuleAccessor) {
     let rot = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
     EffectModule::req(o, smash::phx::Hash40::new("sys_hit_fire"), &Vector3f { x: POS.0, y: POS.1, z: 0.0 }, &rot, 1.6, 0, 0, false, 0);
     feu(o, 1.2);
+    // v0.23 : son quand la balle touche un joueur (impact de feu + éjection)
+    SoundModule::play_se(o, smash::phx::Hash40::new("se_common_fire_m_damage"), true, false, false, false, enSEType(0));
+    SoundModule::play_se(o, smash::phx::Hash40::new("se_common_blowaway_m"), true, false, false, false, enSEType(0));
     StatusModule::change_status_force(o, *FIGHTER_STATUS_KIND_DAMAGE_FLY_ROLL, false);
     GroundModule::correct(o, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
     GroundModule::set_collidable(o, false);
@@ -381,6 +385,8 @@ unsafe fn impact(o: *mut BattleObjectModuleAccessor, ib: *mut BattleObjectModule
 unsafe fn fumee(ib: *mut BattleObjectModuleAccessor, x: f32, y: f32, rz: f32) {
     let rot = Vector3f { x: 0.0, y: 0.0, z: rz };
     EffectModule::req(ib, smash::phx::Hash40::new("sys_landing_smoke_s"), &Vector3f { x, y, z: 0.0 }, &rot, 0.9, 0, 0, false, 0);
+    // v0.23 : son de rebond
+    SoundModule::play_se(ib, smash::phx::Hash40::new("se_common_wallhit"), true, false, false, false, enSEType(0));
 }
 
 unsafe fn physique() {
@@ -508,6 +514,7 @@ unsafe fn physique() {
         if st == *FIGHTER_STATUS_KIND_GUARD || st == *FIGHTER_STATUS_KIND_GUARD_ON || st == *FIGHTER_STATUS_KIND_GUARD_DAMAGE {
             DIR = (-DIR.0, DIR.1); // bouclier : elle rebondit
             GRACE = 10;
+            SoundModule::play_se(o, smash::phx::Hash40::new("se_common_hit_nodamage"), true, false, false, false, enSEType(0));
             continue;
         }
         // éliminé d'un coup : vrai K.O. du jeu dans la direction de la balle
@@ -584,6 +591,6 @@ unsafe fn ballon_frame_(fighter: &mut L2CFighterCommon) {
 
 #[skyline::main(name = "ballon")]
 pub fn main() {
-    log("=== plugin ballon v0.22 chargé ===");
+    log("=== plugin ballon v0.23 chargé ===");
     Agent::new("fighter").on_line(Main, ballon_frame).install();
 }
