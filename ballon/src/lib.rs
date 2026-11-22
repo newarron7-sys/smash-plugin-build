@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.9 : la balle ne bougeait pas quand on la tapait -> détection des coups par le plugin (hitbox active + zone devant le combattant).
 //! - v0.8 : crash (récursion infinie : changer le statut du combattant relançait ballon_frame) -> verrou anti ré-entrée.
 //! - v0.7 : correctif : le combattant qui « donne » la balle restait bloqué (objet lourd tenu) -> éjection + debout.
 //! v0.1 : balle d'Ultimate normale au centre ; v0.2 : comportement Lethal League
@@ -76,6 +77,8 @@ unsafe fn ejecter(o: *mut BattleObjectModuleAccessor, x: f32, y: f32, dx: f32, d
 
 static mut AMORTI: bool = false; // amorti : trajectoire en cloche, pas mortelle
 static mut VY_AMORTI: f32 = 0.0;
+static mut DEJA: [bool; 8] = [false; 8]; // ce combattant a déjà renvoyé la balle avec ce coup
+const PORTEE: f32 = 16.0; // portée d'un coup autour du point devant le combattant
 static mut EN_COURS: bool = false; // v0.8 : anti ré-entrée (changer le statut relance la boucle du combattant -> récursion infinie)
 static mut BONUS: f32 = 1.0; // frappe après un amorti : plus forte
 
@@ -187,28 +190,51 @@ unsafe fn physique() {
         PostureModule::set_pos(ib, &Vector3f { x: POS.0, y: POS.1, z: 0.0 });
         return;
     }
-    // la balle a-t-elle été déplacée par le jeu (coup reçu) depuis l'image précédente ?
-    let p = PostureModule::pos(ib);
-    let (dx, dy) = ((*p).x - POS.0, (*p).y - POS.1);
-    let d = (dx * dx + dy * dy).sqrt();
-    if d > 0.6 && FIGE == 0 {
-        PROPRIO = plus_proche(POS.0, POS.1);
-        let o = boma_de(Fighter::get_id_from_entry_id(PROPRIO.max(0)));
-        let (dir, mult, fige, amorti) = match o { Some(o) => frappe(o, (dx / d, dy / d)), None => ((dx / d, dy / d), 1.0, 1.0, false) };
-        if VIT <= 0.0 { VIT = V0; }
-        if amorti {
-            AMORTI = true;                    // garde sa vitesse ; la prochaine frappe ira plus vite
-            VY_AMORTI = 2.2;
-            BONUS = 1.35;
-            DIR = dir;
-        } else {
-            AMORTI = false;
-            DIR = dir;
-            VIT = (VIT * ACCEL * mult * BONUS).min(VMAX);
-            BONUS = 1.0;
+    // v0.9 : détection des coups par nous-mêmes (le jeu ne bouge pas la balle quand on la tape) :
+    // un combattant dont un coup est actif (hitbox) et dont la zone de frappe, devant lui, touche la balle
+    if FIGE == 0 {
+        for e in 0..8 {
+            let Some(o) = boma_de(Fighter::get_id_from_entry_id(e)) else { continue };
+            let st = StatusModule::status_kind(o);
+            if st == *FIGHTER_STATUS_KIND_DEAD || st == *FIGHTER_STATUS_KIND_STANDBY || st == *FIGHTER_STATUS_KIND_REBIRTH {
+                continue;
+            }
+            let att = (0..8).any(|i| AttackModule::is_attack(o, i, false));
+            if !att {
+                DEJA[e as usize] = false;
+                continue;
+            }
+            if DEJA[e as usize] {
+                continue; // un seul renvoi par coup
+            }
+            let lr = PostureModule::lr(o);
+            let p = PostureModule::pos(o);
+            let (cx, cy) = ((*p).x + lr * 7.0, (*p).y + 10.0);
+            let (dx, dy) = (POS.0 - cx, POS.1 - cy);
+            let d = (dx * dx + dy * dy).sqrt();
+            if d > R + PORTEE {
+                continue;
+            }
+            DEJA[e as usize] = true;
+            PROPRIO = e;
+            let n = d.max(0.001);
+            let (dir, mult, fige, amorti) = frappe(o, (dx / n, dy / n));
+            if VIT <= 0.0 { VIT = V0; }
+            if amorti {
+                AMORTI = true;                    // garde sa vitesse ; la prochaine frappe ira plus vite
+                VY_AMORTI = 2.2;
+                BONUS = 1.35;
+                DIR = dir;
+            } else {
+                AMORTI = false;
+                DIR = dir;
+                VIT = (VIT * ACCEL * mult * BONUS).min(VMAX);
+                BONUS = 1.0;
+            }
+            FIGE = ((3.0 + VIT * 1.5) * fige) as i32; // arrêt sur image, plus long quand elle va vite
+            GRACE = 6;
+            break;
         }
-        FIGE = ((3.0 + VIT * 1.5) * fige) as i32; // arrêt sur image, plus long quand elle va vite
-        GRACE = 6;
     }
     if FIGE > 0 {
         FIGE -= 1;
