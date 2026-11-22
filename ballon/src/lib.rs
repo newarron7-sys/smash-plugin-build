@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.24 : tous les compteurs de temps de l'objet remis chaque image ; si la balle disparaît quand même, recréée aussitôt avec son état.
 //! - v0.23 : sons : rebond sur le décor, balle qui touche un joueur.
 //! - v0.22 : la balle ne clignote / disparaît plus : toujours en statut FALL, sans collision décor.
 //! - v0.21 : la balle tourne nettement sur elle-même quand elle se déplace.
@@ -47,7 +48,7 @@ use smashline::*;
 static mut NB_LOG: u32 = 0;
 fn log(m: &str) {
     unsafe {
-        if NB_LOG > 400 { return; }
+        if NB_LOG > 1500 { return; }
         NB_LOG += 1;
     }
     use std::io::Write;
@@ -178,6 +179,27 @@ static mut AMORTI: bool = false; // amorti : trajectoire en cloche, pas mortelle
 static mut VY_AMORTI: f32 = 0.0;
 static mut DEJA: [bool; 8] = [false; 8]; // ce combattant a déjà renvoyé la balle avec ce coup
 const PORTEE: f32 = 16.0; // portée d'un coup autour du point devant le combattant
+// v0.24 : tous les compteurs de temps de l'objet, remis à leur valeur de départ chaque image
+unsafe fn compteurs() -> [i32; 10] {
+    [*ITEM_INSTANCE_WORK_INT_COUNTER, *ITEM_INSTANCE_WORK_INT_COUNTER_2, *ITEM_INSTANCE_WORK_INT_COUNTER_3,
+     *ITEM_INSTANCE_WORK_INT_FORCE_REMOVE_COUNTER, *ITEM_INSTANCE_WORK_INT_LIFE_TIME,
+     *ITEM_INSTANCE_WORK_INT_LIFE_TIME_FORCE_COUNTER1, *ITEM_INSTANCE_WORK_INT_LIFE_TIME_FORCE_COUNTER2,
+     *ITEM_INSTANCE_WORK_INT_LIFE_TIME_EDITSTAGE, *ITEM_INSTANCE_WORK_INT_TRACKING_COUNTER, *ITEM_INSTANCE_WORK_INT_NO_PICKUP_FRAME]
+}
+unsafe fn valeurs() -> [i32; 8] {
+    [*ITEM_INSTANCE_WORK_INT_VALUE_1, *ITEM_INSTANCE_WORK_INT_VALUE_2, *ITEM_INSTANCE_WORK_INT_VALUE_3, *ITEM_INSTANCE_WORK_INT_VALUE_4,
+     *ITEM_INSTANCE_WORK_INT_VALUE_5, *ITEM_INSTANCE_WORK_INT_VALUE_6, *ITEM_INSTANCE_WORK_INT_VALUE_7, *ITEM_INSTANCE_WORK_INT_VALUE_8]
+}
+unsafe fn etat_objet(ib: *mut BattleObjectModuleAccessor) -> String {
+    let c: Vec<i32> = compteurs().iter().map(|&k| WorkModule::get_int(ib, k)).collect();
+    let v: Vec<i32> = valeurs().iter().map(|&k| WorkModule::get_int(ib, k)).collect();
+    format!("compteurs {:?} valeurs {:?}", c, v)
+}
+static mut INIT: [i32; 10] = [0; 10];
+// v0.24 : si la balle disparaît quand même, elle est recréée tout de suite au même endroit, même vitesse
+#[derive(Clone, Copy)]
+struct Sauve { pos: (f32, f32), dir: (f32, f32), vit: f32, proprio: i32, amorti: bool, vy: f32, bonus: f32 }
+static mut SAUVE: Option<Sauve> = None;
 static mut VIE0: i32 = -1; // v0.17 : durée de vie de la balle à son apparition, remise chaque image (plus de clignotement / disparition)
 static mut ROT: f32 = 0.0; // v0.21 : rotation visuelle de la balle (degrés)
 static mut EN_COURS: bool = false; // v0.8 : anti ré-entrée (changer le statut relance la boucle du combattant -> récursion infinie)
@@ -315,7 +337,13 @@ unsafe fn apparaitre(boma: *mut BattleObjectModuleAccessor) {
     StatusModule::change_status_force(boma, *FIGHTER_STATUS_KIND_WAIT, false);
     BALLE = id;
     remettre_au_centre();
+    if let Some(sv) = SAUVE.take() {
+        POS = sv.pos; DIR = sv.dir; VIT = sv.vit; PROPRIO = sv.proprio; AMORTI = sv.amorti; VY_AMORTI = sv.vy; BONUS = sv.bonus;
+        log("balle recréée avec son état");
+    }
     if let Some(ib) = boma_de(id) {
+        for (i, &k) in compteurs().iter().enumerate() { INIT[i] = WorkModule::get_int(ib, k); }
+        log(&format!("objet au départ : {}", etat_objet(ib)));
         VIE0 = WorkModule::get_int(ib, *ITEM_INSTANCE_WORK_INT_LIFE_TIME);
         log(&format!("vie balle : {} / max {}", VIE0, WorkModule::get_int(ib, *ITEM_INSTANCE_WORK_INT_LIFE_TIME_MAX)));
         StatusModule::change_status_force(ib, *ITEM_STATUS_KIND_FALL, false);
@@ -478,6 +506,10 @@ unsafe fn physique() {
         StatusModule::change_status_force(ib, *ITEM_STATUS_KIND_FALL, false);
     }
     GroundModule::set_collidable(ib, false);
+    if IMAGE % 300 == 0 {
+        log(&format!("objet image {} : {}", IMAGE, etat_objet(ib)));
+    }
+    for (i, &k) in compteurs().iter().enumerate() { WorkModule::set_int(ib, INIT[i], k); }
     if VIE0 >= 0 {
         if IMAGE % 600 == 0 {
             log(&format!("vie balle avant remise : {}", WorkModule::get_int(ib, *ITEM_INSTANCE_WORK_INT_LIFE_TIME)));
@@ -542,6 +574,7 @@ unsafe fn ballon_frame_(fighter: &mut L2CFighterCommon) {
         ATTENTE = DELAI;
         CHEF = -1;
         BALLE = 0;
+        SAUVE = None;
         for v in VOLS.iter_mut() { v.actif = false; }
         return;
     }
@@ -573,6 +606,13 @@ unsafe fn ballon_frame_(fighter: &mut L2CFighterCommon) {
         log(&format!("image {} : balle id={:#x} {} attente={} vit={:.2}", IMAGE, BALLE, pb, ATTENTE, VIT));
     }
     vols();
+    if BALLE != 0 && balle_boma().is_none() {
+        // disparue d'elle-même : on la recrée tout de suite avec le même état
+        log(&format!("balle disparue image {} -> recréation", IMAGE));
+        SAUVE = Some(Sauve { pos: POS, dir: DIR, vit: VIT, proprio: PROPRIO, amorti: AMORTI, vy: VY_AMORTI, bonus: BONUS });
+        BALLE = 0;
+        ATTENTE = 0;
+    }
     if balle_boma().is_some() {
         ATTENTE = DELAI;
         physique();
@@ -591,6 +631,6 @@ unsafe fn ballon_frame_(fighter: &mut L2CFighterCommon) {
 
 #[skyline::main(name = "ballon")]
 pub fn main() {
-    log("=== plugin ballon v0.23 chargé ===");
+    log("=== plugin ballon v0.24 chargé ===");
     Agent::new("fighter").on_line(Main, ballon_frame).install();
 }
