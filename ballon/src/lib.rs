@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.10 : le joueur 1 (identifiant 0) était ignoré : il ne touchait jamais la balle et n'était jamais éliminé.
 //! - v0.9 : la balle ne bougeait pas quand on la tapait -> détection des coups par le plugin (hitbox active + zone devant le combattant).
 //! - v0.8 : crash (récursion infinie : changer le statut du combattant relançait ballon_frame) -> verrou anti ré-entrée.
 //! - v0.7 : correctif : le combattant qui « donne » la balle restait bloqué (objet lourd tenu) -> éjection + debout.
@@ -102,7 +103,9 @@ unsafe fn frappe(o: *mut BattleObjectModuleAccessor, d: (f32, f32)) -> ((f32, f3
 }
 
 unsafe fn boma_de(id: u32) -> Option<*mut BattleObjectModuleAccessor> {
-    if id == 0 || id == *BATTLE_OBJECT_ID_INVALID as u32 || !sv_battle_object::is_active(id) {
+    // v0.10 : l'identifiant 0 est valide (c'est le joueur 1 !) : avant il était ignoré -> P1 ne frappait jamais
+    // la balle et ne pouvait pas être éliminé
+    if id == *BATTLE_OBJECT_ID_INVALID as u32 || !sv_battle_object::is_active(id) {
         return None;
     }
     let b = sv_battle_object::module_accessor(id);
@@ -119,6 +122,10 @@ unsafe fn hammer_express(boma: *mut BattleObjectModuleAccessor) -> bool {
     let x_d = hit.x;
     let gauche = GroundModule::ray_check_hit_pos(boma, &de, &Vector2f { x: -100.0, y: 0.0 }, &mut hit, true);
     droite && gauche && (x_d - MUR).abs() < 8.0 && (hit.x + MUR).abs() < 8.0
+}
+
+unsafe fn balle_boma() -> Option<*mut BattleObjectModuleAccessor> {
+    if BALLE == 0 { None } else { boma_de(BALLE) }
 }
 
 unsafe fn remettre_au_centre() {
@@ -183,7 +190,7 @@ unsafe fn plus_proche(x: f32, y: f32) -> i32 {
 }
 
 unsafe fn physique() {
-    let Some(ib) = boma_de(BALLE) else { return };
+    let Some(ib) = balle_boma() else { return };
     // tenue par quelqu'un (ne devrait plus arriver) : on la libère au lieu de la déplacer
     if StatusModule::status_kind(ib) == *ITEM_STATUS_KIND_HAVE {
         StatusModule::change_status_force(ib, *ITEM_STATUS_KIND_FALL, false);
@@ -327,7 +334,7 @@ unsafe fn ballon_frame_(fighter: &mut L2CFighterCommon) {
     if EST_HE == 0 {
         return;
     }
-    if boma_de(BALLE).is_some() {
+    if balle_boma().is_some() {
         ATTENTE = DELAI;
         physique();
         return;
