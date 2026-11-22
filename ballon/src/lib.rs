@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.16 : élimination visible : dégâts de feu, gel, vol en tournoyant à travers murs et sol jusqu'au K.O.
 //! - v0.15 : arrêt sur image du joueur qui frappe + balle (plus long) ; le lanceur ne peut pas être éliminé par sa balle.
 //! - v0.14 : direction = angle réel de la hitbox qui touche (comme sur un adversaire), détection par la vraie hitbox.
 //! - v0.13 : détection du stage : le booléen du rayon n'est pas fiable -> seulement les positions des murs (±74.2).
@@ -81,6 +82,74 @@ const KO_H: f32 = 180.0;
 const KO_B: f32 = -140.0;
 
 /// envoie le combattant juste derrière la zone de K.O., dans la direction de la balle : le jeu fait le vrai K.O.
+/// v0.16 : éjection visible comme dans Brawl : dégâts de feu, gel, puis le combattant vole en tournoyant dans la
+/// direction de la balle, traverse les murs et le sol et retombe jusqu'à la zone de K.O.
+#[derive(Clone, Copy)]
+struct Vol { actif: bool, gel: i32, t: i32, x: f32, y: f32, vx: f32, vy: f32 }
+static mut VOLS: [Vol; 8] = [Vol { actif: false, gel: 0, t: 0, x: 0.0, y: 0.0, vx: 0.0, vy: 0.0 }; 8];
+const V_EJ: f32 = 5.5;
+const GRAV_EJ: f32 = 0.2;
+
+unsafe fn feu(o: *mut BattleObjectModuleAccessor, sc: f32) {
+    let z = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    EffectModule::req_follow(o, smash::phx::Hash40::new("sys_damage_fire"), smash::phx::Hash40::new("hip"), &z, &z, sc, true, 0, 0, 0, 0, 0, false, false);
+}
+
+unsafe fn eliminer(e: i32, o: *mut BattleObjectModuleAccessor) {
+    let p = PostureModule::pos(o);
+    let (x, y) = ((*p).x, (*p).y);
+    DamageModule::add_damage(o, 10.0 + VIT * 2.0, 0);
+    let gel = (((6.0 + VIT * 2.5) * 1.3) as i32).clamp(10, 45);
+    let rot = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+    EffectModule::req(o, smash::phx::Hash40::new("sys_hit_fire"), &Vector3f { x: POS.0, y: POS.1, z: 0.0 }, &rot, 1.6, 0, 0, false, 0);
+    feu(o, 1.2);
+    StatusModule::change_status_force(o, *FIGHTER_STATUS_KIND_DAMAGE_FLY_ROLL, false);
+    GroundModule::correct(o, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
+    GroundModule::set_collidable(o, false);
+    StopModule::set_hit_stop_frame(o, gel, false);
+    let (dx, dy) = if DIR.0.abs() + DIR.1.abs() < 0.01 { (1.0, 0.0) } else { DIR };
+    VOLS[e as usize] = Vol { actif: true, gel, t: 0, x, y: y.max(SOL + 1.0), vx: dx * V_EJ, vy: dy * V_EJ + 1.0 };
+    log(&format!("elimination : joueur {} dir ({:.2},{:.2}) gel {}", e, dx, dy, gel));
+}
+
+unsafe fn vols() {
+    for e in 0..8 {
+        let v = VOLS[e];
+        if !v.actif { continue; }
+        let Some(o) = boma_de(Fighter::get_id_from_entry_id(e as i32)) else { VOLS[e].actif = false; continue };
+        let st = StatusModule::status_kind(o);
+        if st == *FIGHTER_STATUS_KIND_DEAD || st == *FIGHTER_STATUS_KIND_REBIRTH || st == *FIGHTER_STATUS_KIND_STANDBY {
+            GroundModule::set_collidable(o, true);
+            VOLS[e].actif = false;
+            continue;
+        }
+        let mut v = v;
+        if v.gel > 0 {
+            v.gel -= 1;
+        } else {
+            v.vy -= GRAV_EJ;
+            v.x += v.vx;
+            v.y += v.vy;
+            v.t += 1;
+            if v.t % 12 == 0 { feu(o, 1.0); }
+            if st != *FIGHTER_STATUS_KIND_DAMAGE_FLY_ROLL && st != *FIGHTER_STATUS_KIND_DAMAGE_FLY {
+                StatusModule::change_status_force(o, *FIGHTER_STATUS_KIND_DAMAGE_FLY_ROLL, false);
+            }
+        }
+        if v.t > 150 {
+            // sécurité : toujours vivant -> directement hors de la zone de K.O. (ancienne méthode)
+            GroundModule::set_collidable(o, true);
+            VOLS[e].actif = false;
+            ejecter(o, v.x, v.y, v.vx, v.vy);
+            continue;
+        }
+        GroundModule::correct(o, GroundCorrectKind(*GROUND_CORRECT_KIND_AIR));
+        PostureModule::set_pos(o, &Vector3f { x: v.x, y: v.y, z: 0.0 });
+        KineticModule::clear_speed_all(o);
+        VOLS[e] = v;
+    }
+}
+
 unsafe fn ejecter(o: *mut BattleObjectModuleAccessor, x: f32, y: f32, dx: f32, dy: f32) {
     let mut t = 1.0e9f32;
     if dx > 0.001 { t = t.min((KO_D - x) / dx); }
@@ -359,7 +428,7 @@ unsafe fn physique() {
         if dd > R + CORPS {
             continue;
         }
-        if e == PROPRIO {
+        if e == PROPRIO || VOLS[e as usize].actif {
             continue; // v0.15 : sa propre balle ne l'élimine pas
         }
         if AttackModule::is_attack(o, 0, false) || AttackModule::is_attack(o, 1, false) {
@@ -371,7 +440,8 @@ unsafe fn physique() {
             continue;
         }
         // éliminé d'un coup : vrai K.O. du jeu dans la direction de la balle
-        ejecter(o, ox, oy - 8.0, DIR.0, DIR.1);
+        let _ = (ox, oy);
+        eliminer(e, o);
         remettre_au_centre();
         return;
     }
@@ -394,6 +464,7 @@ unsafe fn ballon_frame_(fighter: &mut L2CFighterCommon) {
         ATTENTE = DELAI;
         CHEF = -1;
         BALLE = 0;
+        for v in VOLS.iter_mut() { v.actif = false; }
         return;
     }
     if CHEF < 0 {
@@ -423,6 +494,7 @@ unsafe fn ballon_frame_(fighter: &mut L2CFighterCommon) {
         let pb = match balle_boma() { Some(ib) => { let p = PostureModule::pos(ib); format!("({:.1},{:.1}) statut {}", (*p).x, (*p).y, StatusModule::status_kind(ib)) }, None => "aucune".into() };
         log(&format!("image {} : balle id={:#x} {} attente={} vit={:.2}", IMAGE, BALLE, pb, ATTENTE, VIT));
     }
+    vols();
     if balle_boma().is_some() {
         ATTENTE = DELAI;
         physique();
