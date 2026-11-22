@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.14 : direction = angle réel de la hitbox qui touche (comme sur un adversaire), détection par la vraie hitbox.
 //! - v0.13 : détection du stage : le booléen du rayon n'est pas fiable -> seulement les positions des murs (±74.2).
 //! - v0.12 : journal de diagnostic sd:/ballon_log.txt.
 //! - v0.11 : apparition par n'importe quel combattant au sol et libre (la balle n'apparaissait pas si P1 bougeait).
@@ -101,6 +102,51 @@ static mut EN_COURS: bool = false; // v0.8 : anti ré-entrée (changer le statut
 static mut BONUS: f32 = 1.0; // frappe après un amorti : plus forte
 
 /// comment le combattant a frappé : (direction, multiplicateur de vitesse, arrêt sur image ×, amorti)
+/// v0.14 : la hitbox active la plus proche de la balle -> (distance - portée, angle du coup en degrés)
+unsafe fn hitbox_touche(o: *mut BattleObjectModuleAccessor) -> Option<(f32, i32)> {
+    let mut best: Option<(f32, i32)> = None;
+    for i in 0..8 {
+        if !AttackModule::is_attack(o, i, false) {
+            continue;
+        }
+        let ad = AttackModule::attack_data(o, i, false);
+        if ad.is_null() {
+            continue;
+        }
+        let ad = *ad;
+        let mut jp = Vector3f { x: 0.0, y: 0.0, z: 0.0 };
+        ModelModule::joint_global_position(o, smash::phx::Hash40 { hash: ad.node }, &mut jp, true);
+        let ol = (ad.x * ad.x + ad.y * ad.y + ad.z * ad.z).sqrt();
+        let portee = ad.size.max(2.0) + ol * 0.8 + R + 1.5;
+        let d = ((POS.0 - jp.x).powi(2) + (POS.1 - jp.y).powi(2)).sqrt() - portee;
+        if d < 0.0 && best.map_or(true, |b| d < b.0) {
+            best = Some((d, ad.vector));
+        }
+    }
+    best
+}
+
+/// v0.14 : direction comme sur un vrai adversaire : l'angle du coup (0 = devant, 90 = haut, 270 = bas)
+unsafe fn direction_coup(o: *mut BattleObjectModuleAccessor, angle: i32) -> (f32, f32) {
+    let p = PostureModule::pos(o);
+    let mut lr = PostureModule::lr(o);
+    if (POS.0 - (*p).x) * lr < -2.0 {
+        lr = -lr; // balle derrière le combattant (coup arrière) : vers l'arrière
+    }
+    let a = match angle {
+        361 => 40,                                 // angle « Sakurai »
+        a if (0..360).contains(&a) => a,
+        _ => {
+            // angles spéciaux (360+) : à l'opposé du combattant
+            let (dx, dy) = (POS.0 - (*p).x, POS.1 - ((*p).y + 10.0));
+            let n = (dx * dx + dy * dy).sqrt().max(0.001);
+            return (dx / n, dy / n);
+        }
+    } as f32;
+    let r = a.to_radians();
+    (r.cos() * lr, r.sin())
+}
+
 unsafe fn frappe(o: *mut BattleObjectModuleAccessor, d: (f32, f32)) -> ((f32, f32), f32, f32, bool) {
     let st = StatusModule::status_kind(o);
     let lr = PostureModule::lr(o);
@@ -242,18 +288,14 @@ unsafe fn physique() {
             if DEJA[e as usize] {
                 continue; // un seul renvoi par coup
             }
-            let lr = PostureModule::lr(o);
-            let p = PostureModule::pos(o);
-            let (cx, cy) = ((*p).x + lr * 7.0, (*p).y + 10.0);
-            let (dx, dy) = (POS.0 - cx, POS.1 - cy);
-            let d = (dx * dx + dy * dy).sqrt();
-            if d > R + PORTEE {
-                continue;
-            }
+            let Some((_, angle)) = hitbox_touche(o) else { continue };
             DEJA[e as usize] = true;
             PROPRIO = e;
-            let n = d.max(0.001);
-            let (dir, mult, fige, amorti) = frappe(o, (dx / n, dy / n));
+            let dir = direction_coup(o, angle);
+            let st2 = StatusModule::status_kind(o);
+            let smash = st2 == *FIGHTER_STATUS_KIND_ATTACK_S4 || st2 == *FIGHTER_STATUS_KIND_ATTACK_HI4 || st2 == *FIGHTER_STATUS_KIND_ATTACK_LW4;
+            let (mult, fige, amorti) = if smash { (1.7, 0.5, false) } else { (1.0, 1.0, false) };
+            log(&format!("frappe : joueur {} statut {} angle {} -> dir ({:.2},{:.2})", e, st2, angle, dir.0, dir.1));
             if VIT <= 0.0 { VIT = V0; }
             if amorti {
                 AMORTI = true;                    // garde sa vitesse ; la prochaine frappe ira plus vite
