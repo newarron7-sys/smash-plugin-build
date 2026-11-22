@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.15 : arrêt sur image du joueur qui frappe + balle (plus long) ; le lanceur ne peut pas être éliminé par sa balle.
 //! - v0.14 : direction = angle réel de la hitbox qui touche (comme sur un adversaire), détection par la vraie hitbox.
 //! - v0.13 : détection du stage : le booléen du rayon n'est pas fiable -> seulement les positions des murs (±74.2).
 //! - v0.12 : journal de diagnostic sd:/ballon_log.txt.
@@ -294,7 +295,7 @@ unsafe fn physique() {
             let dir = direction_coup(o, angle);
             let st2 = StatusModule::status_kind(o);
             let smash = st2 == *FIGHTER_STATUS_KIND_ATTACK_S4 || st2 == *FIGHTER_STATUS_KIND_ATTACK_HI4 || st2 == *FIGHTER_STATUS_KIND_ATTACK_LW4;
-            let (mult, fige, amorti) = if smash { (1.7, 0.5, false) } else { (1.0, 1.0, false) };
+            let (mult, fige, amorti) = if smash { (1.7, 1.2, false) } else { (1.0, 1.0, false) };
             log(&format!("frappe : joueur {} statut {} angle {} -> dir ({:.2},{:.2})", e, st2, angle, dir.0, dir.1));
             if VIT <= 0.0 { VIT = V0; }
             if amorti {
@@ -308,7 +309,9 @@ unsafe fn physique() {
                 VIT = (VIT * ACCEL * mult * BONUS).min(VMAX);
                 BONUS = 1.0;
             }
-            FIGE = ((3.0 + VIT * 1.5) * fige) as i32; // arrêt sur image, plus long quand elle va vite
+            // v0.15 : arrêt sur image de la balle ET du joueur qui frappe, plus long quand elle va vite
+            FIGE = (((6.0 + VIT * 2.5) * fige) as i32).min(40);
+            StopModule::set_hit_stop_frame(o, FIGE, false);
             GRACE = 6;
             break;
         }
@@ -355,6 +358,9 @@ unsafe fn physique() {
         let dd = ((ox - POS.0).powi(2) + (oy - POS.1).powi(2)).sqrt();
         if dd > R + CORPS {
             continue;
+        }
+        if e == PROPRIO {
+            continue; // v0.15 : sa propre balle ne l'élimine pas
         }
         if AttackModule::is_attack(o, 0, false) || AttackModule::is_attack(o, 1, false) {
             continue; // il est en train de frapper : le coup sera détecté à l'image suivante
