@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.18 : petite fumée blanche quand la balle rebondit sur le sol, un mur ou le plafond.
 //! - v0.17 : la balle ne disparaît plus (durée de vie remise à sa valeur de départ à chaque image).
 //! - v0.16 : élimination visible : dégâts de feu, gel, vol en tournoyant à travers murs et sol jusqu'au K.O.
 //! - v0.15 : arrêt sur image du joueur qui frappe + balle (plus long) ; le lanceur ne peut pas être éliminé par sa balle.
@@ -337,6 +338,11 @@ unsafe fn plus_proche(x: f32, y: f32) -> i32 {
     best.0
 }
 
+unsafe fn fumee(ib: *mut BattleObjectModuleAccessor, x: f32, y: f32, rz: f32) {
+    let rot = Vector3f { x: 0.0, y: 0.0, z: rz };
+    EffectModule::req(ib, smash::phx::Hash40::new("sys_landing_smoke_s"), &Vector3f { x, y, z: 0.0 }, &rot, 0.9, 0, 0, false, 0);
+}
+
 unsafe fn physique() {
     let Some(ib) = balle_boma() else { return };
     // tenue par quelqu'un (ne devrait plus arriver) : on la libère au lieu de la déplacer
@@ -396,17 +402,18 @@ unsafe fn physique() {
         VY_AMORTI -= 0.09;
         let mut x = POS.0;
         let mut y = POS.1 + VY_AMORTI;
-        if y < SOL + R { y = SOL + R; VY_AMORTI = VY_AMORTI.abs() * 0.5; }
+        if y < SOL + R { y = SOL + R; if VY_AMORTI < -0.6 { fumee(ib, x, SOL, 0.0); } VY_AMORTI = VY_AMORTI.abs() * 0.5; }
         if y > PLAFOND - R { y = PLAFOND - R; VY_AMORTI = -VY_AMORTI.abs(); }
         POS = (x, y);
     } else if VIT > 0.0 {
         // avance en ligne droite, rebonds parfaits
         let mut x = POS.0 + DIR.0 * VIT;
         let mut y = POS.1 + DIR.1 * VIT;
-        if x > MUR - R { x = 2.0 * (MUR - R) - x; DIR.0 = -DIR.0.abs(); }
-        if x < -MUR + R { x = 2.0 * (-MUR + R) - x; DIR.0 = DIR.0.abs(); }
-        if y < SOL + R { y = 2.0 * (SOL + R) - y; DIR.1 = DIR.1.abs(); }
-        if y > PLAFOND - R { y = 2.0 * (PLAFOND - R) - y; DIR.1 = -DIR.1.abs(); }
+        // v0.18 : petite fumée blanche à chaque rebond (mur, sol, plafond)
+        if x > MUR - R { x = 2.0 * (MUR - R) - x; DIR.0 = -DIR.0.abs(); fumee(ib, MUR, y, 90.0); }
+        if x < -MUR + R { x = 2.0 * (-MUR + R) - x; DIR.0 = DIR.0.abs(); fumee(ib, -MUR, y, -90.0); }
+        if y < SOL + R { y = 2.0 * (SOL + R) - y; DIR.1 = DIR.1.abs(); fumee(ib, x, SOL, 0.0); }
+        if y > PLAFOND - R { y = 2.0 * (PLAFOND - R) - y; DIR.1 = -DIR.1.abs(); fumee(ib, x, PLAFOND, 180.0); }
         POS = (x, y);
     }
     PostureModule::set_pos(ib, &Vector3f { x: POS.0, y: POS.1, z: 0.0 });
