@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.22 : la balle ne clignote / disparaît plus : toujours en statut FALL, sans collision décor.
 //! - v0.21 : la balle tourne nettement sur elle-même quand elle se déplace.
 //! - v0.20 : freeze plus long à la frappe (10 + 3,5 × vitesse images, max 55).
 //! - v0.19 : effets de coup sur la balle : étincelle selon l'attribut, son d'impact, secousse de l'écran.
@@ -465,6 +466,12 @@ unsafe fn physique() {
         ROT = (ROT + sens * (10.0 + v * 4.0).min(45.0)) % 360.0;
     }
     PostureModule::set_rot(ib, &Vector3f { x: 0.0, y: 0.0, z: ROT }, 0);
+    // v0.22 : la balle passait au sol dans un autre statut (4) où elle ne suivait plus nos positions, puis
+    // clignotait et disparaissait : on la garde toujours « en chute » et sans collision avec le décor
+    if StatusModule::status_kind(ib) != *ITEM_STATUS_KIND_FALL {
+        StatusModule::change_status_force(ib, *ITEM_STATUS_KIND_FALL, false);
+    }
+    GroundModule::set_collidable(ib, false);
     if VIE0 >= 0 {
         if IMAGE % 600 == 0 {
             log(&format!("vie balle avant remise : {}", WorkModule::get_int(ib, *ITEM_INSTANCE_WORK_INT_LIFE_TIME)));
@@ -577,6 +584,6 @@ unsafe fn ballon_frame_(fighter: &mut L2CFighterCommon) {
 
 #[skyline::main(name = "ballon")]
 pub fn main() {
-    log("=== plugin ballon v0.12 chargé ===");
+    log("=== plugin ballon v0.22 chargé ===");
     Agent::new("fighter").on_line(Main, ballon_frame).install();
 }
