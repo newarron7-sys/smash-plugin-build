@@ -17,6 +17,7 @@
 //! - v0.5 (comme le mod Brawl) : le combattant touché est envoyé juste derrière la zone de K.O. dans la direction
 //!   de la balle : c'est le vrai K.O. du jeu (rayon, son) qui se joue. Pas d'effet ajouté (ni rayon, ni traînée).
 //! - v0.6 : balle du mod Brawl (modèle + texture, dans item/soccerball) et 2× plus grosse (comme dans Brawl).
+//! - v0.12 : journal de diagnostic sd:/ballon_log.txt.
 //! - v0.11 : apparition par n'importe quel combattant au sol et libre (la balle n'apparaissait pas si P1 bougeait).
 //! - v0.10 : le joueur 1 (identifiant 0) était ignoré : il ne touchait jamais la balle et n'était jamais éliminé.
 //! - v0.9 : la balle ne bougeait pas quand on la tapait -> détection des coups par le plugin (hitbox active + zone devant le combattant).
@@ -30,6 +31,20 @@ use smash::lib::lua_const::*;
 use smash::lua2cpp::*;
 use smash::phx::{Vector2f, Vector3f};
 use smashline::*;
+
+/// v0.12 : journal de diagnostic sur la carte SD (sd:/ballon_log.txt)
+static mut NB_LOG: u32 = 0;
+fn log(m: &str) {
+    unsafe {
+        if NB_LOG > 400 { return; }
+        NB_LOG += 1;
+    }
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("sd:/ballon_log.txt") {
+        let _ = writeln!(f, "{}", m);
+    }
+}
+static mut IMAGE: u32 = 0;
 
 const DELAI: i32 = 90; // avant de (re)faire apparaître la balle
 const CENTRE: (f32, f32) = (0.0, 45.0);
@@ -122,6 +137,7 @@ unsafe fn hammer_express(boma: *mut BattleObjectModuleAccessor) -> bool {
     let droite = GroundModule::ray_check_hit_pos(boma, &de, &Vector2f { x: 100.0, y: 0.0 }, &mut hit, true);
     let x_d = hit.x;
     let gauche = GroundModule::ray_check_hit_pos(boma, &de, &Vector2f { x: -100.0, y: 0.0 }, &mut hit, true);
+    log(&format!("detection stage : droite={} x={:.1} gauche={} x={:.1}", droite, x_d, gauche, hit.x));
     droite && gauche && (x_d - MUR).abs() < 8.0 && (hit.x + MUR).abs() < 8.0
 }
 
@@ -154,7 +170,10 @@ unsafe fn apparaitre(boma: *mut BattleObjectModuleAccessor) {
         return;
     }
     ItemModule::have_item(boma, ItemKind(*ITEM_KIND_SOCCERBALL), 0, 0, false, false);
-    if !ItemModule::is_have_item(boma, 0) {
+    let tient = ItemModule::is_have_item(boma, 0);
+    let id0 = ItemModule::get_have_item_id(boma, 0);
+    log(&format!("apparition : statut={} tient={} id={:#x} actif={}", st, tient, id0, boma_de(id0 as u32).is_some()));
+    if !tient {
         return;
     }
     let id = ItemModule::get_have_item_id(boma, 0) as u32;
@@ -343,9 +362,15 @@ unsafe fn ballon_frame_(fighter: &mut L2CFighterCommon) {
     SANS_CHEF = 0;
     if EST_HE < 0 {
         EST_HE = hammer_express(boma) as i32;
+        log(&format!("stage {} -> Hammer Express = {} (chef = joueur {})", stage::get_stage_id(), EST_HE, CHEF));
     }
     if EST_HE == 0 {
         return;
+    }
+    IMAGE += 1;
+    if IMAGE % 120 == 0 {
+        let pb = match balle_boma() { Some(ib) => { let p = PostureModule::pos(ib); format!("({:.1},{:.1}) statut {}", (*p).x, (*p).y, StatusModule::status_kind(ib)) }, None => "aucune".into() };
+        log(&format!("image {} : balle id={:#x} {} attente={} vit={:.2}", IMAGE, BALLE, pb, ATTENTE, VIT));
     }
     if balle_boma().is_some() {
         ATTENTE = DELAI;
@@ -365,5 +390,6 @@ unsafe fn ballon_frame_(fighter: &mut L2CFighterCommon) {
 
 #[skyline::main(name = "ballon")]
 pub fn main() {
+    log("=== plugin ballon v0.12 chargé ===");
     Agent::new("fighter").on_line(Main, ballon_frame).install();
 }
