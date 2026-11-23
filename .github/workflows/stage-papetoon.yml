@@ -54,6 +54,21 @@ jobs:
           find /tmp/ref -ipath "*ui/replace*/stage/stage_*" -iname "*yoshi_cartboard*" -type f | head -20 > /tmp/out/ref_ui.txt
           du -sh /tmp/out/travail
           true
+      - name: Collisions de Yoshi's Story (yoshi_cartboard_00.lvd) - refs + HDR, en yaml
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e +o pipefail
+          cargo install smash-lvd --features cli --root /tmp/lvdtool >/dev/null 2>&1; ls /tmp/lvdtool/bin
+          mkdir -p /tmp/out/lvd /tmp/hdr && cd /tmp/hdr
+          curl -sSL -o hdr.zip https://github.com/HDR-Development/HewDraw-Remix/releases/download/v0.50.10/hdr-switch.zip
+          curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
+          for z in hdr.zip sp.zip; do unzip -l $z | grep -i yoshi_cartboard | head; unzip -qo $z "*yoshi_cartboard*" -d x_$z 2>/dev/null; done
+          find /tmp/ref /tmp/hdr -iname "yoshi_cartboard*.lvd" -print0 | while IFS= read -r -d '' f; do
+            n=$(md5sum "$f" | cut -c1-8); cp "$f" /tmp/out/lvd/$n.lvd; echo "$f" > /tmp/out/lvd/$n.txt
+            /tmp/lvdtool/bin/yamlvd "$f" /tmp/out/lvd/$n.yml 2>&1 | tail -2; echo "== $n $f"
+          done
+          true
       - name: Chiffrer (cle de la session) et publier
         if: always()
         run: |
