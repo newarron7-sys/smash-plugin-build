@@ -1,0 +1,17 @@
+<!doctype html><html><body style="margin:0;background:#000"><script type="module">
+import * as THREE from './three.module.js';
+const q=new URLSearchParams(location.search);
+const W=+q.get('w'),H=+q.get('h');
+const r=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});r.setSize(W,H);r.outputColorSpace=THREE.SRGBColorSpace;document.body.appendChild(r.domElement);
+const sc=new THREE.Scene();sc.background=new THREE.Color(0x87a060);
+const cam=new THREE.PerspectiveCamera(+q.get('fov'),W/H,1,40000);
+cam.position.set(+q.get('cx'),+q.get('cy'),+q.get('cz'));cam.lookAt(+q.get('tx'),+q.get('ty'),+q.get('tz'));
+const L=new THREE.TextureLoader();const d=await (await fetch('scene.json')).json();const tx={};
+let n=0;
+for(const o of d){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(o.p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(o.uv,2));
+ if(!tx[o.t]){tx[o.t]=L.load('tex/'+o.t+'.png',()=>{n--;});n++;tx[o.t].wrapS=tx[o.t].wrapT=THREE.RepeatWrapping;tx[o.t].colorSpace=THREE.SRGBColorSpace;tx[o.t].flipY=false;tx[o.t].anisotropy=8;}
+ const m=new THREE.MeshBasicMaterial({map:tx[o.t],side:THREE.DoubleSide,transparent:o.a,alphaTest:o.a?0.3:0,depthWrite:!o.a});
+ sc.add(new THREE.Mesh(g,m));}
+const wait=()=>new Promise(res=>{const f=()=>n<=0?res():setTimeout(f,50);f();});await wait();
+r.render(sc,cam);window.FINI=true;
+</script></body></html>

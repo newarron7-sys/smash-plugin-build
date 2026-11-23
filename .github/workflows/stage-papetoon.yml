@@ -1,0 +1,64 @@
+name: Stage - Planet Papetoon sur Yoshi's Story (usage perso)
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - 'outils/stagekit/**'
+      - '.github/workflows/stage-papetoon.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: stage-papetoon
+  cancel-in-progress: true
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Outils
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar fonts-dejavu-core >/dev/null 2>&1 || true
+          pip install ssbh_data_py numpy pillow scipy >/dev/null
+          mkdir -p /tmp/out/travail
+      - name: Stage Brawl Planet Papetoon (GameBanana 395060)
+        run: |
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 395060 /tmp/pp 2>&1 | tee /tmp/out/pp_fichiers.txt | head -5
+          cp "$(find /tmp/pp -iname 'STGPAPETOON.pac' | head -1)" /tmp/out/travail/
+      - name: Analyse du stage Brawl (modeles, apercu de face)
+        run: |
+          set +e
+          python3 -u outils/stagekit/stage/tools/analyse_brawl_stage.py /tmp/out/travail/STGPAPETOON.pac /tmp/out/apercu_papetoon.png "Planet Papetoon" -56,56,0 > /tmp/out/analyse.txt 2>&1
+          tail -60 /tmp/out/analyse.txt
+      - name: References Ultimate de Yoshi's Story (stage/yoshi_cartboard)
+        run: |
+          set +e +o pipefail
+          for q in "yoshi's story" "yoshis story" "yoshi story" "yoshi's story stage" "yoshi's story retexture"; do
+            python3 -u outils/stagekit/stage/tools/gb_fetch.py cherche "$q" stage/yoshi_cartboard /tmp/ref 6 2>&1 | tail -4
+          done
+          for d in $(find /tmp/ref -type d -path "*stage/yoshi_cartboard" 2>/dev/null); do
+            id=$(echo "$d" | sed -E 's#/tmp/ref/([0-9]+)/.*#\1#'); n=$(echo "$d" | md5sum | cut -c1-6)
+            mkdir -p "/tmp/out/travail/ref_${id}_$n" && cp -r "$d" "/tmp/out/travail/ref_${id}_$n/"
+            echo "$d" > "/tmp/out/travail/ref_${id}_$n/source.txt"
+            find "$d" -type f | sed "s#$d/##" | sort > "/tmp/out/travail/ref_${id}_$n/liste.txt"
+            echo "== ref $id $n : $(wc -l < "/tmp/out/travail/ref_${id}_$n/liste.txt") fichiers, lvd $(grep -c lvd "/tmp/out/travail/ref_${id}_$n/liste.txt")"
+          done
+          find /tmp/ref -ipath "*ui/replace*/stage/stage_*" -iname "*yoshi_cartboard*" -type f | head -20 > /tmp/out/ref_ui.txt
+          du -sh /tmp/out/travail
+          true
+      - name: Chiffrer (cle de la session) et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_papetoon && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "papetoon" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_papetoon
