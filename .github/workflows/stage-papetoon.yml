@@ -14,7 +14,7 @@ concurrency:
 jobs:
   stage:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 150
     defaults:
       run:
         shell: bash
@@ -85,6 +85,24 @@ jobs:
           key: ultimate-tex-cli-v1
       - name: ultimate_tex_cli
         run: test -x ~/.cargo/bin/ultimate_tex_cli || cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli 2>&1 | tail -2
+      - name: Cache textures HD (x4)
+        uses: actions/cache@v4
+        with:
+          path: /tmp/hd
+          key: papetoon-hd-x4-v1
+      - name: Textures HD x4 (Real-ESRGAN x4plus, comme COT)
+        run: |
+          set -o pipefail
+          if [ ! -f /tmp/hd/fini ]; then
+            pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision >/dev/null
+            pip install spandrel >/dev/null
+            curl -sSL -o /tmp/esr.pth https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
+            mkdir -p /tmp/hd
+            python3 -u outils/stagekit/stage/tools/pp_scene.py textures /tmp/out/travail/STGPAPETOON.pac /tmp/hdsrc 2>&1 | grep -v "^texture"
+            for f in /tmp/hdsrc/*.png; do b=$(basename "$f" .png); python3 -u outils/stagekit/stage/tools/upscale_tex.py /tmp/esr.pth "$f" "/tmp/hd/${b}_x4.png"; done
+            touch /tmp/hd/fini
+          fi
+          ls -la /tmp/hd | head -30
       - name: Construction du stage (Papetoon sur Yoshi's Story)
         run: |
           set -o pipefail
@@ -95,10 +113,24 @@ jobs:
           M="/tmp/out/mod/(Stage) Planet Papetoon (Yoshi's Story)"
           mkdir -p "$M"
           python3 -u outils/stagekit/stage/tools/brawl_coll.py /tmp/out/travail/STGPAPETOON.pac > /tmp/out/collisions_brawl.txt 2>&1 || true
-          python3 -u outils/stagekit/stage/tools/papetoon_ys.py /tmp/out/travail/STGPAPETOON.pac "$REF" "$LVD" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -40
+          PP_HD=/tmp/hd python3 -u outils/stagekit/stage/tools/papetoon_ys.py /tmp/out/travail/STGPAPETOON.pac "$REF" "$LVD" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -40
           find "$M" -type f | sed "s#$M/##" | sort > /tmp/out/mod_liste.txt; wc -l /tmp/out/mod_liste.txt; du -sh "$M"
           rm -rf /tmp/out/travail/ref_*
           python3 -u outils/stagekit/stage/tools/apercu_pp.py /tmp/out/travail/STGPAPETOON.pac "$M/stage/yoshi_cartboard/normal/param/yoshi_cartboard_00.lvd" /tmp/out/apercu_jeu.png 2>&1 | tail -3
+      - name: Image de l'ecran des terrains (rendu three.js + greffe dans les bntx de reference)
+        run: |
+          set +e
+          export PATH=$PATH:$HOME/.cargo/bin
+          npm i --prefix /tmp/rn three@0.160.0 playwright@1.47.2 >/dev/null 2>&1
+          (cd /tmp/rn && npx playwright install --with-deps chromium >/dev/null 2>&1)
+          R=/tmp/rendu; mkdir -p $R; cp outils/stagekit/stage/tools/rendu/* $R/; cp /tmp/rn/node_modules/three/build/three.module.js $R/
+          python3 -u outils/stagekit/stage/tools/pp_scene.py scene /tmp/out/travail/STGPAPETOON.pac /tmp/hd $R 2>&1 | grep -v "^texture" | tail -2
+          (cd $R && nohup python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 3
+          mkdir -p /tmp/refui; find /tmp/ref/590120 -ipath "*ui/replace*/stage/stage_*" -name "stage_*_yoshi_cartboard.bntx" -exec cp {} /tmp/refui/ \; ; ls -la /tmp/refui
+          M="/tmp/out/mod/(Stage) Planet Papetoon (Yoshi's Story)"
+          NODE_PATH=/tmp/rn/node_modules python3 -u outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu
+          find "$M/ui" -type f; ls /tmp/out/ui_apercu
+          true
       - name: Chiffrer (cle de la session) et publier
         if: always()
         run: |
