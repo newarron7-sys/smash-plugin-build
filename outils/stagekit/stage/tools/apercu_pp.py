@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import brawl_stage  # noqa: E402
 
 PAC, LVD, OUT = sys.argv[1:4]
-ECH, Y0 = 58.0 / 56.0, -1.0
+ECH, Y0 = 58.0 / 56.0, float(os.environ.get('PP_Y0', '-4.98'))   # comme papetoon_ys.py
 SANS = {'stGimmickYoshiBumper', 'EffFoxReflectorStart', 'EffFoxReflector', 'EffFoxReflectorRef', 'Path'}
 TEX, models = brawl_stage.load(PAC)
 ARR = {n: np.asarray(im.convert('RGBA')) for n, im in TEX.items()}
@@ -34,7 +34,7 @@ for _, mn, ol in models:
     if mn in SANS:
         continue
     for o in ol:
-        if o['name'] == 'Rail' or o['tex'] not in ARR:
+        if o['name'] in ('Rail', 'MainShadow', 'PlatMidShadow', 'PlatLeftShadow', 'PlatRightShadow') or o['tex'] not in ARR:
             continue
         pos = o['pos'][:, [0, 2, 1]].astype(np.float64)
         pos[:, :, 1] -= Y0

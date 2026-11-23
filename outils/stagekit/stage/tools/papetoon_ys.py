@@ -10,9 +10,9 @@ déclarées dans config.json) :
 - matériau : « Bottom » de la réf (SFX_PBS_000010000000c100, texture en Texture5, sans éclairage : l'éclairage est déjà
   peint dans les textures de Brawl), deux faces, transparence par découpe (alpha to coverage) ;
 - cachés (maillage d'un seul point, numdlb d'origine gardé) : floatingfloor_set (plates-formes d'origine), bg2_set
-  (fond d'origine). Gardés : Randall (cloudrift_set), Maskass (heiho_set), tosanzo_set, ombres ;
+  (fond d'origine). Gardés : Randall (cloudrift_set), Maskass (heiho_set) ; caché : éléphant (tosanzo_set) ; ombres TShadow1 retirées ;
 - pas de Shine (stGimmickYoshiBumper, EffFoxReflector*, Rail, Path) : demande du joueur ;
-- collisions : celles du Yoshi's Story d'HDR (même forme que Brawl / P+), plates-formes déplacées sur celles de Papetoon ;
+- collisions : celles de Papetoon (lues dans le .pac) posées dans le lvd du Yoshi's Story d'HDR ;
   décor mis à l'échelle pour que le bord du sol tombe sur celui des collisions (±58).
 """
 import os, shutil, subprocess, sys
@@ -29,10 +29,10 @@ ST = os.path.join(OUT, 'stage', 'yoshi_cartboard', 'normal')
 if os.path.isdir(os.path.join(OUT, 'stage')):
     shutil.rmtree(os.path.join(OUT, 'stage'))
 ECH = float(os.environ.get('PP_ECHELLE', str(58.0 / 56.0)))   # bord du sol Brawl ±56 -> collisions HDR ±58
-Y0 = float(os.environ.get('PP_Y0', '-1.0'))                     # dessus du sol de Papetoon (Brawl) -> y 0
+Y0 = float(os.environ.get('PP_Y0', '-4.98'))                    # modèle Brawl 4,98 sous ses collisions (sol -4,98 / coll 0 ; plates-formes 18,47 / 23,45)
 PFX = 'pptn_'
 SANS = {'stGimmickYoshiBumper', 'EffFoxReflectorStart', 'EffFoxReflector', 'EffFoxReflectorRef', 'Path'}
-SANS_OBJ = {'Rail'}
+SANS_OBJ = {'Rail', 'MainShadow', 'PlatMidShadow', 'PlatLeftShadow', 'PlatRightShadow'}   # ombres TShadow1 (multiplicatives dans Brawl -> taches noires/blanches)
 DOSSIER = {'YoshiStory': 'ground_set'}                          # le reste -> bg1_set
 CACHES = ['floatingfloor_set', 'bg2_set']
 
@@ -164,7 +164,15 @@ for dos in CACHES:
     blank.objects = [null]
     os.makedirs(os.path.join(ST, 'model', dos), exist_ok=True)
     blank.save(os.path.join(ST, 'model', dos, 'model.numshb'))
-print('cachés :', CACHES)
+# éléphant au panneau rouge (tosanzo_set) : numdlb à 0 entrée, comme la réf 392643
+for f in ('model.numdlb', 'model.numatb'):
+    src = os.path.join(RM, 'tosanzo_set', f)
+    if os.path.exists(src):
+        os.makedirs(os.path.join(ST, 'model', 'tosanzo_set'), exist_ok=True)
+        shutil.copy(src, os.path.join(ST, 'model', 'tosanzo_set', f))
+m0 = S.modl_data.read_modl(os.path.join(ST, 'model', 'tosanzo_set', 'model.numdlb'))
+assert len(m0.entries) == 0
+print('cachés :', CACHES, '+ tosanzo_set (0 entrée)')
 
 # collisions : HDR, plates-formes de Papetoon (dessus des plates-formes Brawl, même transformation que le décor)
 import yaml
@@ -176,10 +184,31 @@ d = yaml.safe_load(open(tmp))
 
 
 def t(x, y):
-    return round(x * ECH, 3), round((y - Y0) * ECH, 3)
+    """collisions de Brawl (déjà dans l'espace des collisions) -> même échelle que le décor"""
+    return round(x * ECH, 3), round(y * ECH, 3)
 
 
-PLATS = {'gauche': ((-60.0, 18.0), (-28.0, 18.0)), 'droite': ((28.0, 18.0), (60.0, 18.0)), 'haut': ((-16.0, 37.0), (16.0, 37.0))}
+# collisions de Papetoon lues dans STGPAPETOON.pac (brawl_coll.py) : sol plat ±39,2 à y 0, pentes jusqu'à ±56 à y -3,5
+SOL = [(-52.67, -200.0), (-52.67, -12.25), (-56.0, -6.65), (-56.0, -3.5), (-39.2, 0.0), (39.2, 0.0),
+       (56.0, -3.5), (56.0, -6.65), (52.67, -12.25), (52.67, -200.0), (-52.67, -200.0)]
+PLATS = {'gauche': ((-59.5, 23.45), (-28.0, 23.45)), 'droite': ((28.0, 23.45), (59.5, 23.45)), 'haut': ((-15.75, 42.0), (15.75, 42.0))}
+sol = max((c for c in d['collisions'] if len(c['vertices']) > 2), key=lambda c: len(c['vertices']))
+assert len(sol['vertices']) == len(SOL), len(sol['vertices'])
+for v, (x, y) in zip(sol['vertices'], SOL):
+    v['x'], v['y'] = t(x, y)
+for i, n in enumerate(sol['normals']):
+    a_, b_ = sol['vertices'][i], sol['vertices'][i + 1]
+    nx, ny = -(b_['y'] - a_['y']), b_['x'] - a_['x']
+    L = (nx * nx + ny * ny) ** 0.5
+    n['x'], n['y'] = round(nx / L, 6), round(ny / L, 6)
+for cl in sol['cliffs']:
+    sg = 1 if cl['pos']['x'] > 0 else -1
+    cl['pos']['x'], cl['pos']['y'] = t(sg * 56.0, -3.5)
+    cl['pos']['x'] = round(cl['pos']['x'] + sg * 10.0, 3)
+    cl['entry']['start_pos']['x'], cl['entry']['start_pos']['y'] = cl['pos']['x'], cl['pos']['y']
+print('sol', [(v['x'], v['y']) for v in sol['vertices']])
+print('normales', [(n['x'], n['y']) for n in sol['normals']])
+print('rebords', [(c['pos']['x'], c['pos']['y'], c['line_index']) for c in sol['cliffs']])
 plats = [c for c in d['collisions'] if len(c['vertices']) == 2 and c['vertices'][0]['y'] > 10]
 plats.sort(key=lambda c: (c['vertices'][0]['y'] > 35, c['vertices'][0]['x']))
 for c, nom in zip(plats, ['gauche', 'droite', 'haut']):
