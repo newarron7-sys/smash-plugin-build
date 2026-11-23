@@ -9,7 +9,7 @@ R, REFD, UI, AP = sys.argv[1:5]
 OUTILS = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(AP, exist_ok=True)
 # caméra (x, y, z) -> cible, champ vertical ; stage_1 = petite vignette, plus serrée
-CAM = {1: ((0, 48, 170), (0, 14, 0), 44), 'def': ((0, 48, 170), (0, 14, 0), 28)}
+CAM = {1: ((0, 26, 230), (0, 15, 0), 36), 'def': ((0, 26, 230), (0, 15, 0), 22)}
 
 for ref in sorted(glob.glob(os.path.join(REFD, 'stage_*_yoshi_cartboard.bntx'))):
     n = int(re.search(r'stage_(\d+)_', os.path.basename(ref)).group(1))
