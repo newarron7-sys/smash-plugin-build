@@ -97,6 +97,7 @@ jobs:
           python3 -u outils/stagekit/stage/tools/papetoon_ys.py /tmp/out/travail/STGPAPETOON.pac "$REF" "$LVD" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -40
           find "$M" -type f | sed "s#$M/##" | sort > /tmp/out/mod_liste.txt; wc -l /tmp/out/mod_liste.txt; du -sh "$M"
           rm -rf /tmp/out/travail/ref_*
+          python3 -u outils/stagekit/stage/tools/apercu_pp.py /tmp/out/travail/STGPAPETOON.pac "$M/stage/yoshi_cartboard/normal/param/yoshi_cartboard_00.lvd" /tmp/out/apercu_jeu.png 2>&1 | tail -3
       - name: Chiffrer (cle de la session) et publier
         if: always()
         run: |
