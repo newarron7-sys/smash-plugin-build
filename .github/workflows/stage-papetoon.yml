@@ -43,13 +43,14 @@ jobs:
           for q in "yoshi's story" "yoshis story" "yoshi story" "yoshi's story stage" "yoshi's story retexture"; do
             python3 -u outils/stagekit/stage/tools/gb_fetch.py cherche "$q" stage/yoshi_cartboard /tmp/ref 6 2>&1 | tail -4
           done
-          for d in $(find /tmp/ref -type d -path "*stage/yoshi_cartboard" 2>/dev/null); do
+          find /tmp/ref -type d -path "*stage/yoshi_cartboard" -print0 2>/dev/null | while IFS= read -r -d '' d; do
             id=$(echo "$d" | sed -E 's#/tmp/ref/([0-9]+)/.*#\1#'); n=$(echo "$d" | md5sum | cut -c1-6)
             mkdir -p "/tmp/out/travail/ref_${id}_$n" && cp -r "$d" "/tmp/out/travail/ref_${id}_$n/"
             echo "$d" > "/tmp/out/travail/ref_${id}_$n/source.txt"
             find "$d" -type f | sed "s#$d/##" | sort > "/tmp/out/travail/ref_${id}_$n/liste.txt"
             echo "== ref $id $n : $(wc -l < "/tmp/out/travail/ref_${id}_$n/liste.txt") fichiers, lvd $(grep -c lvd "/tmp/out/travail/ref_${id}_$n/liste.txt")"
           done
+          find /tmp/ref -maxdepth 4 -name "config.json" -print0 | while IFS= read -r -d '' c; do id=$(echo "$c" | sed -E 's#/tmp/ref/([0-9]+)/.*#\1#'); cp "$c" "/tmp/out/travail/config_$id.json"; done
           find /tmp/ref -ipath "*ui/replace*/stage/stage_*" -iname "*yoshi_cartboard*" -type f | head -20 > /tmp/out/ref_ui.txt
           du -sh /tmp/out/travail
           true
