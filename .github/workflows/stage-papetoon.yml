@@ -78,6 +78,25 @@ jobs:
             /tmp/lvdtool/bin/yamlvd "$f" /tmp/out/lvd/$n.yml 2>&1 | tail -2; echo "== $n $f"
           done
           true
+      - name: Cache ultimate_tex_cli
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/ultimate_tex_cli
+          key: ultimate-tex-cli-v1
+      - name: ultimate_tex_cli
+        run: test -x ~/.cargo/bin/ultimate_tex_cli || cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli 2>&1 | tail -2
+      - name: Construction du stage (Papetoon sur Yoshi's Story)
+        run: |
+          set -o pipefail
+          pip install pyyaml >/dev/null
+          export PATH=$PATH:/tmp/lvdtool/bin:$HOME/.cargo/bin
+          REF=$(find /tmp/ref/392643 -type d -path "*stage/yoshi_cartboard" | head -1)
+          LVD=$(find /tmp/hdr -path "*hdr-stages/stage/yoshi_cartboard/normal/param/yoshi_cartboard_00.lvd" | head -1)
+          M="/tmp/out/mod/(Stage) Planet Papetoon (Yoshi's Story)"
+          mkdir -p "$M"
+          python3 -u outils/stagekit/stage/tools/papetoon_ys.py /tmp/out/travail/STGPAPETOON.pac "$REF" "$LVD" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -40
+          find "$M" -type f | sed "s#$M/##" | sort > /tmp/out/mod_liste.txt; wc -l /tmp/out/mod_liste.txt; du -sh "$M"
+          rm -rf /tmp/out/travail/ref_*
       - name: Chiffrer (cle de la session) et publier
         if: always()
         run: |
