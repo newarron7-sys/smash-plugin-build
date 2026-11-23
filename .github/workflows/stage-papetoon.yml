@@ -54,6 +54,15 @@ jobs:
           find /tmp/ref -ipath "*ui/replace*/stage/stage_*" -iname "*yoshi_cartboard*" -type f | head -20 > /tmp/out/ref_ui.txt
           du -sh /tmp/out/travail
           true
+      - name: Inspection des refs (modeles, materiaux)
+        run: |
+          set +e
+          for id in 392643 590120 309999 353126; do
+            d=$(find /tmp/ref/$id -type d -path "*stage/yoshi_cartboard" | head -1)
+            [ -n "$d" ] && python3 outils/stagekit/stage/tools/inspect_ref.py "$d" > /tmp/out/inspect_$id.txt 2>&1
+            echo "== $id $(wc -l < /tmp/out/inspect_$id.txt)"
+          done
+          true
       - name: Collisions de Yoshi's Story (yoshi_cartboard_00.lvd) - refs + HDR, en yaml
         env:
           GH_TOKEN: ${{ github.token }}
