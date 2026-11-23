@@ -40,3 +40,11 @@ for ref in sorted(glob.glob(os.path.join(REFD, 'stage_*_yoshi_cartboard.bntx')))
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     subprocess.run([sys.executable, os.path.join(OUTILS, 'greffe_bntx.py'), ref, neuf, dst], check=True)
     os.remove(neuf)
+    # contrôle : le bntx greffé relu doit redonner l'image rendue
+    chk = os.path.join(AP, 'controle_stage_%d.png' % n)
+    subprocess.run(['ultimate_tex_cli', dst, chk], capture_output=True)
+    if os.path.exists(chk):
+        import numpy as np
+        A_ = np.asarray(Image.open(png).convert('RGB')).astype(float)
+        B_ = np.asarray(Image.open(chk).convert('RGB')).astype(float)
+        print('contrôle stage_%d : écart moyen %.2f / 255' % (n, abs(A_ - B_).mean()) if A_.shape == B_.shape else ('tailles', A_.shape, B_.shape))

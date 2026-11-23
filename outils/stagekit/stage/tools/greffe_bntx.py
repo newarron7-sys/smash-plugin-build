@@ -20,15 +20,44 @@ def info(d):
     return dict(mips=mips, fmt='%08X' % fmt, w=w, h=h, bh=bh, size=size, brtd=j), d[nom_o:nom_o + 40].split(b'\0')[0]
 
 
+def adresses(w, h, bpp, bh):
+    """adresse (octets) de chaque élément (h, w) dans une surface Tegra X1 en blocs linéaires (GOB 64 o x 8 lignes)"""
+    import numpy as np
+    wg = (w * bpp + 63) // 64
+    x = (np.arange(w) * bpp)[None, :]
+    y = np.arange(h)[:, None]
+    gob = (y // (8 * bh)) * 512 * bh * wg + (x // 64) * 512 * bh + ((y % (8 * bh)) // 8) * 512
+    xx, yy = x % 64, y % 8
+    return gob + (xx // 32) * 256 + (yy // 2) * 64 + ((xx % 32) // 16) * 32 + (yy % 2) * 16 + (xx % 16)
+
+
+def reswizzle(data, w, h, bpp, bh_src, bh_dst, size):
+    import numpy as np
+    src = np.frombuffer(data, np.uint8)
+    out = np.zeros(size, np.uint8)
+    As, Ad = adresses(w, h, bpp, bh_src).ravel(), adresses(w, h, bpp, bh_dst).ravel()
+    k = np.arange(bpp)
+    out[(Ad[:, None] + k).ravel()] = src[(As[:, None] + k).ravel()]
+    return out.tobytes()
+
+
 r, n = open(REF, 'rb').read(), open(NEW, 'rb').read()
 ir, nr = info(r)
 inn, _ = info(n)
 print('réf', ir, nr)
 print('neuf', inn)
-for k in ('mips', 'fmt', 'w', 'h', 'bh', 'size'):
+for k in ('mips', 'fmt', 'w', 'h', 'size'):
     assert ir[k] == inn[k], (k, ir[k], inn[k])
 a, b = ir['brtd'] + 0x10, inn['brtd'] + 0x10
+data = n[b:b + inn['size']]
+if ir['bh'] != inn['bh']:
+    # hauteur de bloc différente : on remet les blocs dans la disposition de la référence (blocs de 4x4 px, 16 octets)
+    assert ir['mips'] == 1, 'reswizzle seulement sans mipmaps'
+    BPP = 16 if 0x1A <= (int(ir['fmt'], 16) >> 8) & 0xFF <= 0x20 else 4   # BC1..BC7 : blocs de 16 octets (BC1 = 8, non géré)
+    bw, bhp = ((ir['w'] + 3) // 4, (ir['h'] + 3) // 4) if BPP == 16 else (ir['w'], ir['h'])
+    data = reswizzle(data, bw, bhp, BPP, 1 << inn['bh'], 1 << ir['bh'], ir['size'])
+    print('reswizzle : hauteur de bloc', 1 << inn['bh'], '->', 1 << ir['bh'])
 out = bytearray(r)
-out[a:a + ir['size']] = n[b:b + inn['size']]
+out[a:a + ir['size']] = data
 open(OUT, 'wb').write(bytes(out))
 print('greffé ->', OUT, len(out), 'octets, nom interne', nr)
