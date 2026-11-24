@@ -31,7 +31,7 @@ jobs:
         run: |
           set +e
           mkdir -p /tmp/pack && cd /tmp/pack
-          gdown --fuzzy "https://drive.google.com/file/d/1RQbtMsA21CzJfrziyVpGWUxUthrTBEBi/view" -O pack.zip > /tmp/out/gdown.txt 2>&1
+          gdown 1RQbtMsA21CzJfrziyVpGWUxUthrTBEBi -O pack.zip > /tmp/out/gdown.txt 2>&1
           ls -la pack.zip | awk '{print $5}'
           7z l -ba -slt pack.zip | grep "^Path = " | sed 's/^Path = //' > /tmp/out/pack_liste.txt; wc -l < /tmp/out/pack_liste.txt
           7z x -y -ox pack.zip > /dev/null 2>&1
