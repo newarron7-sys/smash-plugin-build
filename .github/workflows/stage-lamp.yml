@@ -85,7 +85,7 @@ jobs:
           curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
           for z in hdr.zip sp.zip; do unzip -qo $z "*animal_village*" -d x_$z 2>/dev/null; done
           find /tmp/hdr -path "*animal_village*" -type f | sed 's#/tmp/hdr/##' > /tmp/out/lvd/hdr_fichiers.txt
-          find /tmp/ref /tmp/hdr -iname "animal_village*.lvd" -print0 | while IFS= read -r -d '' f; do
+          find /tmp/ref /tmp/hdr -ipath "*animal_village*" -iname "*.lvd" -print0 | while IFS= read -r -d '' f; do
             n=$(md5sum "$f" | cut -c1-8); cp "$f" /tmp/out/lvd/$n.lvd; echo "$f" > /tmp/out/lvd/$n.txt
             /tmp/lvdtool/bin/yamlvd "$f" /tmp/out/lvd/$n.yml >/dev/null 2>&1
           done
