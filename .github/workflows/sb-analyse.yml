@@ -85,11 +85,20 @@ jobs:
                       nm = str(h)
                   else:
                       nm, c = '', item
-                  if c.type in ('struct', 'list'):
-                      out.write('  ' * ind + '%s (%s, %d)\n' % (nm, c.type, len(c)))
-                      dump(c, ind + 1)
-                  else:
-                      out.write('  ' * ind + '%s = %r\n' % (nm, c.value))
+                  t = str(getattr(c, 'type', '?'))
+                  try:
+                      v = c.value
+                      out.write('  ' * ind + '%s = %r  [%s]\n' % (nm, v, t))
+                  except Exception:
+                      try:
+                          n = len(c)
+                      except Exception:
+                          n = -1
+                      out.write('  ' * ind + '%s (%s, %d)\n' % (nm, t, n))
+                      try:
+                          dump(c, ind + 1)
+                      except Exception as e:
+                          out.write('  ' * ind + '  ! %s\n' % e)
           dump(pyprc.param(sys.argv[1]))
           PY
               ;;
