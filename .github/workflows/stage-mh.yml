@@ -1,0 +1,85 @@
+name: Stage - Monster Hunter Tri Basin 1 sur Chateau de Suzaku (usage perso) - analyse
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/stage-mh.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: stage-mh
+  cancel-in-progress: true
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Outils
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar unrar fonts-dejavu-core >/dev/null 2>&1 || true
+          pip install ssbh_data_py numpy pillow scipy pyyaml gdown >/dev/null
+          mkdir -p /tmp/out/travail /tmp/out/refs /tmp/out/lvd
+      - name: Pack de stages (Google Drive) et Basin 1
+        run: |
+          set +e
+          mkdir -p /tmp/pack && cd /tmp/pack
+          gdown --fuzzy "https://drive.google.com/file/d/1RQbtMsA21CzJfrziyVpGWUxUthrTBEBi/view" -O pack.zip > /tmp/out/gdown.txt 2>&1
+          ls -la pack.zip | awk '{print $5}'
+          7z l -ba -slt pack.zip | grep "^Path = " | sed 's/^Path = //' > /tmp/out/pack_liste.txt; wc -l < /tmp/out/pack_liste.txt
+          7z x -y -ox pack.zip > /dev/null 2>&1
+          find x -type f \( -iname "*.zip" -o -iname "*.rar" -o -iname "*.7z" \) -print0 | while IFS= read -r -d '' a; do 7z x -y -o"${a%.*}_x" "$a" > /dev/null 2>&1; done
+          find x -type f | sed 's#^x/##' > /tmp/out/pack_tout.txt; wc -l < /tmp/out/pack_tout.txt
+          find x -type f -iname "*.pac" -print0 | while IFS= read -r -d '' f; do
+            n=$(echo "$f" | md5sum | cut -c1-6); cp "$f" "/tmp/out/travail/${n}_$(basename "$f")"; echo "$f" > "/tmp/out/travail/${n}_$(basename "$f").src"
+          done
+          ls /tmp/out/travail | grep -c "\.pac$"
+      - name: Analyse des stages du pack (modeles, collisions, apercu)
+        run: |
+          set +e
+          for f in /tmp/out/travail/*.pac; do
+            b=$(basename "$f" .pac)
+            python3 -u outils/stagekit/stage/tools/brawl_coll.py "$f" > /tmp/out/travail/collisions_$b.txt 2>&1
+            timeout 900 python3 -u outils/stagekit/stage/tools/analyse_brawl_stage.py "$f" /tmp/out/travail/apercu_$b.png "$b" -56,56,0 > /tmp/out/travail/analyse_$b.txt 2>&1
+          done
+          ls /tmp/out/travail | wc -l
+      - name: Infinite Azure (356866, reference grand stage) et refs du Chateau de Suzaku
+        run: |
+          set +e
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 356866 /tmp/ia > /tmp/out/refs/ia_fichiers.txt 2>&1
+          find /tmp/ia -type f | sed 's#/tmp/ia/##' > /tmp/out/refs/ia_tout.txt
+          for q in "suzaku castle" "suzaku" "suzaku castle retexture"; do
+            python3 -u outils/stagekit/stage/tools/gb_fetch.py cherche "$q" stage/ /tmp/ref 6 > /dev/null 2>&1
+          done
+          find /tmp/ref -type f | sed 's#/tmp/ref/##' > /tmp/out/refs/suzaku_tout.txt
+          find /tmp/ref -maxdepth 4 -name "config.json" -print0 | while IFS= read -r -d '' c; do id=$(echo "$c" | sed -E 's#/tmp/ref/([0-9]+)/.*#\1#'); cp "$c" "/tmp/out/refs/config_$id.json"; done
+          wc -l /tmp/out/refs/*.txt
+      - name: lvd en yaml (Infinite Azure, refs, HDR)
+        run: |
+          set +e
+          cargo install smash-lvd --features cli --root /tmp/lvdtool >/dev/null 2>&1
+          mkdir -p /tmp/hdr && cd /tmp/hdr
+          curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
+          unzip -l sp.zip | awk '{print $4}' | grep "hdr-stages/stage/" | cut -d/ -f5 | sort -u > /tmp/out/lvd/hdr_stages.txt
+          unzip -qo sp.zip "*hdr-stages/stage/*" -d x 2>/dev/null
+          find /tmp/ia /tmp/ref /tmp/hdr/x -iname "*.lvd" -print0 | while IFS= read -r -d '' f; do
+            n=$(echo "$f" | md5sum | cut -c1-8); echo "$f" > /tmp/out/lvd/$n.txt
+            /tmp/lvdtool/bin/yamlvd "$f" /tmp/out/lvd/$n.yml > /dev/null 2>&1
+          done
+          ls /tmp/out/lvd | wc -l
+      - name: Chiffrer (cle de la session) et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_mh && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "mh" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_mh
