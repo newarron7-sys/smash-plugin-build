@@ -138,6 +138,30 @@ def tname(t):
 tm = S.matl_data.read_matl(MATL_MODELE)
 TI = next(i for i, e in enumerate(tm.entries) if e.material_label == 'Bottom')
 
+# v3 : carte d'ombres d'origine (BakeMap de la carte Brawl, 2e texture + 2e jeu d'UV de Blue / Grid) dans un matériau
+# du jeu à texture d'ombre : Texture0 (couleur, map1) + Texture9 (éclairage cuit, bake1), modèle pris dans
+# stc_bg_set de 387162 (même dossier que le décor)
+CUIT = os.environ.get('UE_CUIT', '1') == '1'
+GAB_CUIT = None
+if CUIT:
+    _rm = S.matl_data.read_matl(os.path.join(RM, DOS, 'model.numatb'))
+    for pref in ('SFX_PBS_0000000008088280', 'SFX_PBS_0000000000088280', 'SFX_PBS_0000000000080280'):
+        cand = [e for e in _rm.entries if e.shader_label.startswith(pref) and
+                sorted(t.param_id.name for t in e.textures) == ['Texture0', 'Texture9']]
+        if cand:
+            GAB_CUIT = cand[0]
+            break
+    ATTR_CUIT = None
+    if GAB_CUIT is not None:
+        _dl = S.modl_data.read_modl(os.path.join(RM, DOS, 'model.numdlb'))
+        _sh = A.read_mesh(os.path.join(RM, DOS, 'model.numshb'))
+        noms_o = [(en.mesh_object_name, en.mesh_object_subindex) for en in _dl.entries if en.material_label == GAB_CUIT.material_label]
+        for o in _sh.objects:
+            if (o.name, o.subindex) in noms_o:
+                ATTR_CUIT = ([a.name for a in o.texture_coordinates], [a.name for a in o.color_sets])
+                break
+    print('matériau à texture d\'ombre :', GAB_CUIT.shader_label if GAB_CUIT else None, GAB_CUIT.material_label if GAB_CUIT else None, ATTR_CUIT)
+
 # regroupement par texture
 par_tex = {}
 for mn, o in garde:
@@ -171,11 +195,14 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     nrm = np.concatenate([o['nrm'][:, [0, 2, 1]] for o in ol]).reshape(-1, 3)
     uv = np.concatenate([(o['uv'][:, [0, 2, 1]] if o['uv'] is not None else np.zeros(o['pos'].shape[:2] + (2,)))
                          for o in ol]).reshape(-1, 2)
-    key = np.round(np.c_[pos, nrm * 100, uv * 4096], 3)
+    cuit = GAB_CUIT is not None and ATTR_CUIT is not None and all(o.get('uv1') is not None and 'BakeMap' in o.get('texs', []) for o in ol)
+    uv1 = np.concatenate([(o['uv1'][:, [0, 2, 1]] if o.get('uv1') is not None else np.zeros(o['pos'].shape[:2] + (2,)))
+                          for o in ol]).reshape(-1, 2)
+    key = np.round(np.c_[pos, nrm * 100, uv * 4096, uv1 * 4096], 3)
     uk, inv = np.unique(key, axis=0, return_inverse=True)
     first = np.zeros(len(uk), dtype=np.int64)
     first[inv.ravel()[::-1]] = np.arange(len(inv.ravel()))[::-1]
-    pos, nrm, uv = pos[first], nrm[first], uv[first]
+    pos, nrm, uv, uv1 = pos[first], nrm[first], uv[first], uv1[first]
     pos[:, 1] -= Y0
     pos *= ECH
     nrm = nrm / np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-6)
@@ -190,18 +217,28 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
         up = np.where(np.abs(nrm[:, 1:2]) > 0.9, np.array([[1, 0, 0]]), np.array([[0, 1, 0]]))
         tg = np.c_[np.cross(up, nrm), np.ones(nv)]
     mo.tangents = [attr('Tangent0', tg)]
-    mo.texture_coordinates = [attr('map1', uv), attr('bake1', uv), attr('uvSet', uv)]
-    c1 = np.full((nv, 4), 0.502)
-    c1[:, :3] *= ombrage(nrm)[:, None]
-    mo.color_sets = [attr('colorSet1', c1), attr('colorSet4', np.full((nv, 4), 0.502))]
+    if cuit:
+        mo.texture_coordinates = [attr(n_, uv1 if n_ == 'bake1' else uv) for n_ in ATTR_CUIT[0]]
+        mo.color_sets = [attr(n_, np.full((nv, 4), 0.502)) for n_ in ATTR_CUIT[1]]
+    else:
+        mo.texture_coordinates = [attr('map1', uv), attr('bake1', uv), attr('uvSet', uv)]
+        c1 = np.full((nv, 4), 0.502)
+        c1[:, :3] *= ombrage(nrm)[:, None]
+        mo.color_sets = [attr('colorSet1', c1), attr('colorSet4', np.full((nv, 4), 0.502))]
     mo.vertex_indices = idx
     a = alpha(t)
-    lab = 'ue_%s%s' % (t, '_a' if a else '')
-    e = S.matl_data.read_matl(MATL_MODELE).entries[TI]
+    lab = 'ue_%s%s%s' % (t, '_a' if a else '', '_cuit' if cuit else '')
+    if cuit:
+        e = next(x for x in S.matl_data.read_matl(os.path.join(RM, DOS, 'model.numatb')).entries
+                 if x.material_label == GAB_CUIT.material_label)
+    else:
+        e = S.matl_data.read_matl(MATL_MODELE).entries[TI]
     e.material_label = lab
     for x in e.textures:
-        if x.param_id.name == 'Texture5':
+        if x.param_id.name in ('Texture5', 'Texture0'):
             x.data = tname(t)
+        elif x.param_id.name == 'Texture9':
+            x.data = tname('BakeMap')
     for x in e.rasterizer_states:
         d_ = x.data
         d_.cull_mode = S.matl_data.CullMode.Disabled
@@ -229,6 +266,15 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     subprocess.run(['ultimate_tex_cli', png, cible, '--format', 'BC7RgbaUnormSrgb'], check=True, capture_output=True)
     os.remove(png)
 
+if any(l.endswith('_cuit') for l in labs):
+    from PIL import Image
+    png = os.path.join(OUT, '_tmp.png')
+    TEX['BakeMap'].convert('RGBA').save(png)
+    subprocess.run(['ultimate_tex_cli', png, os.path.join(D, tname('BakeMap') + '.nutexb'), '--format', 'BC7RgbaUnormSrgb'],
+                   check=True, capture_output=True)
+    os.remove(png)
+    print('texture d\'ombre :', tname('BakeMap'), TEX['BakeMap'].size, [l for l in labs if l.endswith('_cuit')])
+
 # scène three.js (aperçus / image de l'écran des terrains), même décor que le mod
 if os.environ.get('UE_SCENE'):
     import json as _j
@@ -241,17 +287,22 @@ if os.environ.get('UE_SCENE'):
         hd = os.path.join(os.environ.get('UE_HD', ''), t + '_x4.png')
         im_ = np.asarray((Image.open(hd) if os.environ.get('UE_HD') and os.path.exists(hd) else TEX[t]).convert('RGBA')).astype(np.float32)
         Image.fromarray(np.clip(ajuste(im_, t) + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(os.path.join(SC, 'tex', noms[t] + '.png'))
+    TEX['BakeMap'].convert('RGBA').save(os.path.join(SC, 'tex', 'bake.png'))
     for t, ol in par_tex.items():
         for o in ol:
             p = o['pos'][:, [0, 2, 1]].astype(np.float64)
             p[:, :, 1] -= Y0
             p *= ECH
             u = o['uv'][:, [0, 2, 1]] if o['uv'] is not None else np.zeros(p.shape[:2] + (2,))
-            nn = o['nrm'][:, [0, 2, 1]].reshape(-1, 3)
-            nn = nn / np.maximum(np.linalg.norm(nn, axis=1, keepdims=True), 1e-6)
-            c = np.repeat(ombrage(nn)[:, None], 3, axis=1)
-            scene.append({'p': np.round(p.reshape(-1), 4).tolist(), 'uv': np.round(u.reshape(-1), 5).tolist(), 't': noms[t], 'a': bool(alpha(t)),
-                          'c': np.round(c.reshape(-1), 3).tolist()})
+            el = {'p': np.round(p.reshape(-1), 4).tolist(), 'uv': np.round(u.reshape(-1), 5).tolist(), 't': noms[t], 'a': bool(alpha(t))}
+            if GAB_CUIT is not None and o.get('uv1') is not None and 'BakeMap' in o.get('texs', []):
+                el['b'] = 'bake'
+                el['u1'] = np.round(o['uv1'][:, [0, 2, 1]].reshape(-1), 5).tolist()
+            else:
+                nn = o['nrm'][:, [0, 2, 1]].reshape(-1, 3)
+                nn = nn / np.maximum(np.linalg.norm(nn, axis=1, keepdims=True), 1e-6)
+                el['c'] = np.round(np.repeat(ombrage(nn)[:, None], 3, axis=1).reshape(-1), 3).tolist()
+            scene.append(el)
     _j.dump(scene, open(os.path.join(SC, 'scene.json'), 'w'))
     print('scène', len(scene), 'objets')
 

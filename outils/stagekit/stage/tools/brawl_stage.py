@@ -169,15 +169,17 @@ def load(pac, verbose=False):
                     P = np.c_[P, np.zeros(len(P))]
                 N = M['arrays']['nrm'][ob['ids'][1]][0] if 0 <= ob['ids'][1] < len(M['arrays']['nrm']) else None
                 U = M['arrays']['uv'][ob['ids'][4]][0] if 0 <= ob['ids'][4] < len(M['arrays']['uv']) else None
+                U1 = M['arrays']['uv'][ob['ids'][5]][0] if 0 <= ob['ids'][5] < len(M['arrays']['uv']) else None
                 mi = M['obj_mat'].get(oi)
                 mname = M['mat_names'][mi] if mi is not None and mi < len(M['mat_names']) else ''
-                pos, uv, nrm = [], [], []
+                pos, uv, nrm, uv1 = [], [], [], []
                 for t in ob['tris']:
-                    tp, tu, tn = [], [], []
+                    tp, tu, tn, tu1 = [], [], [], []
                     for v in t:
                         w = byid.get(v.get('bone', ob['node']), np.eye(4))
                         tp.append((w @ np.r_[P[v['pos']], 1.0])[:3])
                         tu.append(U[v['uv0']] if U is not None and 'uv0' in v else (0.0, 0.0))
+                        tu1.append(U1[v['uv1']] if U1 is not None and 'uv1' in v else (0.0, 0.0))
                         if N is not None and 'nrm' in v:
                             nn = w[:3, :3] @ N[v['nrm']][:3]
                             tn.append(nn / (np.linalg.norm(nn) or 1.0))
@@ -186,8 +188,10 @@ def load(pac, verbose=False):
                     pos.append(tp)
                     uv.append(tu)
                     nrm.append(tn)
+                    uv1.append(tu1)
                 texs = MT.get(mname, [])
                 objs.append({'name': on, 'mat': mname, 'tex': texs[0] if texs else None, 'pos': np.array(pos),
-                             'uv': np.array(uv) if U is not None else None, 'nrm': np.array(nrm)})
+                             'uv': np.array(uv) if U is not None else None, 'nrm': np.array(nrm),
+                             'uv1': np.array(uv1) if U1 is not None else None, 'texs': list(texs)})
             models.append((name, mn, objs))
     return TEX, models
