@@ -34,8 +34,12 @@ PFX = 'lamp_'
 DOS = 'stc_bg_set'
 
 TEX, models = brawl_stage.load(PAC)
+SANS = {'AdvGdtWarpZone01'}          # tourbillon blanc : porte de l'Émissaire subspatial (demande du joueur)
 garde = []
 for _, mn, ol in models:
+    if mn in SANS:
+        print('ignore (modèle)', mn)
+        continue
     for o in ol:
         if not o['tex'] or o['tex'] not in TEX:
             print('ignore', mn, o['name'], o['tex'])
@@ -69,6 +73,45 @@ print('sol visible (Brawl) à z 0 :', hs)
 vals = [h for h in hs if h is not None and abs(h) < 10]
 Y0 = float(os.environ.get('LAMP_Y0', str(round(float(np.median(vals)), 3) if vals else 0.0)))
 print('Y0 =', Y0)
+
+
+# cour prolongée vers l'écran (demande du joueur : on voyait le bord avant du sol quand la caméra recule) :
+# le bord avant du dallage (z ~322, y ~11, texture 197F49C0, v 0,4933, u linéaire en x) est étiré jusqu'à z 2500,
+# et sur les côtés jusqu'à x ±2500 (u du bout du bord).
+def prolongement():
+    bord = []
+    for _, o in garde:
+        if o['tex'] != '197F49C0' or o['uv'] is None:
+            continue
+        P, U = o['pos'], o['uv']
+        nn = np.cross(P[:, 1] - P[:, 0], P[:, 2] - P[:, 0])
+        nn /= np.maximum(np.linalg.norm(nn, axis=1, keepdims=True), 1e-9)
+        for t in np.where(np.abs(nn[:, 1]) > 0.5)[0]:
+            for k in range(3):
+                if P[t, k, 2] > 318 and abs(U[t, k, 1] - 0.4933) < 0.002:
+                    bord.append((P[t, k, 0], P[t, k, 1], P[t, k, 2], U[t, k, 0], U[t, k, 1]))
+    bord = np.array(sorted(bord))
+    xs = np.unique(np.round(bord[:, 0], 1))
+    pts = []
+    for x in xs:
+        m = np.abs(bord[:, 0] - x) < 0.2
+        pts.append((x, bord[m, 1].min() - 0.05, bord[m, 2].min() - 0.5, bord[m, 3].mean(), bord[m, 4].mean()))
+    pts = [(-2500.0,) + pts[0][1:]] + pts + [(2500.0,) + pts[-1][1:]]
+    Z2 = 2500.0
+    pos, uv = [], []
+    for (x0, y0, z0, u0, v0), (x1, y1, z1, u1, v1) in zip(pts, pts[1:]):
+        a, b, c, d = (x0, y0, z0), (x1, y1, z1), (x1, y1, Z2), (x0, y0, Z2)
+        pos += [[a, b, c], [a, c, d]]
+        uv += [[(u0, v0), (u1, v1), (u1, v1)], [(u0, v0), (u1, v1), (u0, v0)]]
+    pos = np.array(pos, dtype=np.float64)
+    print('cour prolongée : bord x %.0f..%.0f, y %.1f..%.1f, z %.0f -> %.0f, %d triangles'
+          % (xs.min(), xs.max(), min(p[1] for p in pts), max(p[1] for p in pts), min(p[2] for p in pts), Z2, len(pos)))
+    return {'name': 'prolongement', 'tex': '197F49C0', 'pos': pos, 'uv': np.array(uv, dtype=np.float64),
+            'nrm': np.tile(np.array([0.0, 1.0, 0.0]), pos.shape[:2] + (1,))}
+
+
+if os.environ.get('LAMP_PROLONGE', '1') == '1':
+    garde.append(('prolongement', prolongement()))
 
 
 def attr(name, data):
@@ -156,6 +199,27 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     subprocess.run(['ultimate_tex_cli', png, cible, '--format', 'BC7RgbaUnormSrgb'], check=True, capture_output=True)
     nouveaux.append(os.path.relpath(cible, OUT).replace(os.sep, '/'))
     os.remove(png)
+
+# scène three.js (aperçus / image de l'écran des terrains), même décor que le mod
+if os.environ.get('LAMP_SCENE'):
+    import json as _j
+    from PIL import Image
+    SC = os.environ['LAMP_SCENE']
+    os.makedirs(os.path.join(SC, 'tex'), exist_ok=True)
+    noms, scene = {}, []
+    for i, t in enumerate(sorted(par_tex)):
+        noms[t] = 't%02d' % i
+        hd = os.path.join(os.environ.get('LAMP_HD', ''), t + '_x4.png')
+        (Image.open(hd) if os.environ.get('LAMP_HD') and os.path.exists(hd) else TEX[t]).convert('RGBA').save(os.path.join(SC, 'tex', noms[t] + '.png'))
+    for t, ol in par_tex.items():
+        for o in ol:
+            p = o['pos'][:, [0, 2, 1]].astype(np.float64)
+            p[:, :, 1] -= Y0
+            p *= ECH
+            u = o['uv'][:, [0, 2, 1]] if o['uv'] is not None else np.zeros(p.shape[:2] + (2,))
+            scene.append({'p': np.round(p.reshape(-1), 4).tolist(), 'uv': np.round(u.reshape(-1), 5).tolist(), 't': noms[t], 'a': bool(alpha(t))})
+    _j.dump(scene, open(os.path.join(SC, 'scene.json'), 'w'))
+    print('scène', len(scene), 'objets')
 
 matl = S.matl_data.read_matl(os.path.join(RM, DOS, 'model.numatb'))
 matl.entries = entries

@@ -11,7 +11,7 @@ import brawl_stage  # noqa: E402
 MODE, PAC = sys.argv[1:3]
 ECH = float(os.environ.get('PP_ECHELLE', str(58.0 / 56.0)))
 Y0 = float(os.environ.get('PP_Y0', '-4.98'))
-SANS = {'stGimmickYoshiBumper', 'EffFoxReflectorStart', 'EffFoxReflector', 'EffFoxReflectorRef', 'Path'}
+SANS = {'AdvGdtWarpZone01', 'stGimmickYoshiBumper', 'EffFoxReflectorStart', 'EffFoxReflector', 'EffFoxReflectorRef', 'Path'}
 SANS_OBJ = {'Rail', 'MainShadow', 'PlatMidShadow', 'PlatLeftShadow', 'PlatRightShadow'}
 
 TEX, models = brawl_stage.load(PAC)

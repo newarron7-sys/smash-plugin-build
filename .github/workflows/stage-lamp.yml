@@ -109,7 +109,7 @@ jobs:
           key: lamp-hd-x4-v1
       - name: Textures HD x4 (Real-ESRGAN x4plus)
         env:
-          PP_Y0: '-0.986'
+          PP_Y0: '-1.034'
           PP_ECHELLE: '1.0'
         run: |
           set -o pipefail
@@ -132,12 +132,12 @@ jobs:
           LVD=$(find /tmp/hdr -path "*hdr-stages/stage/animal_village/normal/param/xvillage00.lvd" | head -1)
           M="/tmp/out/mod/(Stage) Sleepless Lamp (Smashville)"
           mkdir -p "$M"
-          LAMP_HD=/tmp/hd python3 -u outils/stagekit/stage/tools/lamp_sv.py /tmp/out/travail/STGSLEEPLESSLAMP.pac "$REF" "$NUIT" "$(cat /tmp/matl_modele.txt)" "$LVD" "$M" > /tmp/out/construction.txt 2>&1
+          LAMP_HD=/tmp/hd LAMP_SCENE=/tmp/rendu python3 -u outils/stagekit/stage/tools/lamp_sv.py /tmp/out/travail/STGSLEEPLESSLAMP.pac "$REF" "$NUIT" "$(cat /tmp/matl_modele.txt)" "$LVD" "$M" > /tmp/out/construction.txt 2>&1
           tail -3 /tmp/out/construction.txt | cut -c1-60
           find "$M" -type f | sed "s#$M/##" | sort > /tmp/out/mod_liste.txt; wc -l < /tmp/out/mod_liste.txt; du -sh "$M"
       - name: Image de l'ecran des terrains
         env:
-          PP_Y0: '-0.986'
+          PP_Y0: '-1.034'
           PP_ECHELLE: '1.0'
           UI_NOM: animal_village
           UI_CAM: '0,40,300,0,45,0,34,40'
@@ -148,12 +148,16 @@ jobs:
           npm i --prefix /tmp/rn three@0.160.0 playwright@1.47.2 >/dev/null 2>&1
           (cd /tmp/rn && npx playwright install --with-deps chromium >/dev/null 2>&1)
           R=/tmp/rendu; mkdir -p $R; cp outils/stagekit/stage/tools/rendu/* $R/; cp /tmp/rn/node_modules/three/build/three.module.js $R/
-          python3 -u outils/stagekit/stage/tools/pp_scene.py scene /tmp/out/travail/STGSLEEPLESSLAMP.pac /tmp/hd $R > /dev/null 2>&1
+          ls $R/scene.json
           (cd $R && nohup python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 3
           mkdir -p /tmp/refui; find /tmp/ref/409684 -ipath "*ui/replace*/stage/stage_*" -name "stage_*_animal_village.bntx" -exec cp {} /tmp/refui/ \; ; ls /tmp/refui | wc -l
           M="/tmp/out/mod/(Stage) Sleepless Lamp (Smashville)"
           NODE_PATH=/tmp/rn/node_modules python3 -u outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu > /tmp/out/ui.txt 2>&1
           grep -c "greffé" /tmp/out/ui.txt
+          # aperçus caméra reculée (comme quand les persos sont éloignés), vue de face et un peu de haut
+          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=0b1030 node rendu.js /tmp/out/apercu_recule.png 1280 720 0 45 330 0 25 0 40 > /dev/null 2>&1)
+          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=0b1030 node rendu.js /tmp/out/apercu_recule_bas.png 1280 720 0 20 380 0 0 0 40 > /dev/null 2>&1)
+          ls /tmp/out/apercu_recule*.png
           true
       - name: Chiffrer (cle de la session) et publier
         if: always()
