@@ -73,11 +73,11 @@ def grille(base, n=2048, panneaux=5, sous=4):
         d = np.minimum(x % pas, pas - (x % pas))
         return d < larg / 2.0
     pas_p = n / panneaux
-    maj = lignes(pas_p, 4)
-    mi = lignes(pas_p / sous, 2)
+    maj = lignes(pas_p, 10)
+    mi = lignes(pas_p / sous, 4)
     f = np.ones((n, n), dtype=np.float32)
-    f[mi[None, :] | mi[:, None]] = 0.9
-    f[maj[None, :] | maj[:, None]] = 0.68
+    f[mi[None, :] | mi[:, None]] = 0.8
+    f[maj[None, :] | maj[:, None]] = 0.5
     im = np.zeros((n, n, 4), dtype=np.float32)
     im[:, :, :3] = f[:, :, None] * np.asarray(base, dtype=np.float32)[None, None, :3]
     im[:, :, 3] = 255
