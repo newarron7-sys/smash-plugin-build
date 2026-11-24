@@ -19,6 +19,7 @@ jobs:
         shell: bash
     env:
       MID: '537019'
+      BRAWL_CHR0: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -47,6 +48,31 @@ jobs:
           find /tmp/gb/$MID -iname "*.pac" -print0 | while IFS= read -r -d '' f; do cp "$f" /tmp/out/travail/; done
           find /tmp/gb/$MID -iname "*.txt" -print0 | while IFS= read -r -d '' f; do echo "== $f"; head -60 "$f"; done > /tmp/out/lisezmoi.txt 2>&1
           ls /tmp/out/travail | wc -l
+      - name: Dojo Mishima (demon_dojo) - refs, chemins du jeu, HDR, Stage Alts
+        run: |
+          set +e
+          mkdir -p /tmp/out/refs /tmp/out/lvd /tmp/out/sa
+          for q in "mishima dojo" "mishima dojo retexture" "kazuya stage" "mishima"; do
+            python3 -u outils/stagekit/stage/tools/gb_fetch.py cherche "$q" stage/demon_dojo /tmp/ref 6 > /dev/null 2>&1
+          done
+          find /tmp/ref -type f | sed 's#/tmp/ref/##' > /tmp/out/refs/tous.txt
+          find /tmp/ref -maxdepth 4 -name "config.json" -print0 | while IFS= read -r -d '' c; do id=$(echo "$c" | sed -E 's#/tmp/ref/([0-9]+)/.*#\1#'); cp "$c" "/tmp/out/refs/config_$id.json"; done
+          curl -sSL -o /tmp/hashes.txt https://raw.githubusercontent.com/ultimate-research/archive-hashes/master/Hashes_FullPath
+          grep "^stage/demon_dojo/" /tmp/hashes.txt > /tmp/out/refs/hashes_dojo.txt; grep "^ui/replace.*/stage/stage_[0-9]/stage_[0-9]_demon_dojo" /tmp/hashes.txt >> /tmp/out/refs/hashes_dojo.txt; wc -l < /tmp/out/refs/hashes_dojo.txt
+          cargo install smash-lvd --features cli --root /tmp/lvdtool >/dev/null 2>&1
+          mkdir -p /tmp/hdr && cd /tmp/hdr
+          curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
+          unzip -l sp.zip | awk '{print $4}' > /tmp/out/refs/hdr_liste.txt
+          unzip -qo sp.zip "*hdr-stages/stage/demon_dojo/*" "*hdr-stages/config.json" "*hdr-stages/ui/*demon_dojo*" -d x 2>/dev/null
+          find /tmp/hdr/x -name "config.json" -exec cp {} /tmp/out/refs/hdr_stages_config.json \;
+          find /tmp/hdr/x -type f | sed 's#/tmp/hdr/x/##' > /tmp/out/lvd/hdr_fichiers.txt
+          find /tmp/ref /tmp/hdr/x -iname "*.lvd" -path "*demon_dojo*" -print0 | while IFS= read -r -d '' f; do
+            n=$(echo "$f" | md5sum | cut -c1-8); echo "$f" > /tmp/out/lvd/$n.txt; /tmp/lvdtool/bin/yamlvd "$f" /tmp/out/lvd/$n.yml > /dev/null 2>&1
+          done
+          cd $GITHUB_WORKSPACE
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 460711 /tmp/sa > /tmp/out/sa/fichiers.txt 2>&1
+          find /tmp/sa -type f -not -path "*archives*" -not -iname "*.nutexb" -not -iname "*.nro" -print0 | xargs -0 -I{} cp --parents {} /tmp/out/sa/ 2>/dev/null
+          ls /tmp/out/lvd | wc -l; true
       - name: Chiffrer (cle de la session) et publier
         if: always()
         run: |
