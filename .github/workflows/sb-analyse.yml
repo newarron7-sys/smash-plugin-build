@@ -59,6 +59,43 @@ jobs:
             python3 -c "import pyprc,sys;p=pyprc.param(sys.argv[1]);print(p)" "$f" > "prc_$(basename "$f").txt" 2>&1
           done
           ls | head -50
+      - name: Decompilation (lvd en yaml, stdat en texte) + autres mods Stage Builder pour comparer
+        run: |
+          set +e
+          cargo install smash-lvd --features cli --root /tmp/lvdtool >/dev/null 2>&1
+          pip install pyprc >/dev/null 2>&1
+          curl -sSL -o /tmp/labels.csv https://raw.githubusercontent.com/ultimate-research/param-labels/master/ParamLabels.csv
+          for q in "stage builder" "stage builder blast" "sp_edit" "stage builder camera"; do
+            python3 -u outils/stagekit/stage/tools/gb_fetch.py cherche "$q" stage/sp_edit /tmp/ref 8 > /dev/null 2>&1
+          done
+          mkdir -p /tmp/out/dec
+          find /tmp/out/mod /tmp/ref -path "*sp_edit*" \( -iname "*.lvd" -o -iname "*.stdat" -o -iname "*.prc" -o -iname "*.stprm" \) -print0 | while IFS= read -r -d '' f; do
+            n=$(echo "$f" | md5sum | cut -c1-6); b=$(basename "$f")
+            echo "$f" > /tmp/out/dec/${n}_$b.src
+            case "$b" in
+              *.lvd) /tmp/lvdtool/bin/yamlvd "$f" /tmp/out/dec/${n}_$b.yml > /dev/null 2>&1 ;;
+              *) python3 - "$f" /tmp/out/dec/${n}_$b.txt <<'PY'
+          import sys, pyprc
+          pyprc.hash.load_labels('/tmp/labels.csv')
+          out = open(sys.argv[2], 'w')
+          def dump(p, ind=0):
+              for item in p:
+                  if isinstance(item, tuple):
+                      h, c = item
+                      nm = str(h)
+                  else:
+                      nm, c = '', item
+                  if c.type in ('struct', 'list'):
+                      out.write('  ' * ind + '%s (%s, %d)\n' % (nm, c.type, len(c)))
+                      dump(c, ind + 1)
+                  else:
+                      out.write('  ' * ind + '%s = %r\n' % (nm, c.value))
+          dump(pyprc.param(sys.argv[1]))
+          PY
+              ;;
+            esac
+          done
+          ls /tmp/out/dec | wc -l
       - name: Chiffrer (cle de la session) et publier
         if: always()
         run: |
