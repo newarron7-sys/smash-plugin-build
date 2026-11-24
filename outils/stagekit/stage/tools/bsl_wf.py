@@ -32,7 +32,7 @@ PFX = 'bsl_'
 DOS = 'stc_floor_set'
 
 TEX, models = brawl_stage.load(PAC)
-SANS = {'SA-X', 'SA-X_shadow', 'X', 'X2', 'X3', 'X4', 'Shadow'}   # animés dans Brawl / ombres multiplicatives
+SANS = {'SA-X', 'SA-X_shadow', 'X', 'X2', 'X3', 'X4', 'Shadow', 'SR388'}   # animés dans Brawl / ombres multiplicatives / planète SR388 verte sous le stage (demande du joueur)
 SANS_TEX = {'2802kd_glass01', '2802kd_rifrect01'}   # vitres / reflets (transparents ou additifs dans Brawl) : vitres ouvertes sur SR388
 LUM = float(os.environ.get('BSL_LUM', '0.8'))        # éclairage du décor baissé (demande du joueur)
 SAT = float(os.environ.get('BSL_SAT', '0.8'))        # couleurs moins vives (demande du joueur)
