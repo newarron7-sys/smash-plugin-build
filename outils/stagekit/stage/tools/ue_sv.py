@@ -259,7 +259,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     hd = os.path.join(os.environ.get('UE_HD', ''), t + '_x4.png')
     if os.environ.get('UE_HD') and os.path.exists(hd):
         im = np.asarray(Image.open(hd).convert('RGBA')).astype(np.float32)
-    im = ajuste(im, t)
+    im = ajuste(im, t) if not cuit else im
     if a:
         im[:, :, :3] *= im[:, :, 3:] / 255.0
     Image.fromarray(np.clip(im + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(png)
@@ -270,7 +270,11 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
 if any(l.endswith('_cuit') for l in labs):
     from PIL import Image
     png = os.path.join(OUT, '_tmp.png')
-    TEX['BakeMap'].convert('RGBA').save(png)
+    # v4 : en jeu, beaucoup trop lumineux (soleil de Smashville + éclairage cuit + textures déjà éclaircies) ->
+    # textures d'origine pour les objets à texture d'ombre et carte d'ombres assombrie (UE_CUIT_LUM)
+    bk = np.asarray(TEX['BakeMap'].convert('RGBA')).astype(np.float32)
+    bk[:, :, :3] *= float(os.environ.get('UE_CUIT_LUM', '1.0'))
+    Image.fromarray(np.clip(bk + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(png)
     subprocess.run(['ultimate_tex_cli', png, os.path.join(D, tname('BakeMap') + '.nutexb'), '--format', 'BC7RgbaUnormSrgb'],
                    check=True, capture_output=True)
     os.remove(png)
