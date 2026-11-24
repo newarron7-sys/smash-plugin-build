@@ -109,11 +109,14 @@ jobs:
           REF=$(find /tmp/ref/379012 -type d -path "*stage/sf_suzaku" | head -1)
           NU=$(find /tmp/ref/348709 -type d -path "*stage/sf_suzaku" | head -1)
           LVD=$(find /tmp/hdr/x -path "*hdr-stages/stage/sf_suzaku/normal/param/streetfighter_f00.lvd" | head -1)
-          M="/tmp/out/mod/(Stage) MH Tri Basin 1 (Suzaku)"
-          mkdir -p "$M"
-          MH_HD=/tmp/hd MH_SCENE=/tmp/rendu python3 -u outils/stagekit/stage/tools/mh_sz.py /tmp/out/travail/STGFINAL_basin1.pac "$REF" "$NU" "$(cat /tmp/matl_modele.txt)" "$LVD" "$M" > /tmp/out/construction.txt 2>&1
-          tail -3 /tmp/out/construction.txt | cut -c1-60
-          find "$M" -type f | sed "s#$M/##" | sort > /tmp/out/mod_liste.txt; wc -l < /tmp/out/mod_liste.txt; du -sh "$M"
+          for T in A B C; do
+            M="/tmp/out/mod/(Stage) MH Tri Basin 1 (Suzaku) test $T"
+            mkdir -p "$M"
+            SC=""; [ $T = C ] && SC=/tmp/rendu
+            MH_TEST=$T MH_HD=/tmp/hd MH_SCENE=$SC python3 -u outils/stagekit/stage/tools/mh_sz.py /tmp/out/travail/STGFINAL_basin1.pac "$REF" "$NU" "$(cat /tmp/matl_modele.txt)" "$LVD" "$M" > /tmp/out/construction_$T.txt 2>&1
+            tail -2 /tmp/out/construction_$T.txt | cut -c1-60
+            find "$M" -type f | sed "s#$M/##" | sort > /tmp/out/mod_liste_$T.txt; wc -l < /tmp/out/mod_liste_$T.txt
+          done
       - name: Image de l'ecran des terrains
         env:
           PP_Y0: '0.1'
@@ -130,9 +133,10 @@ jobs:
           ls $R/scene.json
           (cd $R && nohup python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 3
           mkdir -p /tmp/refui; find /tmp/ref/582565 -ipath "*ui/replace*/stage/stage_*" -name "stage_*_sf_suzaku.bntx" -exec cp {} /tmp/refui/ \; ; ls /tmp/refui | wc -l
-          M="/tmp/out/mod/(Stage) MH Tri Basin 1 (Suzaku)"
+          M="/tmp/out/mod/(Stage) MH Tri Basin 1 (Suzaku) test C"
           NODE_PATH=/tmp/rn/node_modules python3 -u outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu > /tmp/out/ui.txt 2>&1
           grep -c "greffé" /tmp/out/ui.txt
+          for T in A B; do cp -r "$M/ui" "/tmp/out/mod/(Stage) MH Tri Basin 1 (Suzaku) test $T/"; done
           # aperçus caméra reculée (comme quand les persos sont éloignés), vue de face et un peu de haut
           (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=9ab8d8 node rendu.js /tmp/out/apercu_recule.png 1280 720 0 80 700 0 40 0 40 > /dev/null 2>&1)
           (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=9ab8d8 node rendu.js /tmp/out/apercu_recule_bas.png 1280 720 700 120 1500 700 40 0 40 > /dev/null 2>&1)

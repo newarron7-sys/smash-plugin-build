@@ -25,6 +25,8 @@ if os.path.isdir(os.path.join(OUT, 'stage')):
     shutil.rmtree(os.path.join(OUT, 'stage'))
 ECH = float(os.environ.get('MH_ECHELLE', '1.0'))
 PFX = 'mh_'
+TEST = os.environ.get('MH_TEST', 'C')   # A : collisions seules ; B : + décor de Basin 1 ; C : + château caché
+print('version de test', TEST)
 DOS = 'stc_bg_m_set'
 
 TEX, models = brawl_stage.load(PAC)
@@ -118,6 +120,8 @@ par_tex = {}
 for mn, o in garde:
     par_tex.setdefault(o['tex'], []).append(o)
 
+if TEST == 'A':
+    par_tex = {}
 D = os.path.join(ST, 'model', DOS)
 os.makedirs(D, exist_ok=True)
 objs, labs, entries, nouveaux = [], [], [], []
@@ -205,27 +209,30 @@ if os.environ.get('MH_SCENE'):
     _j.dump(scene, open(os.path.join(SC, 'scene.json'), 'w'))
     print('scène', len(scene), 'objets')
 
-matl = S.matl_data.read_matl(MATL_MODELE)
-matl.entries = entries
-matl.save(os.path.join(D, 'model.numatb'))
-mesh = A.read_mesh(os.path.join(RM, DOS, 'model.numshb'))
-mesh.objects = objs
-mesh.save(os.path.join(D, 'model.numshb'))
-modl = S.modl_data.read_modl(os.path.join(RM, DOS, 'model.numdlb'))
-modl.entries = [S.modl_data.ModlEntryData(o.name, o.subindex, l) for o, l in zip(objs, labs)]
-modl.save(os.path.join(D, 'model.numdlb'))
-S.meshex_data.MeshExData.from_mesh_objects(objs).save(os.path.join(D, 'model.numshexb'))
-print('DOSSIER', DOS, len(objs), 'objets', sum(len(o.vertex_indices) // 3 for o in objs), 'triangles')
+if TEST == 'A':
+    shutil.rmtree(D)
+else:
+  matl = S.matl_data.read_matl(MATL_MODELE)
+  matl.entries = entries
+  matl.save(os.path.join(D, 'model.numatb'))
+  mesh = A.read_mesh(os.path.join(RM, DOS, 'model.numshb'))
+  mesh.objects = objs
+  mesh.save(os.path.join(D, 'model.numshb'))
+  modl = S.modl_data.read_modl(os.path.join(RM, DOS, 'model.numdlb'))
+  modl.entries = [S.modl_data.ModlEntryData(o.name, o.subindex, l) for o, l in zip(objs, labs)]
+  modl.save(os.path.join(D, 'model.numdlb'))
+  S.meshex_data.MeshExData.from_mesh_objects(objs).save(os.path.join(D, 'model.numshexb'))
+  print('DOSSIER', DOS, len(objs), 'objets', sum(len(o.vertex_indices) // 3 for o in objs), 'triangles')
 
 # décor d'origine : tous les ensembles cachés par un numdlb à 0 entrée (méthode des mods Wii Fit / Smashville qui marchent) ;
 # aucun fichier d'un autre mod (v1 : squelettes / matériaux copiés -> plantage au chargement)
 vide = S.modl_data.read_modl(os.path.join(RM, DOS, 'model.numdlb'))
 vide.entries = []
 caches = ['stc_ring_s_set', 'stc_ring_under1_set', 'stc_ring_under_set', 'dyr_cloud01_set', 'dyr_hurinkazan_set', 'floating_plate_set']
-for nom in caches:
+for nom in (caches if TEST == 'C' else []):
     os.makedirs(os.path.join(ST, 'model', nom), exist_ok=True)
     vide.save(os.path.join(ST, 'model', nom, 'model.numdlb'))
-print('cachés (0 entrée) :', ' '.join(caches))
+print('cachés (0 entrée) :', ' '.join(caches) if TEST == 'C' else 'aucun (test %s)' % TEST)
 
 # collisions : sol de Basin 1 tel quel, murs invisibles aux extrémités, plates-formes à -999 (HDR)
 import yaml
