@@ -6,8 +6,7 @@ usage : python3 mh_sz.py <STGFINAL.pac> <réf 379012 .../stage/sf_suzaku> <réf 
 
 Méthode de BSL Station / Sleepless Lamp :
 - décor de Basin 1 dans stc_bg_m_set (maillages regroupés par texture, sans os ; matériau « Bottom » sans éclairage) ;
-- décor d'origine du Château de Suzaku gardé entier mais aux sommets ramenés en un point sous le sol (stc_ring_*,
-  nuages) ; bannières et plates-formes du toit (sans maillage dans les réfs) : numdlb à 0 entrée ;
+- décor d'origine du Château de Suzaku caché par des numdlb à 0 entrée (v2 : plus aucun fichier d'un autre mod) ;
 - collisions : sol de Basin 1 tel quel (presque plat, Brawl), murs invisibles aux extrémités (x -782 et +2201),
   plates-formes du toit à y -999 comme HDR ; blast zones et caméra élargies juste derrière les murs (Infinite Azure).
 """
@@ -218,34 +217,15 @@ modl.save(os.path.join(D, 'model.numdlb'))
 S.meshex_data.MeshExData.from_mesh_objects(objs).save(os.path.join(D, 'model.numshexb'))
 print('DOSSIER', DOS, len(objs), 'objets', sum(len(o.vertex_indices) // 3 for o in objs), 'triangles')
 
-# décor d'origine : modèles entiers aux sommets ramenés en (0, -100, 0)
-def ecrase(src_dir, nom, extra=()):
-    dst = os.path.join(ST, 'model', nom)
-    os.makedirs(dst, exist_ok=True)
-    for f in ('model.numdlb', 'model.numatb', 'model.nusktb') + tuple(extra):   # fichiers de la même réf ensemble (matériaux / os cohérents)
-        if os.path.exists(os.path.join(src_dir, f)):
-            shutil.copy(os.path.join(src_dir, f), dst)
-    m = A.read_mesh(os.path.join(src_dir, 'model.numshb'))
-    for o in m.objects:
-        p = np.asarray(o.positions[0].data, dtype=np.float32)
-        q = np.zeros_like(p)
-        q[:, 1] = -100.0
-        o.positions[0].data = q
-    m.save(os.path.join(dst, 'model.numshb'))
-    S.meshex_data.MeshExData.from_mesh_objects(m.objects).save(os.path.join(dst, 'model.numshexb'))
-    print('ramené en un point :', nom, len(m.objects), 'objets')
-
-
-for nom in ('stc_ring_s_set', 'stc_ring_under1_set', 'stc_ring_under_set'):
-    ecrase(os.path.join(RM, nom), nom)
-ecrase(os.path.join(REF_NU, 'normal', 'model', 'dyr_cloud01_set'), 'dyr_cloud01_set', ('model.numatb', 'model.nusktb'))
-# sans maillage dans les réfs : numdlb à 0 entrée (fabriqué depuis un numdlb du Château de Suzaku)
+# décor d'origine : tous les ensembles cachés par un numdlb à 0 entrée (méthode des mods Wii Fit / Smashville qui marchent) ;
+# aucun fichier d'un autre mod (v1 : squelettes / matériaux copiés -> plantage au chargement)
 vide = S.modl_data.read_modl(os.path.join(RM, DOS, 'model.numdlb'))
 vide.entries = []
-for nom in ('dyr_hurinkazan_set', 'floating_plate_set'):
+caches = ['stc_ring_s_set', 'stc_ring_under1_set', 'stc_ring_under_set', 'dyr_cloud01_set', 'dyr_hurinkazan_set', 'floating_plate_set']
+for nom in caches:
     os.makedirs(os.path.join(ST, 'model', nom), exist_ok=True)
     vide.save(os.path.join(ST, 'model', nom, 'model.numdlb'))
-print('cachés (0 entrée) : dyr_hurinkazan_set floating_plate_set')
+print('cachés (0 entrée) :', ' '.join(caches))
 
 # collisions : sol de Basin 1 tel quel, murs invisibles aux extrémités, plates-formes à -999 (HDR)
 import yaml
