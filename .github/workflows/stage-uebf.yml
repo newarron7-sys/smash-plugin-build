@@ -1,0 +1,59 @@
+name: Stage - Unreal Introduction Map sur le Champ de bataille (variante Stage Alts) - reperage
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/stage-uebf.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: stage-uebf
+  cancel-in-progress: true
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+    env:
+      MID: '692367'
+      BRAWL_CHR0: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Outils
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar fonts-dejavu-core >/dev/null 2>&1 || true
+          pip install ssbh_data_py numpy pillow scipy pyyaml >/dev/null
+          mkdir -p /tmp/out/travail
+      - name: Reperage - Champ de bataille HDR, variantes, Stage Alts
+        run: |
+          set +e
+          mkdir -p /tmp/out/rep && cd /tmp/out/rep
+          curl -sSL -o /tmp/hashes.txt https://raw.githubusercontent.com/ultimate-research/archive-hashes/master/Hashes_FullPath
+          grep "^stage/battlefield/" /tmp/hashes.txt > hashes_bf.txt; grep -E "^ui/.*stage_[0-9]_battlefield" /tmp/hashes.txt >> hashes_bf.txt; wc -l < hashes_bf.txt
+          mkdir -p /tmp/hdr && cd /tmp/hdr
+          curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
+          unzip -l sp.zip > /tmp/out/rep/hdr_liste.txt
+          unzip -qo sp.zip "*hdr-stages/*" -x "*.nutexb" -d x 2>/dev/null
+          find x -type f | sed 's#^x/##' > /tmp/out/rep/hdr_stages_fichiers.txt
+          find x -name "*.json" -o -name "*.toml" | while read f; do mkdir -p /tmp/out/rep/cfg/$(dirname "$f"); cp "$f" /tmp/out/rep/cfg/"$f"; done
+          mkdir -p /tmp/out/rep/bf; cp -r $(find x -type d -path "*hdr-stages/stage/battlefield" | head -1) /tmp/out/rep/bf/ 2>/dev/null
+          find x -path "*ui*" -iname "*battlefield*" -exec cp --parents {} /tmp/out/rep/bf/ \; 2>/dev/null
+          cd $GITHUB_WORKSPACE
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 460711 /tmp/sa > /dev/null 2>&1
+          mkdir -p /tmp/out/rep/sa; find /tmp/sa -type f \( -iname "*.txt" -o -iname "*.py" -o -iname "*.md" \) -exec cp {} /tmp/out/rep/sa/ \;
+          du -sh /tmp/out/rep; true
+      - name: Chiffrer (cle de la session) et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_uebf && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "uebf" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_uebf
