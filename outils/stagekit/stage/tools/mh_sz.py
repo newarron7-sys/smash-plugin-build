@@ -222,7 +222,7 @@ print('DOSSIER', DOS, len(objs), 'objets', sum(len(o.vertex_indices) // 3 for o 
 def ecrase(src_dir, nom, extra=()):
     dst = os.path.join(ST, 'model', nom)
     os.makedirs(dst, exist_ok=True)
-    for f in ('model.numdlb',) + tuple(extra):
+    for f in ('model.numdlb', 'model.numatb', 'model.nusktb') + tuple(extra):   # fichiers de la même réf ensemble (matériaux / os cohérents)
         if os.path.exists(os.path.join(src_dir, f)):
             shutil.copy(os.path.join(src_dir, f), dst)
     m = A.read_mesh(os.path.join(src_dir, 'model.numshb'))
