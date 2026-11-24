@@ -1,4 +1,4 @@
-name: Plugin Fancy Howard (code chiffre, sortie chiffree)
+name: Plugin Fancy Pants (code chiffre, sortie chiffree)
 on:
   push:
     branches: [ main ]
