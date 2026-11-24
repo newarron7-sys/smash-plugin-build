@@ -112,7 +112,7 @@ jobs:
           set -o pipefail
           export PATH=$PATH:/tmp/lvdtool/bin:$HOME/.cargo/bin
           LVD=$(find /tmp/hdr/x -path "*hdr-stages/stage/animal_village/normal/param/xvillage00.lvd" | head -1)
-          for T in A:1.0 B:0.6; do
+          for T in A:0.9; do
             V=${T%%:*}; K=${T##*:}
             M="/tmp/out/mod/$V/(Stage) Unreal Introduction Map (Smashville)"
             mkdir -p "$M"
@@ -139,7 +139,6 @@ jobs:
           grep -c "greffé" /tmp/out/ui.txt
           (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_recule.png 1280 720 27 60 520 27 20 0 40 > /dev/null 2>&1)
           (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_jeu.png 1280 720 -40 45 230 -40 15 0 40 > /dev/null 2>&1)
-          cp -r "$M/ui" "/tmp/out/mod/B/(Stage) Unreal Introduction Map (Smashville)/"
           (cd /tmp/out/mod && find . -type f | sort > /tmp/out/mod_liste.txt); wc -l < /tmp/out/mod_liste.txt
           true
       - name: Chiffrer (cle de la session) et publier

@@ -61,6 +61,29 @@ SOLEIL /= np.linalg.norm(SOLEIL)
 OMBRE = float(os.environ.get('UE_OMBRE', '1.0'))      # 1 = pas d'ombrage ; 0,55 = côtés à l'ombre à 55 %
 
 
+# v5 : quadrillage refait en HD façon Unreal (la texture Brawl 512 a 5 carreaux et des bords noirs épais -> gros traits
+# baveux en jeu) : panneaux = carreaux Brawl (5 par répétition), séparés par un trait fin, chacun en 4 x 4 petits carreaux
+# à lignes très légères ; même gris moyen que l'original
+GRILLE = os.environ.get('UE_GRILLE', '1') == '1'
+
+
+def grille(base, n=2048, panneaux=5, sous=4):
+    x = np.arange(n)
+    def lignes(pas, larg):
+        d = np.minimum(x % pas, pas - (x % pas))
+        return d < larg / 2.0
+    pas_p = n / panneaux
+    maj = lignes(pas_p, 4)
+    mi = lignes(pas_p / sous, 2)
+    f = np.ones((n, n), dtype=np.float32)
+    f[mi[None, :] | mi[:, None]] = 0.9
+    f[maj[None, :] | maj[:, None]] = 0.68
+    im = np.zeros((n, n, 4), dtype=np.float32)
+    im[:, :, :3] = f[:, :, None] * np.asarray(base, dtype=np.float32)[None, None, :3]
+    im[:, :, 3] = 255
+    return im
+
+
 def ombrage(n):
     """n : normales (N, 3) Ultimate (y en haut) -> facteur 0..1 (dessus = 1)"""
     d = np.clip(n @ SOLEIL, 0, None) / SOLEIL[1]
@@ -259,6 +282,9 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     hd = os.path.join(os.environ.get('UE_HD', ''), t + '_x4.png')
     if os.environ.get('UE_HD') and os.path.exists(hd):
         im = np.asarray(Image.open(hd).convert('RGBA')).astype(np.float32)
+    if GRILLE and t == 'Grid':
+        im = grille(np.median(np.asarray(TEX[t].convert('RGBA')).reshape(-1, 4).astype(np.float32), axis=0))
+        print('quadrillage refait', im.shape)
     im = ajuste(im, t) if not cuit else im
     if a:
         im[:, :, :3] *= im[:, :, 3:] / 255.0
@@ -291,6 +317,8 @@ if os.environ.get('UE_SCENE'):
         noms[t] = 't%02d' % i
         hd = os.path.join(os.environ.get('UE_HD', ''), t + '_x4.png')
         im_ = np.asarray((Image.open(hd) if os.environ.get('UE_HD') and os.path.exists(hd) else TEX[t]).convert('RGBA')).astype(np.float32)
+        if GRILLE and t == 'Grid':
+            im_ = grille(np.median(np.asarray(TEX[t].convert('RGBA')).reshape(-1, 4).astype(np.float32), axis=0))
         Image.fromarray(np.clip(ajuste(im_, t) + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(os.path.join(SC, 'tex', noms[t] + '.png'))
     TEX['BakeMap'].convert('RGBA').save(os.path.join(SC, 'tex', 'bake.png'))
     for t, ol in par_tex.items():
