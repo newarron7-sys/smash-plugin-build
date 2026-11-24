@@ -1,0 +1,39 @@
+name: Fancy Pants - sons (vc_mario_c200, sortie chiffree)
+on:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/fp_sons.yml', 'outils/fancy/build_vc_fp.py' ]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sons:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ondes du mod (branche sons, dechiffrees ici)
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          printf '%s' "$CLE" > /tmp/k
+          git fetch -q origin sons && git show origin/sons:sons.tgz.enc > /tmp/sons.enc
+          mkdir -p /tmp/sons && openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/k -in /tmp/sons.enc | tar xz -C /tmp/sons
+          echo "ondes : $(ls /tmp/sons/21B/*.idsp | wc -l)"
+      - name: Modele vc_mario (GameBanana)
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar >/dev/null 2>&1 || true
+          python3 outils/fancy/template.py /tmp/tpl mario "mario voice,mario voice pack,mario voice replacement,mario sound" > /tmp/modele.txt 2>&1 || true
+          grep -E "CHOISI|AUCUN" /tmp/modele.txt | head -3
+      - name: Construire et publier (branche sortie_fp_sons, chiffree)
+        run: |
+          mkdir -p /tmp/out
+          python3 outils/fancy/build_vc_fp.py /tmp/sons/21B /tmp/tpl/vc_mario_modele.nus3audio /tmp/out/vc_mario_c200.nus3audio > /tmp/out/build.txt 2>&1 || true
+          cp /tmp/modele.txt /tmp/out/ 2>/dev/null || true
+          tail -3 /tmp/out/build.txt | grep -oE "ok [0-9]+ pistes" || echo "echec"
+          tar cz -C /tmp/out . | openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -out /tmp/fp_sons.tgz.enc
+          rm -f /tmp/k
+          mkdir -p /tmp/pub && cp /tmp/fp_sons.tgz.enc /tmp/pub/ && cd /tmp/pub
+          git init -q -b sortie_fp_sons && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m sons
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" sortie_fp_sons
