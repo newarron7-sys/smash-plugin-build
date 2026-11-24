@@ -105,6 +105,28 @@ jobs:
             esac
           done
           ls /tmp/out/dec | wc -l
+      - name: Version camera limitee (blast zones et reste du mod inchanges)
+        env:
+          CAM: '800'
+        run: |
+          set -e
+          M="/tmp/out/mod_cam/Stage Builder Extended Blast Zones (camera limitee)"
+          mkdir -p "$M"; cp -r "/tmp/out/mod/Stage Builder Extended Blast Zones/." "$M/"
+          for f in "$M"/stage/sp_edit/normal/param/level_0*.lvd; do
+            /tmp/lvdtool/bin/yamlvd "$f" /tmp/c.yml
+            python3 - /tmp/c.yml <<'PY'
+          import sys, yaml, os
+          d = yaml.safe_load(open(sys.argv[1]))
+          C = float(os.environ['CAM'])
+          for cb in d['camera_boundary']:
+              print('avant', {k: cb[k] for k in ('left', 'right', 'top', 'bottom')})
+              cb['left'], cb['right'], cb['top'], cb['bottom'] = -C, C, C, -C
+          print('blast', {k: d['blast_zone'][0][k] for k in ('left', 'right', 'top', 'bottom')})
+          yaml.safe_dump(d, open(sys.argv[1], 'w'), sort_keys=False)
+          PY
+            /tmp/lvdtool/bin/yamlvd /tmp/c.yml "$f"
+            /tmp/lvdtool/bin/yamlvd "$f" /tmp/v.yml && grep -A4 "camera_boundary" /tmp/v.yml | grep -E "left|right|top|bottom" | tr -d ' ' | tr '\n' ' '; echo
+          done
       - name: Chiffrer (cle de la session) et publier
         if: always()
         run: |
