@@ -144,22 +144,23 @@ TI = next(i for i, e in enumerate(tm.entries) if e.material_label == 'Bottom')
 CUIT = os.environ.get('UE_CUIT', '1') == '1'
 GAB_CUIT = None
 if CUIT:
-    _rm = S.matl_data.read_matl(os.path.join(RM, DOS, 'model.numatb'))
-    for pref in ('SFX_PBS_0000000008088280', 'SFX_PBS_0000000000088280', 'SFX_PBS_0000000000080280'):
-        cand = [e for e in _rm.entries if e.shader_label.startswith(pref) and
-                sorted(t.param_id.name for t in e.textures) == ['Texture0', 'Texture9']]
-        if cand:
-            GAB_CUIT = cand[0]
-            break
     ATTR_CUIT = None
-    if GAB_CUIT is not None:
-        _dl = S.modl_data.read_modl(os.path.join(RM, DOS, 'model.numdlb'))
-        _sh = A.read_mesh(os.path.join(RM, DOS, 'model.numshb'))
-        noms_o = [(en.mesh_object_name, en.mesh_object_subindex) for en in _dl.entries if en.material_label == GAB_CUIT.material_label]
-        for o in _sh.objects:
-            if (o.name, o.subindex) in noms_o:
-                ATTR_CUIT = ([a.name for a in o.texture_coordinates], [a.name for a in o.color_sets])
+    _rm = S.matl_data.read_matl(os.path.join(RM, DOS, 'model.numatb'))
+    _dl = S.modl_data.read_modl(os.path.join(RM, DOS, 'model.numdlb'))
+    _sh = A.read_mesh(os.path.join(RM, DOS, 'model.numshb'))
+    _obj = {(o.name, o.subindex): o for o in _sh.objects}
+    for pref in ('SFX_PBS_0000000008088280', 'SFX_PBS_0000000000088280', 'SFX_PBS_0000000000080280', 'SFX_PBS_0000000008080280'):
+        for e in _rm.entries:
+            if not (e.shader_label.startswith(pref) and sorted(t.param_id.name for t in e.textures) == ['Texture0', 'Texture9']):
+                continue
+            utilis = [(en.mesh_object_name, en.mesh_object_subindex) for en in _dl.entries if en.material_label == e.material_label]
+            o = next((_obj[k] for k in utilis if k in _obj), None)
+            if o is not None:
+                GAB_CUIT = e
+                ATTR_CUIT = ([x.name for x in o.texture_coordinates], [x.name for x in o.color_sets])
                 break
+        if GAB_CUIT is not None:
+            break
     print('matériau à texture d\'ombre :', GAB_CUIT.shader_label if GAB_CUIT else None, GAB_CUIT.material_label if GAB_CUIT else None, ATTR_CUIT)
 
 # regroupement par texture
