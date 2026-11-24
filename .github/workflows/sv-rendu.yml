@@ -1,0 +1,39 @@
+name: Stage - Smashville, fichiers d'eclairage (jour / nuit) - reperage
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/sv-rendu.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mods de Smashville (eclairage)
+        run: |
+          set +e
+          pip install pyyaml >/dev/null
+          for q in "smashville always day" "smashville day" "smashville daytime" "always day smashville" "smashville always night" "smashville morning" "smashville evening"; do
+            python3 -u outils/stagekit/stage/tools/gb_fetch.py cherche "$q" stage/animal_village/normal/render /tmp/r 8 > /dev/null 2>&1
+          done
+          for id in 387162 145592 409684; do python3 -u outils/stagekit/stage/tools/gb_fetch.py mod $id /tmp/r > /dev/null 2>&1; done
+          mkdir -p /tmp/out
+          find /tmp/r -type f -path "*stage/animal_village/normal/render/*" -o -type f -path "*stage/animal_village/normal/lut/*" | while read f; do
+            id=$(echo "$f" | sed -E 's#/tmp/r/([0-9]+)/.*#\1#'); rel=$(echo "$f" | sed -E 's#.*stage/animal_village/normal/##')
+            echo "$id $(md5sum < "$f" | cut -c1-10) $rel"
+          done | sort -k3,3 -k1,1 > /tmp/out/rendu_md5.txt
+          for d in /tmp/r/*/; do id=$(basename $d); echo "$id $(find $d -maxdepth 2 | head -3 | tail -2 | tr '\n' ' ')"; done > /tmp/out/mods.txt
+          wc -l /tmp/out/rendu_md5.txt
+      - name: Chiffrer et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_svr && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "svr" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_svr
