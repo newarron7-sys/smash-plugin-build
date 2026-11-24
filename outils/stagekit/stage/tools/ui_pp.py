@@ -40,7 +40,7 @@ for ref in sorted(glob.glob(os.path.join(REFD, 'stage_*_%s.bntx' % NOM))):
                0x0B01: 'Rgba8Unorm'}.get(fmt, 'BC7RgbaUnormSrgb')
     args = ['ultimate_tex_cli', png, neuf, '--format', fmtname] + (['--no-mipmaps'] if mips == 1 else [])
     subprocess.run(args, check=True, capture_output=True)
-    dst = os.path.join(UI, 'replace', 'stage', 'stage_%d' % n, 'stage_%d_%s.bntx' % (n, NOM))
+    dst = os.path.join(UI, 'replace', 'stage', 'stage_%d' % n, 'stage_%d_%s%s.bntx' % (n, NOM, os.environ.get('UI_SUFFIXE', '')))
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     subprocess.run([sys.executable, os.path.join(OUTILS, 'greffe_bntx.py'), ref, neuf, dst], check=True)
     os.remove(neuf)

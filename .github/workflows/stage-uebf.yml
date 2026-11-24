@@ -1,4 +1,4 @@
-name: Stage - Unreal Introduction Map sur le Champ de bataille (variante Stage Alts) - reperage
+name: Stage - Unreal Introduction Map sur le Champ de bataille (variante Stage Alts R)
 on:
   push:
     branches: [ marioults ]
@@ -30,24 +30,103 @@ jobs:
           sudo apt-get install -y p7zip-full p7zip-rar fonts-dejavu-core >/dev/null 2>&1 || true
           pip install ssbh_data_py numpy pillow scipy pyyaml >/dev/null
           mkdir -p /tmp/out/travail
-      - name: Reperage - Champ de bataille HDR, variantes, Stage Alts
+      - name: Page du mod (description)
         run: |
           set +e
-          mkdir -p /tmp/out/rep && cd /tmp/out/rep
+          curl -sSL -A "Mozilla/5.0" "https://gamebanana.com/apiv11/Mod/$MID/ProfilePage" -o /tmp/out/page.json
+          python3 - <<'PY'
+          import json, re, html
+          p = json.load(open('/tmp/out/page.json'))
+          t = re.sub(r'<[^>]+>', ' ', html.unescape(p.get('_sText', '') or ''))
+          open('/tmp/out/page.txt', 'w').write('%s\n%s\n%s\n\n%s\n' % (p.get('_sName'), p.get('_aGame', {}).get('_sName'),
+              p.get('_aCategory', {}).get('_sName'), re.sub(r'\s+', ' ', t)))
+          print('page ok')
+          PY
+      - name: Telechargement
+        run: |
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod $MID /tmp/gb > /tmp/out/fichiers.txt 2>&1; wc -l /tmp/out/fichiers.txt
+          cp "$(find /tmp/gb/$MID -iname "*DOLPHIN*.pac" | head -1)" /tmp/out/travail/ue.pac
+          find /tmp/gb/$MID -iname "*.txt" -print0 | while IFS= read -r -d '' f; do echo "== $f"; head -60 "$f"; done > /tmp/out/lisezmoi.txt 2>&1
+          ls /tmp/out/travail | wc -l
+      - name: Champ de bataille - HDR, chemins du jeu, outil lvd
+        run: |
+          set +e
+          mkdir -p /tmp/out/refs
           curl -sSL -o /tmp/hashes.txt https://raw.githubusercontent.com/ultimate-research/archive-hashes/master/Hashes_FullPath
-          grep "^stage/battlefield/" /tmp/hashes.txt > hashes_bf.txt; grep -E "^ui/.*stage_[0-9]_battlefield" /tmp/hashes.txt >> hashes_bf.txt; wc -l < hashes_bf.txt
+          grep "^stage/battlefield/normal/" /tmp/hashes.txt > /tmp/liste_bf.txt; wc -l < /tmp/liste_bf.txt
+          cargo install smash-lvd --features cli --root /tmp/lvdtool >/dev/null 2>&1
           mkdir -p /tmp/hdr && cd /tmp/hdr
           curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
-          unzip -l sp.zip > /tmp/out/rep/hdr_liste.txt
-          unzip -qo sp.zip "*hdr-stages/*" -x "*.nutexb" -d x 2>/dev/null
-          find x -type f | sed 's#^x/##' > /tmp/out/rep/hdr_stages_fichiers.txt
-          find x -name "*.json" -o -name "*.toml" | while read f; do mkdir -p /tmp/out/rep/cfg/$(dirname "$f"); cp "$f" /tmp/out/rep/cfg/"$f"; done
-          mkdir -p /tmp/out/rep/bf; cp -r $(find x -type d -path "*hdr-stages/stage/battlefield" | head -1) /tmp/out/rep/bf/ 2>/dev/null
-          find x -path "*ui*" -iname "*battlefield*" -exec cp --parents {} /tmp/out/rep/bf/ \; 2>/dev/null
-          cd $GITHUB_WORKSPACE
-          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 460711 /tmp/sa > /dev/null 2>&1
-          mkdir -p /tmp/out/rep/sa; find /tmp/sa -type f \( -iname "*.txt" -o -iname "*.py" -o -iname "*.md" \) -exec cp {} /tmp/out/rep/sa/ \;
-          du -sh /tmp/out/rep; true
+          unzip -qo sp.zip "*hdr-stages/stage/battlefield/normal/*" "*hdr-stages/ui/replace/stage/stage_*/stage_*_battlefield.bntx" -d x 2>/dev/null
+          find /tmp/hdr/x -type f | sed 's#.*hdr-stages/##' | sort > /tmp/out/refs/hdr_bf.txt; wc -l < /tmp/out/refs/hdr_bf.txt
+      - name: Materiau modele (Yoshi's Story 392643, bg2_set)
+        run: |
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 392643 /tmp/ys > /dev/null 2>&1
+          find /tmp/ys -path "*normal/model/bg2_set/model.numatb" | head -1 > /tmp/matl_modele.txt; wc -l < /tmp/matl_modele.txt
+      - name: Cache ultimate_tex_cli
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/ultimate_tex_cli
+          key: ultimate-tex-cli-v1
+      - name: ultimate_tex_cli
+        run: test -x ~/.cargo/bin/ultimate_tex_cli || cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli 2>&1 | tail -2
+      - name: Cache textures HD (x4)
+        uses: actions/cache@v4
+        with:
+          path: /tmp/hd
+          key: ue-hd-x4-v1
+      - name: Textures HD x4 (Real-ESRGAN x4plus)
+        env:
+          PP_Y0: '0.0'
+          PP_ECHELLE: '1.0'
+        run: |
+          set -o pipefail
+          if [ ! -f /tmp/hd/fini ]; then
+            pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision >/dev/null
+            pip install spandrel >/dev/null
+            curl -sSL -o /tmp/esr.pth https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
+            mkdir -p /tmp/hd
+            python3 -u outils/stagekit/stage/tools/pp_scene.py textures /tmp/out/travail/ue.pac /tmp/hdsrc > /dev/null 2>&1
+            for f in /tmp/hdsrc/*.png; do b=$(basename "$f" .png); python3 -u outils/stagekit/stage/tools/upscale_tex.py /tmp/esr.pth "$f" "/tmp/hd/${b}_x4.png" > /dev/null; done
+            touch /tmp/hd/fini
+          fi
+          ls /tmp/hd | wc -l
+      - name: Construction (Unreal en variante normal_s02 du Champ de bataille)
+        run: |
+          set -o pipefail
+          export PATH=$PATH:/tmp/lvdtool/bin:$HOME/.cargo/bin
+          HBF=$(find /tmp/hdr/x -type d -path "*hdr-stages/stage/battlefield" | head -1)
+          M="/tmp/out/mod/(Stage) Unreal Introduction Map (Champ de bataille R)"
+          mkdir -p "$M"
+          UE_HD=/tmp/hd UE_SCENE=/tmp/rendu python3 -u outils/stagekit/stage/tools/ue_bf.py /tmp/out/travail/ue.pac "$HBF" /tmp/liste_bf.txt "$(cat /tmp/matl_modele.txt)" "$M" > /tmp/out/construction.txt 2>&1
+          tail -3 /tmp/out/construction.txt | cut -c1-60
+          /tmp/lvdtool/bin/yamlvd "$M/stage/battlefield/normal_s02/param/battlefield_00.lvd" /tmp/out/lvd_relu.yml > /dev/null 2>&1; ls -la /tmp/out/lvd_relu.yml | awk '{print $5}'
+          python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print('partages',len(d['share_to_vanilla']))" "$M/config.json"
+          find "$M" -type f | sed "s#$M/##" | sort > /tmp/out/mod_liste.txt; wc -l < /tmp/out/mod_liste.txt; du -sh "$M"
+      - name: Image de l'ecran des terrains
+        env:
+          PP_Y0: '0.0'
+          PP_ECHELLE: '1.0'
+          UI_NOM: battlefield
+          UI_SUFFIXE: _s02
+          UI_CAM: '27,40,330,27,20,0,34,50'
+          UI_FOND: '7fb3e0'
+        run: |
+          set +e
+          export PATH=$PATH:$HOME/.cargo/bin
+          npm i --prefix /tmp/rn three@0.160.0 playwright@1.47.2 >/dev/null 2>&1
+          (cd /tmp/rn && npx playwright install --with-deps chromium >/dev/null 2>&1)
+          R=/tmp/rendu; mkdir -p $R; cp outils/stagekit/stage/tools/rendu/* $R/; cp /tmp/rn/node_modules/three/build/three.module.js $R/
+          ls $R/scene.json
+          (cd $R && nohup python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 3
+          mkdir -p /tmp/refui; for n in 1 2 4; do find /tmp/hdr/x -path "*ui/replace/stage/stage_$n/stage_${n}_battlefield.bntx" -exec cp {} /tmp/refui/ \; ; done; ls /tmp/refui
+          M="/tmp/out/mod/(Stage) Unreal Introduction Map (Champ de bataille R)"
+          NODE_PATH=/tmp/rn/node_modules python3 -u outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu > /tmp/out/ui.txt 2>&1
+          grep -c "greffé" /tmp/out/ui.txt; find "$M/ui" -type f | sed "s#$M/##"
+          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_recule.png 1280 720 27 60 520 27 20 0 40 > /dev/null 2>&1)
+          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_recule_bas.png 1280 720 27 20 260 27 10 0 40 > /dev/null 2>&1)
+          find "$M" -type f | sed "s#$M/##" | sort > /tmp/out/mod_liste.txt
+          true
       - name: Chiffrer (cle de la session) et publier
         if: always()
         run: |
