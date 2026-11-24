@@ -1,0 +1,72 @@
+name: Shaders - textures et attributs utilises (ssbh_wgpu)
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/shader-info.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Analyse
+        run: |
+          set +e
+          pip install ssbh_data_py numpy >/dev/null
+          git clone -q --depth 1 https://github.com/ScanMountGoat/ssbh_wgpu /tmp/w
+          find /tmp/w -iname "*shader*info*" -o -iname "*.json" | grep -v node_modules | head -20
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 392643 /tmp/ref > /dev/null 2>&1
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 387162 /tmp/ref > /dev/null 2>&1
+          mkdir -p /tmp/out
+          python3 - <<'PY' > /tmp/out/shaders.txt 2>&1
+          import glob, json, os, collections
+          import ssbh_data_py as S
+          infos = [f for f in glob.glob('/tmp/w/**/*.json', recursive=True) if 'shader' in f.lower()]
+          print('json', infos)
+          db = {}
+          for f in infos:
+              try:
+                  d = json.load(open(f))
+              except Exception as e:
+                  print('illisible', f, e); continue
+              print(f, type(d), (list(d)[:3] if isinstance(d, dict) else d[:1]))
+              items = d if isinstance(d, list) else d.get('shaders', d)
+              if isinstance(items, dict):
+                  items = [dict(v, name=k) if isinstance(v, dict) else {'name': k, 'v': v} for k, v in items.items()]
+              for it in items:
+                  n = it.get('name') or it.get('shader_label') or it.get('program_name')
+                  if n:
+                      db[n[:24]] = it
+          print('programmes', len(db))
+          mats = collections.OrderedDict()
+          for f in glob.glob('/tmp/ref/**/model.numatb', recursive=True):
+              try:
+                  m = S.matl_data.read_matl(f)
+              except Exception:
+                  continue
+              for e in m.entries:
+                  k = e.shader_label[:24]
+                  mats.setdefault(k, (f.replace('/tmp/ref/', ''), e.material_label, [t.param_id.name for t in e.textures]))
+          for k, (f, lab, tx) in mats.items():
+              it = db.get(k, {})
+              s = json.dumps(it)[:600]
+              print('==', k, lab, tx, f)
+              print('   ', s)
+          PY
+          wc -l /tmp/out/shaders.txt
+      - name: Chiffrer et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_shi && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "shi" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_shi
