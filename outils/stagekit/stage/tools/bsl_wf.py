@@ -9,6 +9,8 @@ mvc2_training 476217) :
 - cachés par un numdlb à 0 entrée, exactement comme ces deux mods : la prof et son reflet, la Balance Board, le vélo,
   les machines, les murs, la salle, les effets, la bâche ;
 - plateau du stage (dyr_board01_hmdl_set) gardé entier mais tous ses sommets ramenés en un point sous le sol ;
+- objets posés par animation dans Brawl (portes x3 au fond) : première image des CHR0 appliquée (BRAWL_CHR0=1) ;
+- vitres et reflets retirés (vue sur SR388) ; couleurs désaturées et décor assombri (BSL_SAT / BSL_LUM) ;
 - pas de SA-X ni de parasites X (animés dans Brawl, couchés / figés sans leur animation), pas d'ombres TShadow1 ;
 - collisions : celles de BSL (sol plat ±85,56, rebords) posées dans le lvd du Studio Wii Fit d'HDR.
 """
@@ -31,13 +33,26 @@ DOS = 'stc_floor_set'
 
 TEX, models = brawl_stage.load(PAC)
 SANS = {'SA-X', 'SA-X_shadow', 'X', 'X2', 'X3', 'X4', 'Shadow'}   # animés dans Brawl / ombres multiplicatives
+SANS_TEX = {'2802kd_glass01', '2802kd_rifrect01'}   # vitres / reflets (transparents ou additifs dans Brawl) : vitres ouvertes sur SR388
+LUM = float(os.environ.get('BSL_LUM', '0.8'))        # éclairage du décor baissé (demande du joueur)
+SAT = float(os.environ.get('BSL_SAT', '0.8'))        # couleurs moins vives (demande du joueur)
+
+
+def ajuste(im):
+    """im : tableau RGBA flottant 0-255 -> couleurs désaturées (SAT) et assombries (LUM)"""
+    rgb = im[:, :, :3]
+    g = (rgb * np.array([0.299, 0.587, 0.114])).sum(axis=2, keepdims=True)
+    im[:, :, :3] = np.clip((g + (rgb - g) * SAT) * LUM, 0, 255)
+    return im
+
+
 garde = []
 for _, mn, ol in models:
     if mn in SANS:
         print('ignore (modèle)', mn)
         continue
     for o in ol:
-        if not o['tex'] or o['tex'] not in TEX:
+        if not o['tex'] or o['tex'] not in TEX or o['tex'] in SANS_TEX:
             print('ignore', mn, o['name'], o['tex'])
             continue
         garde.append((mn, o))
@@ -149,6 +164,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     hd = os.path.join(os.environ.get('BSL_HD', ''), t + '_x4.png')
     if os.environ.get('BSL_HD') and os.path.exists(hd):
         im = np.asarray(Image.open(hd).convert('RGBA')).astype(np.float32)
+    im = ajuste(im)
     if a:
         im[:, :, :3] *= im[:, :, 3:] / 255.0
     Image.fromarray(np.clip(im + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(png)
@@ -167,7 +183,8 @@ if os.environ.get('BSL_SCENE'):
     for i, t in enumerate(sorted(par_tex)):
         noms[t] = 't%02d' % i
         hd = os.path.join(os.environ.get('BSL_HD', ''), t + '_x4.png')
-        (Image.open(hd) if os.environ.get('BSL_HD') and os.path.exists(hd) else TEX[t]).convert('RGBA').save(os.path.join(SC, 'tex', noms[t] + '.png'))
+        im_ = np.asarray((Image.open(hd) if os.environ.get('BSL_HD') and os.path.exists(hd) else TEX[t]).convert('RGBA')).astype(np.float32)
+        Image.fromarray(np.clip(ajuste(im_) + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(os.path.join(SC, 'tex', noms[t] + '.png'))
     for t, ol in par_tex.items():
         for o in ol:
             p = o['pos'][:, [0, 2, 1]].astype(np.float64)

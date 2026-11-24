@@ -19,6 +19,7 @@ jobs:
         shell: bash
     env:
       MID: '406762'
+      BRAWL_CHR0: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

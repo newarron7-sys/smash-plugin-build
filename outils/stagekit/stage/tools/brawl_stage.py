@@ -17,7 +17,7 @@ from arc import arc_entries, TYPES  # noqa: E402
 from brres import brres_files, dict_entries  # noqa: E402
 import mdl0  # noqa: E402
 import tex0  # noqa: E402
-from brawl_anim import srt_matrix  # noqa: E402
+from brawl_anim import srt_matrix, read_chr0  # noqa: E402
 from lz import decompress  # noqa: E402
 
 
@@ -45,7 +45,24 @@ def walk(d, where, out, verbose=False):
             walk(data, name, out, verbose)
 
 
-def bone_worlds(dd, mo):
+def chr0_f0(dd, bf):
+    """os -> (échelle, rotation, translation) à la première image des CHR0 du même .brres (placement des objets que
+    le stage pose par animation, ex. portes de BSL Station agrandies x3 au fond) ; activé par BRAWL_CHR0=1"""
+    out = {}
+    if os.environ.get('BRAWL_CHR0') != '1':
+        return out
+    for an, ao in bf.get('AnmChr(NW4R)', []):
+        try:
+            c = read_chr0(dd, ao)
+        except Exception as e:  # noqa: BLE001
+            print('CHR0 illisible', an, e)
+            continue
+        for bn, ba in c['bones'].items():
+            out[bn] = ba
+    return out
+
+
+def bone_worlds(dd, mo, anim=None):
     """nom -> (n° de matrice, monde 4x4) en enchaînant les SRT (parent = décalage relatif à 0x5C)"""
     offs = struct.unpack_from('>11i', dd, mo + 0x10)
     if not offs[1]:
@@ -59,6 +76,15 @@ def bone_worlds(dd, mo):
         t = struct.unpack_from('>3f', dd, bo + 0x38)
         po = struct.unpack_from('>i', dd, bo + 0x5C)[0]
         nid = struct.unpack_from('>i', dd, bo + 0x10)[0]
+        if anim and n in anim:
+            class _B:
+                pass
+            b_ = _B()
+            b_.s, b_.r, b_.t = s, r, t
+            s2, r2, t2 = anim[n].srt(0, b_)
+            if (s2, r2, t2) != (s, r, t):
+                print('CHR0 image 0 :', n, 'S', tuple(round(x, 2) for x in s2), 'T', tuple(round(x, 1) for x in t2))
+            s, r, t = s2, r2, t2
         info[n] = (nid, srt_matrix(s, r, t), at.get(bo + po) if po else None)
     W = {}
 
@@ -131,7 +157,7 @@ def load(pac, verbose=False):
             except Exception as e:  # noqa: BLE001
                 print('MODELE illisible', name, mn, e)
                 continue
-            BW = bone_worlds(d, mo)
+            BW = bone_worlds(d, mo, chr0_f0(d, bf))
             byid = {nid: w for nid, w in BW.values()}
             MT = mat_textures(d, mo, TEX)
             objs = []
