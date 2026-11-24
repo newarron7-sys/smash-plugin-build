@@ -1,0 +1,70 @@
+name: Stage Builder - analyse d'un mod (usage perso)
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/sb-analyse.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: sb-analyse
+  cancel-in-progress: true
+jobs:
+  sb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      MID: '606339'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Outils
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar binutils-aarch64-linux-gnu >/dev/null 2>&1 || true
+          mkdir -p /tmp/out
+      - name: Page du mod et telechargement
+        run: |
+          set +e
+          curl -sSL -A "Mozilla/5.0" "https://gamebanana.com/apiv11/Mod/$MID/ProfilePage" -o /tmp/out/page.json
+          python3 - <<'PY'
+          import json, re, html
+          p = json.load(open('/tmp/out/page.json'))
+          t = re.sub(r'<[^>]+>', ' ', html.unescape(p.get('_sText', '') or ''))
+          open('/tmp/out/page.txt', 'w').write('%s\n%s\n%s\n\n%s\n' % (p.get('_sName'), p.get('_aGame', {}).get('_sName'),
+              p.get('_aCategory', {}).get('_sName'), re.sub(r'\s+', ' ', t)))
+          for f in p.get('_aFiles') or []:
+              open('/tmp/out/page.txt', 'a').write('FICHIER %s %s %s\n' % (f.get('_sFile'), f.get('_nFilesize'), re.sub(r'\s+', ' ', f.get('_sDescription') or '')))
+          PY
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod $MID /tmp/gb > /tmp/out/fichiers.txt 2>&1
+          mkdir -p /tmp/out/mod && cp -r /tmp/gb/$MID/. /tmp/out/mod/
+          find /tmp/out/mod -type f | wc -l
+      - name: Inspection (nro desassembles, prc, fichiers)
+        run: |
+          set +e
+          cd /tmp/out
+          find mod -type f -exec ls -la {} \; > liste.txt
+          find mod -iname "*.nro" -print0 | while IFS= read -r -d '' f; do
+            b=$(basename "$f" .nro)
+            aarch64-linux-gnu-objdump -D -b binary -m aarch64 "$f" > "desas_$b.txt" 2>&1
+            strings -n 6 "$f" > "chaines_$b.txt"
+          done
+          pip install pyprc >/dev/null 2>&1
+          find mod -iname "*.prc" -o -iname "*.stprm" -o -iname "*.stdat" | while read -r f; do
+            python3 -c "import pyprc,sys;p=pyprc.param(sys.argv[1]);print(p)" "$f" > "prc_$(basename "$f").txt" 2>&1
+          done
+          ls | head -50
+      - name: Chiffrer (cle de la session) et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_sb && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "sb" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_sb
