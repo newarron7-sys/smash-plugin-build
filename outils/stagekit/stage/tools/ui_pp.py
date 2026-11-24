@@ -10,8 +10,12 @@ OUTILS = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(AP, exist_ok=True)
 # caméra (x, y, z) -> cible, champ vertical ; stage_1 = petite vignette, plus serrée
 CAM = {1: ((0, 26, 230), (0, 15, 0), 36), 'def': ((0, 26, 230), (0, 15, 0), 22)}
+NOM = os.environ.get('UI_NOM', 'yoshi_cartboard')          # stage_N_<NOM>.bntx
+if os.environ.get('UI_CAM'):                               # ex. "0,40,300,0,45,0,34,52" : caméra, cible, champ (grand / vignette)
+    v = [float(x) for x in os.environ['UI_CAM'].split(',')]
+    CAM = {1: (tuple(v[0:3]), tuple(v[3:6]), v[7]), 'def': (tuple(v[0:3]), tuple(v[3:6]), v[6])}
 
-for ref in sorted(glob.glob(os.path.join(REFD, 'stage_*_yoshi_cartboard.bntx'))):
+for ref in sorted(glob.glob(os.path.join(REFD, 'stage_*_%s.bntx' % NOM))):
     n = int(re.search(r'stage_(\d+)_', os.path.basename(ref)).group(1))
     if n == 0:
         continue
@@ -36,7 +40,7 @@ for ref in sorted(glob.glob(os.path.join(REFD, 'stage_*_yoshi_cartboard.bntx')))
                0x0B01: 'Rgba8Unorm'}.get(fmt, 'BC7RgbaUnormSrgb')
     args = ['ultimate_tex_cli', png, neuf, '--format', fmtname] + (['--no-mipmaps'] if mips == 1 else [])
     subprocess.run(args, check=True, capture_output=True)
-    dst = os.path.join(UI, 'replace', 'stage', 'stage_%d' % n, 'stage_%d_yoshi_cartboard.bntx' % n)
+    dst = os.path.join(UI, 'replace', 'stage', 'stage_%d' % n, 'stage_%d_%s.bntx' % (n, NOM))
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     subprocess.run([sys.executable, os.path.join(OUTILS, 'greffe_bntx.py'), ref, neuf, dst], check=True)
     os.remove(neuf)
