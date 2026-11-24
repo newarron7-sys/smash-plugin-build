@@ -40,12 +40,31 @@ LUM = float(os.environ.get('UE_LUM', '1.0'))
 SAT = float(os.environ.get('UE_SAT', '1.0'))
 
 
-def ajuste(im):
-    """im : tableau RGBA flottant 0-255 -> couleurs désaturées (SAT) et assombries (LUM)"""
+# v2 : textures éclaircies (UE_LUM) pour retrouver les couleurs des images de référence du joueur (gris ~200, bleu
+# ~ (83, 152, 208) au soleil) ; ciel et nuages gardés tels quels
+SAUF = set(x for x in os.environ.get('UE_LUM_SAUF', '').split(',') if x)
+
+
+def ajuste(im, t=None):
+    """im : tableau RGBA flottant 0-255 -> saturation (SAT) et luminosité (LUM)"""
+    if t in SAUF:
+        return im
     rgb = im[:, :, :3]
     g = (rgb * np.array([0.299, 0.587, 0.114])).sum(axis=2, keepdims=True)
     im[:, :, :3] = np.clip((g + (rgb - g) * SAT) * LUM, 0, 255)
     return im
+
+
+# v2 : faux soleil cuit dans colorSet1 (0,502 = neutre) : dessus clair, côtés plus sombres
+SOLEIL = np.array([float(v) for v in os.environ.get('UE_SOLEIL', '-0.3,1,0.35').split(',')])
+SOLEIL /= np.linalg.norm(SOLEIL)
+OMBRE = float(os.environ.get('UE_OMBRE', '1.0'))      # 1 = pas d'ombrage ; 0,55 = côtés à l'ombre à 55 %
+
+
+def ombrage(n):
+    """n : normales (N, 3) Ultimate (y en haut) -> facteur 0..1 (dessus = 1)"""
+    d = np.clip(n @ SOLEIL, 0, None) / SOLEIL[1]
+    return np.clip(OMBRE + (1 - OMBRE) * d, 0, 1)
 
 
 garde = []
@@ -138,6 +157,12 @@ for d_ in caches:
     shutil.copy(vide, os.path.join(ST, 'model', d_, 'model.numdlb'))
 print('cachés (0 entrée) :', len(caches), ' '.join(caches))
 BN = os.path.join(REF, 'normal')
+# v2 : toujours le jour (Smashville suit l'horloge de la console) : fichiers render/ d'un mod « toujours le jour »
+# (Islandville 382440 : la même série d'éclairage copiée sur matin / jour / soir / nuit, comme Siege's Smashville)
+JOUR = os.environ.get('UE_JOUR', '')
+if JOUR and os.path.isdir(JOUR):
+    shutil.copytree(JOUR, os.path.join(ST, 'render'))
+    print('render : jour permanent', sorted(os.listdir(os.path.join(ST, 'render'))))
 D = os.path.join(ST, 'model', DOS)
 os.makedirs(D, exist_ok=True)
 objs, labs, entries, nouveaux = [], [], [], []
@@ -166,7 +191,9 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
         tg = np.c_[np.cross(up, nrm), np.ones(nv)]
     mo.tangents = [attr('Tangent0', tg)]
     mo.texture_coordinates = [attr('map1', uv), attr('bake1', uv), attr('uvSet', uv)]
-    mo.color_sets = [attr('colorSet1', np.full((nv, 4), 0.502)), attr('colorSet4', np.full((nv, 4), 0.502))]
+    c1 = np.full((nv, 4), 0.502)
+    c1[:, :3] *= ombrage(nrm)[:, None]
+    mo.color_sets = [attr('colorSet1', c1), attr('colorSet4', np.full((nv, 4), 0.502))]
     mo.vertex_indices = idx
     a = alpha(t)
     lab = 'ue_%s%s' % (t, '_a' if a else '')
@@ -194,7 +221,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     hd = os.path.join(os.environ.get('UE_HD', ''), t + '_x4.png')
     if os.environ.get('UE_HD') and os.path.exists(hd):
         im = np.asarray(Image.open(hd).convert('RGBA')).astype(np.float32)
-    im = ajuste(im)
+    im = ajuste(im, t)
     if a:
         im[:, :, :3] *= im[:, :, 3:] / 255.0
     Image.fromarray(np.clip(im + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(png)
@@ -213,14 +240,18 @@ if os.environ.get('UE_SCENE'):
         noms[t] = 't%02d' % i
         hd = os.path.join(os.environ.get('UE_HD', ''), t + '_x4.png')
         im_ = np.asarray((Image.open(hd) if os.environ.get('UE_HD') and os.path.exists(hd) else TEX[t]).convert('RGBA')).astype(np.float32)
-        Image.fromarray(np.clip(ajuste(im_) + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(os.path.join(SC, 'tex', noms[t] + '.png'))
+        Image.fromarray(np.clip(ajuste(im_, t) + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(os.path.join(SC, 'tex', noms[t] + '.png'))
     for t, ol in par_tex.items():
         for o in ol:
             p = o['pos'][:, [0, 2, 1]].astype(np.float64)
             p[:, :, 1] -= Y0
             p *= ECH
             u = o['uv'][:, [0, 2, 1]] if o['uv'] is not None else np.zeros(p.shape[:2] + (2,))
-            scene.append({'p': np.round(p.reshape(-1), 4).tolist(), 'uv': np.round(u.reshape(-1), 5).tolist(), 't': noms[t], 'a': bool(alpha(t))})
+            nn = o['nrm'][:, [0, 2, 1]].reshape(-1, 3)
+            nn = nn / np.maximum(np.linalg.norm(nn, axis=1, keepdims=True), 1e-6)
+            c = np.repeat(ombrage(nn)[:, None], 3, axis=1)
+            scene.append({'p': np.round(p.reshape(-1), 4).tolist(), 'uv': np.round(u.reshape(-1), 5).tolist(), 't': noms[t], 'a': bool(alpha(t)),
+                          'c': np.round(c.reshape(-1), 3).tolist()})
     _j.dump(scene, open(os.path.join(SC, 'scene.json'), 'w'))
     print('scène', len(scene), 'objets')
 

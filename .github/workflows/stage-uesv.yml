@@ -56,6 +56,8 @@ jobs:
           grep "^stage/animal_village/normal/" /tmp/hashes.txt > /tmp/liste_sv.txt; wc -l < /tmp/liste_sv.txt
           python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 387162 /tmp/ref > /dev/null 2>&1
           python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 409684 /tmp/ref > /dev/null 2>&1
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 382440 /tmp/ref > /dev/null 2>&1
+          find /tmp/ref/382440 -type d -path "*stage/animal_village/normal/render" | head -1 > /tmp/jour.txt; echo "jour : $(wc -l < /tmp/jour.txt)"
           find /tmp/ref/387162 -type d -path "*stage/animal_village" | head -1 > /tmp/ref_sv.txt; cat /tmp/ref_sv.txt | wc -l
           mkdir -p /tmp/refui; for n in 1 2 3 4; do find /tmp/ref/409684 -ipath "*ui/replace*/stage/stage_$n/stage_${n}_animal_village.bntx" -exec cp {} /tmp/refui/ \; ; done
           ls /tmp/refui | sed -E 's/stage_([0-9])_.*/\1/' | sort -u | paste -sd, > /tmp/ui_fournis.txt; echo "UI fournies : $(cat /tmp/ui_fournis.txt)"
@@ -112,7 +114,7 @@ jobs:
           LVD=$(find /tmp/hdr/x -path "*hdr-stages/stage/animal_village/normal/param/xvillage00.lvd" | head -1)
           M="/tmp/out/mod/(Stage) Unreal Introduction Map (Smashville)"
           mkdir -p "$M"
-          UE_FORME=$(cat /tmp/forme.txt) UE_UI_FOURNIS=$(cat /tmp/ui_fournis.txt) UE_HD=/tmp/hd UE_SCENE=/tmp/rendu python3 -u outils/stagekit/stage/tools/ue_sv.py /tmp/out/travail/ue.pac "$(cat /tmp/ref_sv.txt)" /tmp/liste_sv.txt "$(cat /tmp/matl_modele.txt)" "$LVD" "$M" > /tmp/out/construction.txt 2>&1
+          UE_JOUR="$(cat /tmp/jour.txt)" UE_LUM=1.85 UE_LUM_SAUF=Sky,Clouds_1_D,Clouds_2_D,Clouds_3_D,Clouds_4_D UE_OMBRE=0.55 UE_FORME=$(cat /tmp/forme.txt) UE_UI_FOURNIS=$(cat /tmp/ui_fournis.txt) UE_HD=/tmp/hd UE_SCENE=/tmp/rendu python3 -u outils/stagekit/stage/tools/ue_sv.py /tmp/out/travail/ue.pac "$(cat /tmp/ref_sv.txt)" /tmp/liste_sv.txt "$(cat /tmp/matl_modele.txt)" "$LVD" "$M" > /tmp/out/construction.txt 2>&1
           tail -2 /tmp/out/construction.txt | cut -c1-60
           python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print('partages',len(d['share_to_vanilla']))" "$M/config.json"
       - name: Image de l'ecran des terrains
@@ -134,6 +136,7 @@ jobs:
           NODE_PATH=/tmp/rn/node_modules python3 -u outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu > /tmp/out/ui.txt 2>&1
           grep -c "greffé" /tmp/out/ui.txt
           (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_recule.png 1280 720 27 60 520 27 20 0 40 > /dev/null 2>&1)
+          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_jeu.png 1280 720 -40 45 230 -40 15 0 40 > /dev/null 2>&1)
           (cd /tmp/out/mod && find . -type f | sort > /tmp/out/mod_liste.txt); wc -l < /tmp/out/mod_liste.txt
           true
       - name: Chiffrer (cle de la session) et publier
