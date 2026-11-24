@@ -34,7 +34,14 @@ PFX = 'ue_'
 TEST = 'C'
 DOS = 'ring_nocastshadow_set'
 VIDES = ['bg_birds_set', 'bg_falls_set', 'bg_far_skycity_set', 'bg_ground_set', 'bg_skydome_set', 'bg_solar_eclipse_line_set',
-         'bg_solar_eclipse_set', 'ring_effects_set', 'ring_effects_r_set', 'ring_flag_set', 'ring_plant_set', 'floating_plate_sub_set']
+         'bg_solar_eclipse_set', 'ring_effects_set', 'ring_effects_r_set', 'ring_flag_set', 'ring_plant_set']
+# v3 : la v2 (floating_plate_sub_set vidé) plantait à la préparation du terrain -> dessous des plates-formes en un point
+# A : ciel et éclipse gardés d'origine ; B : seulement le dessous des plates-formes corrigé
+TEST = os.environ.get('UE_TEST', 'A')
+if TEST == 'A':
+    VIDES = [v for v in VIDES if v not in ('bg_skydome_set', 'bg_solar_eclipse_set', 'bg_solar_eclipse_line_set')]
+EN_UN_POINT = {'floating_plate_set': os.path.join(HBF, 'normal', 'model', 'floating_plate_set'),
+               'floating_plate_sub_set': os.path.join(HBF, 'normal_s02', 'model', 'floating_plate_sub_set')}
 
 TEX, models = brawl_stage.load(PAC)
 SANS = {'EffCommonShield', 'Dummy', 'MShadow'}
@@ -129,20 +136,20 @@ for mn, o in garde:
 
 # fichiers fournis (le reste est partagé avec le jeu par config.json)
 MD = os.path.join(ST, 'model')
-# plates-formes : fichiers d'HDR, sommets en un point dans le sol
-src = os.path.join(HN, 'model', 'floating_plate_set')
-dst = os.path.join(MD, 'floating_plate_set')
-os.makedirs(dst, exist_ok=True)
-for f in os.listdir(src):
-    shutil.copy(os.path.join(src, f), dst)
-m = A.read_mesh(os.path.join(src, 'model.numshb'))
-for o in m.objects:
-    q = np.zeros_like(np.asarray(o.positions[0].data, dtype=np.float32))
-    q[:, 1] = -25.0
-    o.positions[0].data = q
-m.save(os.path.join(dst, 'model.numshb'))
-S.meshex_data.MeshExData.from_mesh_objects(m.objects).save(os.path.join(dst, 'model.numshexb'))
-print('floating_plate_set (HDR) en un point :', len(m.objects), 'objets,', sorted(os.listdir(dst)))
+# plates-formes et dessous : fichiers d'HDR (jeu de fichiers complet du même dossier), sommets en un point dans le sol
+for d_, src in EN_UN_POINT.items():
+    dst = os.path.join(MD, d_)
+    os.makedirs(dst, exist_ok=True)
+    for f in os.listdir(src):
+        shutil.copy(os.path.join(src, f), dst)
+    m = A.read_mesh(os.path.join(src, 'model.numshb'))
+    for o in m.objects:
+        q = np.zeros_like(np.asarray(o.positions[0].data, dtype=np.float32))
+        q[:, 1] = -25.0
+        o.positions[0].data = q
+    m.save(os.path.join(dst, 'model.numshb'))
+    S.meshex_data.MeshExData.from_mesh_objects(m.objects).save(os.path.join(dst, 'model.numshexb'))
+    print(d_, '(HDR) en un point :', len(m.objects), 'objets,', sorted(os.listdir(dst)))
 # fond caché : numdlb + numatb vides
 gab_dl = os.path.join(HN, 'model', 'bg_ground_set', 'model.numdlb')
 gab_ma = os.path.join(HN, 'model', 'bg_ground_set', 'model.numatb')
@@ -154,7 +161,7 @@ for d_ in VIDES:
     ma = S.matl_data.read_matl(gab_ma)
     ma.entries = []
     ma.save(os.path.join(MD, d_, 'model.numatb'))
-print('vides :', VIDES)
+print('TEST', TEST, '; vides :', VIDES)
 # param : stdat d'HDR
 os.makedirs(os.path.join(ST, 'param'), exist_ok=True)
 shutil.copy(os.path.join(HN, 'param', 'battlefield.stdat'), os.path.join(ST, 'param', 'battlefield.stdat'))

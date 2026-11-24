@@ -57,7 +57,7 @@ jobs:
           cargo install smash-lvd --features cli --root /tmp/lvdtool >/dev/null 2>&1
           mkdir -p /tmp/hdr && cd /tmp/hdr
           curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
-          unzip -qo sp.zip "*hdr-stages/stage/battlefield/normal/*" "*hdr-stages/ui/replace/stage/stage_*/stage_*_battlefield.bntx" -d x 2>/dev/null
+          unzip -qo sp.zip "*hdr-stages/stage/battlefield/normal/*" "*hdr-stages/stage/battlefield/normal_s02/model/floating_plate_sub_set/*" "*hdr-stages/ui/replace/stage/stage_*/stage_*_battlefield.bntx" -d x 2>/dev/null
           find /tmp/hdr/x -type f | sed 's#.*hdr-stages/##' | sort > /tmp/out/refs/hdr_bf.txt; wc -l < /tmp/out/refs/hdr_bf.txt
       - name: Materiau modele (Yoshi's Story 392643, bg2_set)
         run: |
@@ -96,13 +96,13 @@ jobs:
           set -o pipefail
           export PATH=$PATH:/tmp/lvdtool/bin:$HOME/.cargo/bin
           HBF=$(find /tmp/hdr/x -type d -path "*hdr-stages/stage/battlefield" | head -1)
-          M="/tmp/out/mod/(Stage) Unreal Introduction Map (Champ de bataille R)"
-          mkdir -p "$M"
-          UE_HD=/tmp/hd UE_SCENE=/tmp/rendu python3 -u outils/stagekit/stage/tools/ue_bf.py /tmp/out/travail/ue.pac "$HBF" /tmp/liste_bf.txt "$(cat /tmp/matl_modele.txt)" "$M" > /tmp/out/construction.txt 2>&1
-          tail -3 /tmp/out/construction.txt | cut -c1-60
-          /tmp/lvdtool/bin/yamlvd "$M/stage/battlefield/normal_s02/param/battlefield_00.lvd" /tmp/out/lvd_relu.yml > /dev/null 2>&1; ls -la /tmp/out/lvd_relu.yml | awk '{print $5}'
-          python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print('partages',len(d['share_to_vanilla']))" "$M/config.json"
-          find "$M" -type f | sed "s#$M/##" | sort > /tmp/out/mod_liste.txt; wc -l < /tmp/out/mod_liste.txt; du -sh "$M"
+          for T in A B; do
+            M="/tmp/out/mod/$T/(Stage) Unreal Introduction Map (Champ de bataille R)"
+            mkdir -p "$M"
+            UE_TEST=$T UE_HD=/tmp/hd UE_SCENE=/tmp/rendu python3 -u outils/stagekit/stage/tools/ue_bf.py /tmp/out/travail/ue.pac "$HBF" /tmp/liste_bf.txt "$(cat /tmp/matl_modele.txt)" "$M" > /tmp/out/construction_$T.txt 2>&1
+            tail -2 /tmp/out/construction_$T.txt | cut -c1-60
+            python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print('partages',len(d['share_to_vanilla']))" "$M/config.json"
+          done
       - name: Image de l'ecran des terrains
         env:
           PP_Y0: '0.0'
@@ -120,12 +120,13 @@ jobs:
           ls $R/scene.json
           (cd $R && nohup python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 3
           mkdir -p /tmp/refui; for n in 1 2 4; do find /tmp/hdr/x -path "*ui/replace/stage/stage_$n/stage_${n}_battlefield.bntx" -exec cp {} /tmp/refui/ \; ; done; ls /tmp/refui
-          M="/tmp/out/mod/(Stage) Unreal Introduction Map (Champ de bataille R)"
+          M="/tmp/out/mod/A/(Stage) Unreal Introduction Map (Champ de bataille R)"
           NODE_PATH=/tmp/rn/node_modules python3 -u outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu > /tmp/out/ui.txt 2>&1
           grep -c "greffé" /tmp/out/ui.txt; find "$M/ui" -type f | sed "s#$M/##"
           (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_recule.png 1280 720 27 60 520 27 20 0 40 > /dev/null 2>&1)
           (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_recule_bas.png 1280 720 27 20 260 27 10 0 40 > /dev/null 2>&1)
-          find "$M" -type f | sed "s#$M/##" | sort > /tmp/out/mod_liste.txt
+          cp -r "$M/ui" "/tmp/out/mod/B/(Stage) Unreal Introduction Map (Champ de bataille R)/"
+          (cd /tmp/out/mod && find . -type f | sort > /tmp/out/mod_liste.txt)
           true
       - name: Chiffrer (cle de la session) et publier
         if: always()
