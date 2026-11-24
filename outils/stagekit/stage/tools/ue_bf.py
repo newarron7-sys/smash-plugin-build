@@ -42,6 +42,12 @@ if TEST == 'A':
     VIDES = [v for v in VIDES if v not in ('bg_skydome_set', 'bg_solar_eclipse_set', 'bg_solar_eclipse_line_set')]
 EN_UN_POINT = {'floating_plate_set': os.path.join(HBF, 'normal', 'model', 'floating_plate_set'),
                'floating_plate_sub_set': os.path.join(HBF, 'normal_s02', 'model', 'floating_plate_sub_set')}
+# v4 (C) : A a planté comme le Château de Suzaku (même adresse cross2 + 0x3601e30 = modèles vidés, numdlb à 0 entrée) ->
+# plus AUCUN modèle vidé : objets de l'anneau ramenés en un point (fichiers d'HDR du même dossier), fond d'origine
+if TEST == 'C':
+    VIDES = []
+    for d_ in ('ring_effects_set', 'ring_effects_r_set', 'ring_plant_set', 'ring_flag_set'):
+        EN_UN_POINT[d_] = os.path.join(HBF, 'normal', 'model', d_)
 
 TEX, models = brawl_stage.load(PAC)
 SANS = {'EffCommonShield', 'Dummy', 'MShadow'}
