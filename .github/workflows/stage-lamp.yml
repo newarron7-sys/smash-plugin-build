@@ -57,6 +57,40 @@ jobs:
             echo "=== $b $(wc -l < /tmp/out/analyse_$b.txt) $(wc -l < /tmp/out/collisions_$b.txt)"
           done
           true
+      - name: References Ultimate de Smashville (stage/animal_village)
+        run: |
+          set +e +o pipefail
+          for q in "smashville" "smashville retexture" "smashville night" "smashville stage"; do
+            python3 -u outils/stagekit/stage/tools/gb_fetch.py cherche "$q" stage/animal_village /tmp/ref 6 > /dev/null 2>&1
+          done
+          ls /tmp/ref | tr '\n' ' '
+          find /tmp/ref -type d -path "*stage/animal_village" -print0 2>/dev/null | while IFS= read -r -d '' d; do
+            id=$(echo "$d" | sed -E 's#/tmp/ref/([0-9]+)/.*#\1#'); n=$(echo "$d" | md5sum | cut -c1-6)
+            mkdir -p "/tmp/out/refs/ref_${id}_$n"
+            echo "$d" > "/tmp/out/refs/ref_${id}_$n/source.txt"
+            find "$d" -type f | sed "s#$d/##" | sort > "/tmp/out/refs/ref_${id}_$n/liste.txt"
+            python3 outils/stagekit/stage/tools/inspect_ref.py "$d" > "/tmp/out/refs/ref_${id}_$n/inspect.txt" 2>&1
+          done
+          find /tmp/ref -maxdepth 4 -name "config.json" -print0 | while IFS= read -r -d '' c; do id=$(echo "$c" | sed -E 's#/tmp/ref/([0-9]+)/.*#\1#'); cp "$c" "/tmp/out/refs/config_$id.json"; done
+          find /tmp/ref -ipath "*ui/replace*/stage/stage_*" -iname "*animal_village*" -type f > /tmp/out/refs/ref_ui.txt
+          find /tmp/ref -type f -path "*stage/animal_village*" | sed 's#/tmp/ref/##' > /tmp/out/refs/tous.txt
+          ls /tmp/out/refs | wc -l
+          true
+      - name: Collisions de Smashville (animal_village) - refs + HDR, en yaml
+        run: |
+          set +e +o pipefail
+          cargo install smash-lvd --features cli --root /tmp/lvdtool >/dev/null 2>&1; ls /tmp/lvdtool/bin
+          mkdir -p /tmp/out/lvd /tmp/hdr && cd /tmp/hdr
+          curl -sSL -o hdr.zip https://github.com/HDR-Development/HewDraw-Remix/releases/download/v0.50.10/hdr-switch.zip
+          curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
+          for z in hdr.zip sp.zip; do unzip -qo $z "*animal_village*" -d x_$z 2>/dev/null; done
+          find /tmp/hdr -path "*animal_village*" -type f | sed 's#/tmp/hdr/##' > /tmp/out/lvd/hdr_fichiers.txt
+          find /tmp/ref /tmp/hdr -iname "animal_village*.lvd" -print0 | while IFS= read -r -d '' f; do
+            n=$(md5sum "$f" | cut -c1-8); cp "$f" /tmp/out/lvd/$n.lvd; echo "$f" > /tmp/out/lvd/$n.txt
+            /tmp/lvdtool/bin/yamlvd "$f" /tmp/out/lvd/$n.yml >/dev/null 2>&1
+          done
+          ls /tmp/out/lvd | wc -l
+          true
       - name: Chiffrer (cle de la session) et publier
         if: always()
         run: |
