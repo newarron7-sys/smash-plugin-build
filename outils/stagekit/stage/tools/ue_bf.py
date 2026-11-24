@@ -46,6 +46,11 @@ EN_UN_POINT = {'floating_plate_set': os.path.join(HBF, 'normal', 'model', 'float
 # plus AUCUN modèle vidé : objets de l'anneau ramenés en un point (fichiers d'HDR du même dossier), fond d'origine
 if TEST == 'C':
     VIDES = []
+    # v5 : la v4 a encore planté au même endroit ; seul point commun avec A : floating_plate_sub_set pris dans
+    # normal_s02 d'HDR -> dessous des plates-formes d'origine (numshb du jeu ramené en un point, seul fichier fourni,
+    # comme floating_plate_set dans le Champ de bataille sans plates-formes validé) ; sans numshb du jeu : d'origine
+    del EN_UN_POINT['floating_plate_sub_set']
+    SUB = os.environ.get('UE_SUB_SHB', '')
     for d_ in ('ring_effects_set', 'ring_effects_r_set', 'ring_plant_set', 'ring_flag_set'):
         EN_UN_POINT[d_] = os.path.join(HBF, 'normal', 'model', d_)
 
@@ -156,6 +161,16 @@ for d_, src in EN_UN_POINT.items():
     m.save(os.path.join(dst, 'model.numshb'))
     S.meshex_data.MeshExData.from_mesh_objects(m.objects).save(os.path.join(dst, 'model.numshexb'))
     print(d_, '(HDR) en un point :', len(m.objects), 'objets,', sorted(os.listdir(dst)))
+if TEST == 'C' and SUB:
+    dst = os.path.join(MD, 'floating_plate_sub_set')
+    os.makedirs(dst, exist_ok=True)
+    m = A.read_mesh(SUB)
+    for o in m.objects:
+        q = np.zeros_like(np.asarray(o.positions[0].data, dtype=np.float32))
+        q[:, 1] = -25.0
+        o.positions[0].data = q
+    m.save(os.path.join(dst, 'model.numshb'))
+    print('floating_plate_sub_set : numshb du jeu en un point :', [o.name for o in m.objects])
 # fond caché : numdlb + numatb vides
 gab_dl = os.path.join(HN, 'model', 'bg_ground_set', 'model.numdlb')
 gab_ma = os.path.join(HN, 'model', 'bg_ground_set', 'model.numatb')

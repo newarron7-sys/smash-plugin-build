@@ -59,6 +59,33 @@ jobs:
           curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
           unzip -qo sp.zip "*hdr-stages/stage/battlefield/normal/*" "*hdr-stages/stage/battlefield/normal_s02/model/floating_plate_sub_set/*" "*hdr-stages/ui/replace/stage/stage_*/stage_*_battlefield.bntx" -d x 2>/dev/null
           find /tmp/hdr/x -type f | sed 's#.*hdr-stages/##' | sort > /tmp/out/refs/hdr_bf.txt; wc -l < /tmp/out/refs/hdr_bf.txt
+      - name: Dessous des plates-formes du jeu (mods GameBanana du Champ de bataille)
+        run: |
+          set +e
+          for q in "battlefield" "battlefield retexture" "battlefield no platforms" "battlefield stage" "omega battlefield"; do
+            python3 -u outils/stagekit/stage/tools/gb_fetch.py cherche "$q" stage/battlefield/normal/model/floating_plate_sub_set /tmp/bfm 8 > /dev/null 2>&1
+          done
+          find /tmp/bfm -path "*stage/battlefield/normal/model/floating_plate_sub_set/model.numshb" -print0 | while IFS= read -r -d '' f; do
+            echo "$(md5sum < "$f" | cut -c1-12) $(stat -c %s "$f") $f"
+          done | sort > /tmp/out/refs/sub_set.txt
+          python3 - <<'PY2'
+          import collections, ssbh_data_py as S
+          L = [l.split(' ', 2) for l in open('/tmp/out/refs/sub_set.txt').read().splitlines() if l]
+          c = collections.Counter(x[0] for x in L)
+          print('numshb trouvés', len(L), c.most_common(5))
+          for h, n in c.most_common():
+              f = next(x[2] for x in L if x[0] == h)
+              try:
+                  m = S.mesh_data.read_mesh(f)
+                  noms = [o.name for o in m.objects]
+                  print(h, n, noms, [len(o.positions[0].data) for o in m.objects])
+                  if noms == ['groupShape111617181364'] * 3:
+                      open('/tmp/sub_shb.txt', 'w').write(f)
+                      break
+              except Exception as e:
+                  print(h, 'illisible', e)
+          PY2
+          cat /tmp/sub_shb.txt 2>/dev/null | sed 's#/tmp/bfm/##' | cut -d/ -f1; true
       - name: Materiau modele (Yoshi's Story 392643, bg2_set)
         run: |
           python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 392643 /tmp/ys > /dev/null 2>&1
@@ -99,7 +126,7 @@ jobs:
           for T in C; do
             M="/tmp/out/mod/$T/(Stage) Unreal Introduction Map (Champ de bataille R)"
             mkdir -p "$M"
-            UE_TEST=$T UE_HD=/tmp/hd UE_SCENE=/tmp/rendu python3 -u outils/stagekit/stage/tools/ue_bf.py /tmp/out/travail/ue.pac "$HBF" /tmp/liste_bf.txt "$(cat /tmp/matl_modele.txt)" "$M" > /tmp/out/construction_$T.txt 2>&1
+            UE_SUB_SHB="$(cat /tmp/sub_shb.txt 2>/dev/null)" UE_TEST=$T UE_HD=/tmp/hd UE_SCENE=/tmp/rendu python3 -u outils/stagekit/stage/tools/ue_bf.py /tmp/out/travail/ue.pac "$HBF" /tmp/liste_bf.txt "$(cat /tmp/matl_modele.txt)" "$M" > /tmp/out/construction_$T.txt 2>&1
             tail -2 /tmp/out/construction_$T.txt | cut -c1-60
             python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print('partages',len(d['share_to_vanilla']))" "$M/config.json"
           done
