@@ -30,7 +30,7 @@ DOS = 'stc_bg_m_set'
 
 TEX, models = brawl_stage.load(PAC)
 SANS = set()
-SANS_TEX = set()
+SANS_TEX = {'m01a05d-t-kira3'}   # reflets de la mer (additifs dans Brawl, noirs en opaque)
 LUM = float(os.environ.get('MH_LUM', '1.0'))
 SAT = float(os.environ.get('MH_SAT', '1.0'))
 
