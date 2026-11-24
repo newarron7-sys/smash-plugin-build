@@ -140,7 +140,8 @@ jobs:
           PP_Y0: '-0.986'
           PP_ECHELLE: '1.0'
           UI_NOM: animal_village
-          UI_CAM: '0,40,300,0,45,0,34,52'
+          UI_CAM: '0,40,300,0,45,0,34,40'
+          UI_FOND: '0b1030'
         run: |
           set +e
           export PATH=$PATH:$HOME/.cargo/bin

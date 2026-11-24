@@ -3,7 +3,7 @@ import * as THREE from './three.module.js';
 const q=new URLSearchParams(location.search);
 const W=+q.get('w'),H=+q.get('h');
 const r=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});r.setSize(W,H);r.outputColorSpace=THREE.SRGBColorSpace;document.body.appendChild(r.domElement);
-const sc=new THREE.Scene();sc.background=new THREE.Color(0x87a060);
+const sc=new THREE.Scene();sc.background=new THREE.Color(parseInt(q.get('bg')||'87a060',16));
 const cam=new THREE.PerspectiveCamera(+q.get('fov'),W/H,1,40000);
 cam.position.set(+q.get('cx'),+q.get('cy'),+q.get('cz'));cam.lookAt(+q.get('tx'),+q.get('ty'),+q.get('tz'));
 const L=new THREE.TextureLoader();const d=await (await fetch('scene.json')).json();const tx={};
