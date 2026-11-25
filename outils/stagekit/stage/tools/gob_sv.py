@@ -34,6 +34,13 @@ PFX = 'gob_'
 DOS = 'stc_bg_set'
 
 TEX, models = brawl_stage.load(PAC)
+# v3 : le sol (152F3974) est une image de reflet précalculée, posée sans mélange dans Brawl (matériau opaque) ; son alpha
+# constant (182) le faisait passer en découpe -> on voyait le vide et le décor en miroir à travers (les « trous »)
+for _t in [x for x in os.environ.get('GOB_OPAQUES', '152F3974').split(',') if x]:
+    if _t in TEX:
+        _im = TEX[_t].convert('RGBA')
+        _im.putalpha(255)
+        TEX[_t] = _im
 SANS = set()
 # v2 : lueur sur le mur près de la porte (mesh_29, additive, collée au mur) qui clignote en jeu (demande du joueur)
 SANS_OBJ = set(x for x in os.environ.get('GOB_SANS_OBJ', 'mesh_29').split(',') if x)
@@ -139,7 +146,9 @@ if os.environ.get('GOB_SOL', '1') == '1':
     morceaux = [quad(-G, G, z1s, G, ys), quad(-G, x0s, z0s, z1s, ys), quad(x1s, G, z0s, z1s, ys), quad(-G, G, -G, z0s, ys)]
     pos = np.concatenate([m_[0] for m_ in morceaux])
     uv = np.concatenate([m_[1] for m_ in morceaux])
-    garde.append(('sol_prolonge', {'name': 'sol_prolonge', 'tex': '152F3974', 'pos': pos, 'uv': uv,
+    moy = np.asarray(TEX['152F3974'].convert('RGB')).reshape(-1, 3).mean(0) * float(os.environ.get('GOB_SOL_PROL_LUM', '0.85'))
+    TEX['gob_sol_prolonge'] = _I.new('RGBA', (16, 16), tuple(int(v) for v in moy) + (255,))
+    garde.append(('sol_prolonge', {'name': 'sol_prolonge', 'tex': 'gob_sol_prolonge', 'pos': pos, 'uv': np.zeros_like(uv),
                                    'nrm': np.tile(np.array([0.0, 1.0, 0.0]), pos.shape[:2] + (1,)), 'add': False}))
     # fond du reflet : sous le point le plus bas du décor dans la salle
     ymin = min(float(o['pos'][(np.abs(o['pos'].mean(1)[:, 0]) < 700) & (np.abs(o['pos'].mean(1)[:, 2]) < 700)][:, :, 1].min())
