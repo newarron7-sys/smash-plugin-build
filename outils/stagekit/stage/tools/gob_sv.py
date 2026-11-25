@@ -35,12 +35,17 @@ DOS = 'stc_bg_set'
 
 TEX, models = brawl_stage.load(PAC)
 SANS = set()
+# v2 : lueur sur le mur près de la porte (mesh_29, additive, collée au mur) qui clignote en jeu (demande du joueur)
+SANS_OBJ = set(x for x in os.environ.get('GOB_SANS_OBJ', 'mesh_29').split(',') if x)
 garde = []
 for _, mn, ol in models:
     if mn in SANS:
         print('ignore (modèle)', mn)
         continue
     for o in ol:
+        if o['name'] in SANS_OBJ:
+            print('ignore (objet)', mn, o['name'])
+            continue
         if not o['tex'] or o['tex'] not in TEX:
             print('ignore', mn, o['name'], o['tex'])
             continue
