@@ -440,16 +440,17 @@ if os.environ.get('GOB_COLL_BRAWL', '0') == '1':
     # chaînes : segments reliés par leurs extrémités (même point), sens de Brawl conservé
     segs = [(PTS[a], PTS[b], ty, fl) for a, b, ty, fl in PLS]
     def _k(p): return (round(p[0], 2), round(p[1], 2))
+    def _thr(j): return bool(segs[j][3] & 0x100)
     libres = list(range(len(segs)))
     chaines = []
     while libres:
         i = libres.pop(0); ch = [i]
         while True:
-            fin = _k(segs[ch[-1]][1]); nx = [j for j in libres if _k(segs[j][0]) == fin]
+            fin = _k(segs[ch[-1]][1]); nx = [j for j in libres if _k(segs[j][0]) == fin and _thr(j) == _thr(ch[-1])]
             if not nx: break
             ch.append(nx[0]); libres.remove(nx[0])
         while True:
-            deb = _k(segs[ch[0]][0]); pv = [j for j in libres if _k(segs[j][1]) == deb]
+            deb = _k(segs[ch[0]][0]); pv = [j for j in libres if _k(segs[j][1]) == deb and _thr(j) == _thr(ch[0])]
             if not pv: break
             ch.insert(0, pv[0]); libres.remove(pv[0])
         chaines.append(ch)
@@ -457,7 +458,13 @@ if os.environ.get('GOB_COLL_BRAWL', '0') == '1':
     mat0 = copy.deepcopy(sol0['materials'][0])
     for k_ in mat0['line_flags']:
         mat0['line_flags'][k_] = False
+    print('matériau lvd :', {k_: v_ for k_, v_ in mat0.items() if k_ != 'line_flags'})
+    _cle_mat = next((k_ for k_, v_ in mat0.items() if k_ != 'line_flags' and isinstance(v_, str)), None)
+    def _dmg(v):
+        if v.startswith('GROUND_COLL_ATTR_'): return 'GROUND_COLL_ATTR_DAMAGE1'
+        return 'damage1' if v.islower() else 'Damage1'
     cols = []
+    npiq = 0
     def _poly(c, pts):
         c['vertices'] = [{'x': float(x * ECH), 'y': float((y - Y0) * ECH)} for x, y in pts]
         nrm = []
@@ -473,7 +480,11 @@ if os.environ.get('GOB_COLL_BRAWL', '0') == '1':
         c['entry']['subname'] = 'Brawl%02d' % k_
         thr = all(segs[j][3] & 0x100 for j in ch)
         c['col_flags']['drop_through'] = bool(thr)
-        _poly(c, pts); cols.append(c)
+        _poly(c, pts)
+        for m_, j in zip(c['materials'], ch):
+            if (segs[j][3] & 0xff) == 0x12 and _cle_mat:  # matériau Brawl « Damage1 » = pics
+                m_[_cle_mat] = _dmg(m_[_cle_mat]); npiq += 1
+        cols.append(c)
     # échelles -> petites plates-formes traversables (tous les 30)
     lad = np.concatenate([o['pos'].reshape(-1, 3) for _, o in garde if o['tex'] and 'ladder' in o['tex'].lower()]) if any(o['tex'] and 'ladder' in o['tex'].lower() for _, o in garde) else np.zeros((0, 3))
     nplat = 0
@@ -513,8 +524,8 @@ if os.environ.get('GOB_COLL_BRAWL', '0') == '1':
         s_['pos']['x'] = xs_sp[i_ % len(xs_sp)] * ECH; s_['pos']['y'] = 0.1
     for i_, r_ in enumerate(d['respawns']):
         r_['pos']['x'] = xs_sp[i_ % len(xs_sp)] * ECH; r_['pos']['y'] = float(os.environ.get('GOB_RESPAWN_Y', '30')) * ECH
-    print('collisions de Brawl : %d chaînes (%d traversables), %d plates-formes d\'échelle ; caméra %s ; K.O. %s' % (
-        len(chaines), sum(1 for c in cols if c['col_flags']['drop_through']), nplat, {k: cb[k] for k in ('left', 'right', 'top', 'bottom')}, {k: bz[k] for k in ('left', 'right', 'top', 'bottom')}))
+    print('collisions de Brawl : %d chaînes (%d traversables), %d plates-formes d\'échelle, %d segments à pics ; caméra %s ; K.O. %s' % (
+        len(chaines), sum(1 for c in cols if c['col_flags']['drop_through']), nplat, npiq, {k: cb[k] for k in ('left', 'right', 'top', 'bottom')}, {k: bz[k] for k in ('left', 'right', 'top', 'bottom')}))
     if os.environ.get('GOB_COLL_PNG'):
         from PIL import Image as _Im, ImageDraw as _Dr
         sc = 2.0; W_ = int((bz['right'] - bz['left']) * sc); H_ = int((bz['top'] - bz['bottom']) * sc)
@@ -525,7 +536,9 @@ if os.environ.get('GOB_COLL_BRAWL', '0') == '1':
             v = [(q['x'], q['y']) for q in c['vertices']]
             col = (80, 200, 255) if c['col_flags']['drop_through'] else (255, 255, 255)
             if 'Ladder' in c['entry']['name']: col = (255, 200, 60)
-            dr.line([P(*q) for q in v], fill=col, width=3)
+            for i_, (a_, b_) in enumerate(zip(v, v[1:])):
+                cc = (255, 60, 60) if _cle_mat and 'damage' in str(c['materials'][i_].get(_cle_mat, '')).lower() else col
+                dr.line([P(*a_), P(*b_)], fill=cc, width=3)
         for s_ in d['spawns']:
             x_, y_ = P(s_['pos']['x'], s_['pos']['y']); dr.ellipse([x_ - 5, y_ - 10, x_ + 5, y_], fill=(80, 255, 80))
         im_.save(os.environ['GOB_COLL_PNG'])
