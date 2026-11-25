@@ -33,6 +33,7 @@ MUR = float(os.environ.get('GOB_MUR_X', '130'))     # murs invisibles de Brawl �
 PFX = 'gob_'
 DOS = 'stc_bg_set'
 
+from PIL import Image
 TEX, models = brawl_stage.load(PAC)
 # v3 : le sol (152F3974) est une image de reflet précalculée, posée sans mélange dans Brawl (matériau opaque) ; son alpha
 # constant (182) le faisait passer en découpe -> on voyait le vide et le décor en miroir à travers (les « trous »)
@@ -41,6 +42,42 @@ for _t in [x for x in os.environ.get('GOB_OPAQUES', '152F3974').split(',') if x]
         _im = TEX[_t].convert('RGBA')
         _im.putalpha(255)
         TEX[_t] = _im
+# v6 (demande du joueur) : le sol miroir (152F3974) est noir / bleu nuit là où le reflet de Brawl ne montre rien -> on
+# repeint ces zones dans le rouge du tapis, et on pose un carré de rouge uni dans un coin (texel du prolongement)
+SOL_T = '152F3974'
+ROUGE = None
+if os.environ.get('GOB_REPEINT', '1') == '1' and SOL_T in TEX:
+    _px = np.asarray(TEX[SOL_T].convert('RGB')).astype(np.float32).reshape(-1, 3)
+    _rg = _px[(_px[:, 0] > 60) & (_px[:, 0] > 2.0 * _px[:, 1]) & (_px[:, 0] > 2.0 * _px[:, 2])]
+    ROUGE = np.percentile(_rg, float(os.environ.get('GOB_ROUGE_PCT', '80')), axis=0) if len(_rg) > 100 else np.array([120.0, 22, 22])
+    if os.environ.get('GOB_ROUGE'):
+        ROUGE = np.array([float(v) for v in os.environ['GOB_ROUGE'].split(',')])
+    print('repeint du sol : rouge %s' % (tuple(int(v) for v in ROUGE),))
+
+
+def repeint(t, im):
+    # im : tableau RGBA float ; renvoie le tableau repeint (sol uniquement)
+    if ROUGE is None or t != SOL_T:
+        return im
+    rgb = im[:, :, :3]
+    mx = rgb.max(2)
+    T = float(os.environ.get('GOB_SEUIL', '75'))
+    w = np.clip((T - mx) / (T * 0.5), 0, 1)                       # sombre -> repeint
+    w = np.maximum(w, np.clip((rgb[:, :, 2] - rgb[:, :, 0]) / 40.0, 0, 1))  # bleu -> repeint
+    ton = (0.85 + 0.15 * np.clip(mx / T, 0, 1))[:, :, None] * ROUGE[None, None, :]
+    rgb = rgb * (1 - w[:, :, None]) + ton * w[:, :, None]
+    h, wd = rgb.shape[:2]
+    c = max(16, wd // 16)
+    rgb[:c, :c] = ROUGE
+    im = im.copy()
+    im[:, :, :3] = rgb
+    im[:, :, 3] = 255
+    print('  repeint %s : %.1f %% des pixels, carré %d px' % (t, 100.0 * float((w > 0.5).mean()), c))
+    return im
+
+
+if ROUGE is not None:
+    TEX[SOL_T] = Image.fromarray(np.clip(repeint(SOL_T, np.asarray(TEX[SOL_T].convert('RGBA')).astype(np.float32)) + 0.5, 0, 255).astype(np.uint8), 'RGBA')
 SANS = set()
 # v2 : lueur sur le mur près de la porte (mesh_29, additive, collée au mur) qui clignote en jeu (demande du joueur)
 SANS_OBJ = set(x for x in os.environ.get('GOB_SANS_OBJ', 'mesh_29').split(',') if x)
@@ -166,6 +203,9 @@ if os.environ.get('GOB_SOL', '1') == '1':
             sc = np.abs(blk.mean(0) - _med).sum() + blk.std(0).sum()
             if sc < best:
                 best, buv = sc, ((_x + 0.5) / _w, (_y + 0.5) / _h)
+    if ROUGE is not None:
+        _c = max(16, _w // 16)
+        buv = ((_c / 2.0) / _w, (_c / 2.0) / _h)
     def dalles(xa, xb, za, zb):
         out = []
         xs_ = np.arange(xa, xb, PAS).tolist() + [xb]
@@ -275,6 +315,7 @@ for k, ((t, add), ol) in enumerate(sorted(par_tex.items())):
     hd = os.path.join(os.environ.get('GOB_HD', ''), t + '_x4.png')
     if os.environ.get('GOB_HD') and os.path.exists(hd):
         im = np.asarray(Image.open(hd).convert('RGBA')).astype(np.float32)
+        im = repeint(t, im)
     if a or add:
         im[:, :, :3] *= im[:, :, 3:] / 255.0
     Image.fromarray(np.clip(im + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(png)
@@ -297,7 +338,10 @@ if os.environ.get('GOB_SCENE'):
     for i, t in enumerate(sorted(set(k_[0] for k_ in par_tex))):
         noms[t] = 't%02d' % i
         hd = os.path.join(os.environ.get('GOB_HD', ''), t + '_x4.png')
-        (Image.open(hd) if os.environ.get('GOB_HD') and os.path.exists(hd) else TEX[t]).convert('RGBA').save(os.path.join(SC, 'tex', noms[t] + '.png'))
+        if os.environ.get('GOB_HD') and os.path.exists(hd):
+            Image.fromarray(np.clip(repeint(t, np.asarray(Image.open(hd).convert('RGBA')).astype(np.float32)) + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(os.path.join(SC, 'tex', noms[t] + '.png'))
+        else:
+            TEX[t].convert('RGBA').save(os.path.join(SC, 'tex', noms[t] + '.png'))
     for (t, add), ol in par_tex.items():
         for o in ol:
             p = o['pos'][:, [0, 2, 1]].astype(np.float64)
