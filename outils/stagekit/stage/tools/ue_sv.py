@@ -108,7 +108,7 @@ for _, mn, ol in models:
 # droite 111,85 < x < 216 : faces devant le plan de jeu (z > 8) qui dépassent du sol) ; murs invisibles aux deux bouts
 # (x -213,48 et 216) au lieu des rebords ; sol de droite arrêté à 216
 COUPE = os.environ.get('UE_COUPE', '1') == '1'
-X_DROITE = float(os.environ.get('UE_X_DROITE', '216.0'))
+X_DROITE = float(os.environ.get('UE_X_DROITE', '240.9'))  # v9 : face du grand bloc blanc de devant (demande du joueur)
 # v9 : mur invisible de gauche au vrai bout de la dalle (x -392,45 au lieu de -213,48), sol prolongé jusque-là
 X_GAUCHE = float(os.environ.get('UE_X_GAUCHE', '-392.45'))
 ZONES_COUPE = [(-1e9, -140.0), (111.85, X_DROITE)]
