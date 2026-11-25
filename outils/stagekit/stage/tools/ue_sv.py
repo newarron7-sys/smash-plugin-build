@@ -170,26 +170,30 @@ CUIT = os.environ.get('UE_CUIT', '1') == '1'
 GAB_CUIT = None
 if CUIT:
     ATTR_CUIT = None
-    _rm = S.matl_data.read_matl(os.path.join(RM, DOS_SOL, 'model.numatb'))
-    _dl = S.modl_data.read_modl(os.path.join(RM, DOS_SOL, 'model.numdlb'))
-    _sh = A.read_mesh(os.path.join(RM, DOS_SOL, 'model.numshb'))
-    _obj = {(o.name, o.subindex): o for o in _sh.objects}
+    DOS_GAB = DOS
     prefs = ('SFX_PBS_0000000008088280', 'SFX_PBS_0000000000088280', 'SFX_PBS_0000000008080280', 'SFX_PBS_0000000000080280')
-    for pref, opq in [(p_, True) for p_ in prefs] + [(p_, False) for p_ in prefs]:
-        for e in _rm.entries:
-            if not (e.shader_label.startswith(pref) and sorted(t.param_id.name for t in e.textures) == ['Texture0', 'Texture9']):
-                continue
-            if opq and not e.shader_label.endswith('_opaque'):
-                continue
-            utilis = [(en.mesh_object_name, en.mesh_object_subindex) for en in _dl.entries if en.material_label == e.material_label]
-            o = next((_obj[k] for k in utilis if k in _obj), None)
-            if o is not None:
-                GAB_CUIT = e
-                ATTR_CUIT = ([x.name for x in o.texture_coordinates], [x.name for x in o.color_sets])
+    for dg in (DOS_SOL, DOS):          # matériau modèle : d'abord le terrain principal, sinon le fond (v5, validé)
+        _rm = S.matl_data.read_matl(os.path.join(RM, dg, 'model.numatb'))
+        _dl = S.modl_data.read_modl(os.path.join(RM, dg, 'model.numdlb'))
+        _sh = A.read_mesh(os.path.join(RM, dg, 'model.numshb'))
+        _obj = {(o.name, o.subindex): o for o in _sh.objects}
+        for pref, opq in [(p_, True) for p_ in prefs] + [(p_, False) for p_ in prefs]:
+            for e in _rm.entries:
+                if not (e.shader_label.startswith(pref) and sorted(t.param_id.name for t in e.textures) == ['Texture0', 'Texture9']):
+                    continue
+                if opq and not e.shader_label.endswith('_opaque'):
+                    continue
+                utilis = [(en.mesh_object_name, en.mesh_object_subindex) for en in _dl.entries if en.material_label == e.material_label]
+                o = next((_obj[k] for k in utilis if k in _obj), None)
+                if o is not None:
+                    GAB_CUIT, DOS_GAB = e, dg
+                    ATTR_CUIT = ([x.name for x in o.texture_coordinates], [x.name for x in o.color_sets])
+                    break
+            if GAB_CUIT is not None:
                 break
         if GAB_CUIT is not None:
             break
-    print('matériau à texture d\'ombre :', GAB_CUIT.shader_label if GAB_CUIT else None, GAB_CUIT.material_label if GAB_CUIT else None, ATTR_CUIT)
+    print('matériau à texture d\'ombre :', DOS_GAB, GAB_CUIT.shader_label if GAB_CUIT else None, GAB_CUIT.material_label if GAB_CUIT else None, ATTR_CUIT)
 
 # regroupement par texture
 par_tex = {}
@@ -260,7 +264,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     a = alpha(t)
     lab = 'ue_%s%s%s' % (t, '_a' if a else '', '_cuit' if cuit else '')
     if cuit:
-        e = next(x for x in S.matl_data.read_matl(os.path.join(RM, DOS_SOL, 'model.numatb')).entries
+        e = next(x for x in S.matl_data.read_matl(os.path.join(RM, DOS_GAB, 'model.numatb')).entries
                  if x.material_label == GAB_CUIT.material_label)
     else:
         e = S.matl_data.read_matl(MATL_MODELE).entries[TI]
