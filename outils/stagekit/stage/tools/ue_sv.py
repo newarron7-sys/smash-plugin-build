@@ -32,6 +32,8 @@ if os.path.isdir(os.path.join(OUT, 'stage')):
 ECH = float(os.environ.get('UE_ECHELLE', '1.0'))
 PFX = 'ue_'
 DOS = 'stc_bg_set'
+# v6 : sol et murs (objets à texture d'ombre) dans le modèle du terrain principal, qui reçoit les ombres des persos
+DOS_SOL = os.environ.get('UE_DOS_SOL', 'stc_mainstage_set')
 
 TEX, models = brawl_stage.load(PAC)
 SANS = {'EffCommonShield', 'Dummy', 'MShadow'}
@@ -168,13 +170,16 @@ CUIT = os.environ.get('UE_CUIT', '1') == '1'
 GAB_CUIT = None
 if CUIT:
     ATTR_CUIT = None
-    _rm = S.matl_data.read_matl(os.path.join(RM, DOS, 'model.numatb'))
-    _dl = S.modl_data.read_modl(os.path.join(RM, DOS, 'model.numdlb'))
-    _sh = A.read_mesh(os.path.join(RM, DOS, 'model.numshb'))
+    _rm = S.matl_data.read_matl(os.path.join(RM, DOS_SOL, 'model.numatb'))
+    _dl = S.modl_data.read_modl(os.path.join(RM, DOS_SOL, 'model.numdlb'))
+    _sh = A.read_mesh(os.path.join(RM, DOS_SOL, 'model.numshb'))
     _obj = {(o.name, o.subindex): o for o in _sh.objects}
-    for pref in ('SFX_PBS_0000000008088280', 'SFX_PBS_0000000000088280', 'SFX_PBS_0000000000080280', 'SFX_PBS_0000000008080280'):
+    prefs = ('SFX_PBS_0000000008088280', 'SFX_PBS_0000000000088280', 'SFX_PBS_0000000008080280', 'SFX_PBS_0000000000080280')
+    for pref, opq in [(p_, True) for p_ in prefs] + [(p_, False) for p_ in prefs]:
         for e in _rm.entries:
             if not (e.shader_label.startswith(pref) and sorted(t.param_id.name for t in e.textures) == ['Texture0', 'Texture9']):
+                continue
+            if opq and not e.shader_label.endswith('_opaque'):
                 continue
             utilis = [(en.mesh_object_name, en.mesh_object_subindex) for en in _dl.entries if en.material_label == e.material_label]
             o = next((_obj[k] for k in utilis if k in _obj), None)
@@ -199,7 +204,7 @@ for l in open(LISTE):
     p = l.strip()
     if p.startswith('stage/animal_village/normal/model/'):
         ens.add(p.split('/')[4])
-caches = sorted(ens - {DOS})
+caches = sorted(ens - ({DOS, DOS_SOL} if GAB_CUIT is not None else {DOS}))
 for d_ in caches:
     os.makedirs(os.path.join(ST, 'model', d_), exist_ok=True)
     shutil.copy(vide, os.path.join(ST, 'model', d_, 'model.numdlb'))
@@ -212,6 +217,8 @@ if JOUR and os.path.isdir(JOUR):
     shutil.copytree(JOUR, os.path.join(ST, 'render'))
     print('render : jour permanent', sorted(os.listdir(os.path.join(ST, 'render'))))
 D = os.path.join(ST, 'model', DOS)
+D_SOL = os.path.join(ST, 'model', DOS_SOL)
+os.makedirs(D_SOL, exist_ok=True)
 os.makedirs(D, exist_ok=True)
 objs, labs, entries, nouveaux = [], [], [], []
 for k, (t, ol) in enumerate(sorted(par_tex.items())):
@@ -253,7 +260,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     a = alpha(t)
     lab = 'ue_%s%s%s' % (t, '_a' if a else '', '_cuit' if cuit else '')
     if cuit:
-        e = next(x for x in S.matl_data.read_matl(os.path.join(RM, DOS, 'model.numatb')).entries
+        e = next(x for x in S.matl_data.read_matl(os.path.join(RM, DOS_SOL, 'model.numatb')).entries
                  if x.material_label == GAB_CUIT.material_label)
     else:
         e = S.matl_data.read_matl(MATL_MODELE).entries[TI]
@@ -289,7 +296,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     if a:
         im[:, :, :3] *= im[:, :, 3:] / 255.0
     Image.fromarray(np.clip(im + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(png)
-    cible = os.path.join(D, tname(t) + '.nutexb')
+    cible = os.path.join(D_SOL if cuit else D, tname(t) + '.nutexb')
     subprocess.run(['ultimate_tex_cli', png, cible, '--format', 'BC7RgbaUnormSrgb'], check=True, capture_output=True)
     os.remove(png)
 
@@ -301,7 +308,7 @@ if any(l.endswith('_cuit') for l in labs):
     bk = np.asarray(TEX['BakeMap'].convert('RGBA')).astype(np.float32)
     bk[:, :, :3] *= float(os.environ.get('UE_CUIT_LUM', '1.0'))
     Image.fromarray(np.clip(bk + 0.5, 0, 255).astype(np.uint8), 'RGBA').save(png)
-    subprocess.run(['ultimate_tex_cli', png, os.path.join(D, tname('BakeMap') + '.nutexb'), '--format', 'BC7RgbaUnormSrgb'],
+    subprocess.run(['ultimate_tex_cli', png, os.path.join(D_SOL, tname('BakeMap') + '.nutexb'), '--format', 'BC7RgbaUnormSrgb'],
                    check=True, capture_output=True)
     os.remove(png)
     print('texture d\'ombre :', tname('BakeMap'), TEX['BakeMap'].size, [l for l in labs if l.endswith('_cuit')])
@@ -339,20 +346,21 @@ if os.environ.get('UE_SCENE'):
     _j.dump(scene, open(os.path.join(SC, 'scene.json'), 'w'))
     print('scène', len(scene), 'objets')
 
-if False:
-    pass
-else:
-  matl = S.matl_data.read_matl(MATL_MODELE)
-  matl.entries = entries
-  matl.save(os.path.join(D, 'model.numatb'))
-  mesh = A.read_mesh(os.path.join(BN, 'model', DOS, 'model.numshb'))
-  mesh.objects = objs
-  mesh.save(os.path.join(D, 'model.numshb'))
-  modl = S.modl_data.read_modl(os.path.join(BN, 'model', DOS, 'model.numdlb'))
-  modl.entries = [S.modl_data.ModlEntryData(o.name, o.subindex, l) for o, l in zip(objs, labs)]
-  modl.save(os.path.join(D, 'model.numdlb'))
-  S.meshex_data.MeshExData.from_mesh_objects(objs).save(os.path.join(D, 'model.numshexb'))
-  print('DOSSIER', DOS, len(objs), 'objets', sum(len(o.vertex_indices) // 3 for o in objs), 'triangles')
+for dos, dd, garde_l in ((DOS, D, lambda l: not l.endswith('_cuit')), (DOS_SOL, D_SOL, lambda l: l.endswith('_cuit'))):
+    sel = [i for i, l in enumerate(labs) if garde_l(l)]
+    if not sel:
+        continue
+    matl = S.matl_data.read_matl(MATL_MODELE)
+    matl.entries = [entries[i] for i in sel]
+    matl.save(os.path.join(dd, 'model.numatb'))
+    mesh = A.read_mesh(os.path.join(BN, 'model', dos, 'model.numshb'))
+    mesh.objects = [objs[i] for i in sel]
+    mesh.save(os.path.join(dd, 'model.numshb'))
+    modl = S.modl_data.read_modl(os.path.join(BN, 'model', dos, 'model.numdlb'))
+    modl.entries = [S.modl_data.ModlEntryData(objs[i].name, objs[i].subindex, labs[i]) for i in sel]
+    modl.save(os.path.join(dd, 'model.numdlb'))
+    S.meshex_data.MeshExData.from_mesh_objects([objs[i] for i in sel]).save(os.path.join(dd, 'model.numshexb'))
+    print('DOSSIER', dos, len(sel), 'objets', sum(len(objs[i].vertex_indices) // 3 for i in sel), 'triangles', [labs[i] for i in sel])
 
 # collisions : sol de la carte, rebords aux deux bouts, bloc solide ; lvd de Smashville d'HDR
 import yaml, copy
