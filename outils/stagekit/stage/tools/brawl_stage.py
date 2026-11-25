@@ -123,6 +123,31 @@ def mat_textures(dd, mo, texnames):
     return out
 
 
+def mat_additif(dd, mo):
+    """matériau -> True si le mélange GX est additif (registre BP 0x41 : source SRCALPHA/ONE, destination ONE ou
+    DSTALPHA, la mémoire d'image de la Wii n'ayant pas d'alpha)"""
+    out = {}
+    try:
+        offs = struct.unpack_from('>11i', dd, mo + 0x10)
+        if not offs[6]:
+            return out
+        for n, m0 in dict_entries(dd, mo + offs[6]):
+            try:
+                size = struct.unpack_from('>i', dd, m0)[0]
+                blob = dd[m0:m0 + max(0, min(size, 0x2000))]
+                i = blob.find(b'\x61\x41')
+                if i < 0:
+                    continue
+                v = int.from_bytes(blob[i + 2:i + 5], 'big')
+                src, dst = (v >> 8) & 7, (v >> 5) & 7
+                out[n] = bool(v & 1) and src in (1, 4) and dst in (1, 6)
+            except Exception:  # noqa: BLE001
+                continue
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
 def load(pac, verbose=False):
     """-> (textures {nom: image RGBA PIL}, modèles [(chemin, nom, objets)]) ; objet = dict(name, mat, tex,
     pos (n,3,3) monde, uv (n,3,2) ou None, nrm (n,3,3) monde ou None)"""
@@ -160,6 +185,7 @@ def load(pac, verbose=False):
             BW = bone_worlds(d, mo, chr0_f0(d, bf))
             byid = {nid: w for nid, w in BW.values()}
             MT = mat_textures(d, mo, TEX)
+            MA = mat_additif(d, mo)
             objs = []
             for oi, (on, ob) in enumerate(M['objs']):
                 if not ob['tris'] or not (0 <= ob['ids'][0] < len(M['arrays']['pos'])):
@@ -192,6 +218,7 @@ def load(pac, verbose=False):
                 texs = MT.get(mname, [])
                 objs.append({'name': on, 'mat': mname, 'tex': texs[0] if texs else None, 'pos': np.array(pos),
                              'uv': np.array(uv) if U is not None else None, 'nrm': np.array(nrm),
-                             'uv1': np.array(uv1) if U1 is not None else None, 'texs': list(texs)})
+                             'uv1': np.array(uv1) if U1 is not None else None, 'texs': list(texs),
+                             'add': MA.get(mname, False)})
             models.append((name, mn, objs))
     return TEX, models
