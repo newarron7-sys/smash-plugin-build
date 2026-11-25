@@ -125,7 +125,8 @@ def fac_toit(P):
     x0, x1, y0, y1, z0, z1 = ZONE_TOIT
     m = (P[:, 0] >= x0 - 0.01) & (P[:, 0] <= x1 + 0.01) & (P[:, 1] >= y0) & (P[:, 1] <= y1 + 0.01) & (P[:, 2] >= z0 - 0.01) & (P[:, 2] <= z1 + 0.01)
     d = np.clip((z1 - P[:, 2]) / max(z1 - z0, 1e-6), 0, 1)
-    f[m] = 1 - OMBRE_TOIT * (0.4 + 0.6 * d[m])
+    # v12 : ombre pleine et uniforme sous le toit (demande du joueur), au lieu d'un dégradé
+    f[m] = 1 - OMBRE_TOIT
     return f
 ZONES_COUPE = [(-1e9, -140.0), (111.85, X_DROITE)]
 SOL_B = [(-213.48, 11.44), (-110.73, 11.44), (-87.29, 0.0), (111.85, 0.0), (159.06, -23.60), (180.64, -23.77),
@@ -139,6 +140,27 @@ def _sol_b(x):
 def _coupe_x(att, xc):
     """att : liste de tableaux (3, k) d'un triangle (pos en premier) -> liste de triangles coupés par x = xc"""
     d = att[0][:, 0] - xc
+    if (d >= -1e-6).all() or (d <= 1e-6).all():
+        return [att]
+    out = []
+    for sgn in (1, -1):
+        poly = []
+        for i in range(3):
+            j = (i + 1) % 3
+            da, db = d[i] * sgn, d[j] * sgn
+            if da >= 0:
+                poly.append([a_[i] for a_ in att])
+            if (da >= 0) != (db >= 0):
+                t = da / (da - db)
+                poly.append([a_[i] + (a_[j] - a_[i]) * t for a_ in att])
+        for k in range(1, len(poly) - 1):
+            out.append([np.array([poly[0][m], poly[k][m], poly[k + 1][m]]) for m in range(len(att))])
+    return out
+
+
+def _coupe_z(att, zc):
+    """comme _coupe_x mais par le plan z = zc"""
+    d = att[0][:, 2] - zc
     if (d >= -1e-6).all() or (d <= 1e-6).all():
         return [att]
     out = []
@@ -190,6 +212,8 @@ if COUPE:
             morceaux = [[o[k][i].astype(np.float64) for k in cles]]
             for xc in (-140.0, 111.85, 159.06, 180.64, 182.61, 216.8, 218.89, X_DROITE):
                 morceaux = [q for m_ in morceaux for q in _coupe_x(m_, xc)]
+            # v12 : sol de la partie gauche découpé au mur du fond (z -64,7) pour l'ombre pleine sous le toit
+            morceaux = [q for m_ in morceaux for q in (_coupe_z(m_, -64.7) if m_[0][:, 0].mean() < -140.0 else [m_])]
             for m_ in morceaux:
                 P = m_[0]
                 cx = P[:, 0].mean()
