@@ -109,6 +109,8 @@ for _, mn, ol in models:
 # (x -213,48 et 216) au lieu des rebords ; sol de droite arrêté à 216
 COUPE = os.environ.get('UE_COUPE', '1') == '1'
 X_DROITE = float(os.environ.get('UE_X_DROITE', '216.0'))
+# v9 : mur invisible de gauche au vrai bout de la dalle (x -392,45 au lieu de -213,48), sol prolongé jusque-là
+X_GAUCHE = float(os.environ.get('UE_X_GAUCHE', '-392.45'))
 ZONES_COUPE = [(-1e9, -140.0), (111.85, X_DROITE)]
 SOL_B = [(-213.48, 11.44), (-110.73, 11.44), (-87.29, 0.0), (111.85, 0.0), (159.06, -23.60), (180.64, -23.77),
          (182.61, -23.01), (216.80, -23.01), (218.89, -23.82), (266.65, -23.82)]
@@ -461,6 +463,7 @@ YH = 200.0
 haut = [(x * ECH, y * ECH) for x, y in SOL_HAUT]
 if COUPE:
     haut = [(x, y) for x, y in haut if x < X_DROITE * ECH] + [(X_DROITE * ECH, float(_sol_b(X_DROITE)) * ECH)]
+    haut[0] = (X_GAUCHE * ECH, haut[0][1])
 (x0, y0), (x1, y1) = haut[0], haut[-1]
 if COUPE:
     # murs invisibles aux deux bouts (sol + murs jusqu'à YH, comme Lamp), plus de rebords
