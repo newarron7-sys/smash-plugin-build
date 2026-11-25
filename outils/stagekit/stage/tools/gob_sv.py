@@ -151,6 +151,14 @@ if os.environ.get('GOB_SOL', '1') == '1':
     _a = np.asarray(TEX['152F3974'].convert('RGB')).astype(np.float32)
     _h, _w = _a.shape[:2]
     _med = np.median(_a.reshape(-1, 3), axis=0)
+    if os.environ.get('GOB_SOL_ROUGE', '1') == '1':
+        # v5 (demande du joueur) : la couleur médiane était presque noire -> le prolongement ressemblait à du vide ;
+        # on vise le rouge du tapis : médiane des pixels nettement rouges, un peu assombrie (rouge foncé du bord)
+        _px = _a.reshape(-1, 3)
+        _rg = _px[(_px[:, 0] > 60) & (_px[:, 0] > 2.0 * _px[:, 1]) & (_px[:, 0] > 2.0 * _px[:, 2])]
+        if len(_rg) > 100:
+            _med = np.median(_rg, axis=0) * float(os.environ.get('GOB_SOL_ROUGE_F', '0.85'))
+        print('prolongement : couleur visée %s (%d pixels rouges)' % (tuple(int(v) for v in _med), len(_rg)))
     best, buv = 1e9, (0.5, 0.5)
     for _y in range(3, _h - 3, 4):
         for _x in range(3, _w - 3, 4):
@@ -176,7 +184,7 @@ if os.environ.get('GOB_SOL', '1') == '1':
     sol0['uv'] = np.concatenate([sol0['uv'], np.tile(np.array(buv), pos.shape[:2] + (1,))])
     sol0['nrm'] = np.concatenate([sol0['nrm'], np.tile(np.array([0.0, 1.0, 0.0]), pos.shape[:2] + (1,))])
     yf = float('nan')
-    print('prolongement : %d dalles dans l\'objet du sol, texel %s (écart %.1f)' % (len(pos) // 2, tuple(round(v, 3) for v in buv), best))
+    print('prolongement : %d dalles dans l\'objet du sol, texel %s (écart %.1f, couleur %s)' % (len(pos) // 2, tuple(round(v, 3) for v in buv), best, tuple(int(v) for v in _a[int(buv[1] * _h), int(buv[0] * _w)])))
     print('sol prolongé à ±%.0f (y %.2f, sol d\'origine x %.0f..%.0f z %.0f..%.0f) ; fond du reflet y %.1f' % (G, ys, x0s, x1s, z0s, z1s, yf))
 
 
