@@ -30,7 +30,7 @@ if os.path.isdir(os.path.join(OUT, 'stage')):
     shutil.rmtree(os.path.join(OUT, 'stage'))
 ECH = float(os.environ.get('GOB_ECHELLE', '1.0'))
 MUR = float(os.environ.get('GOB_MUR_X', '130'))     # murs invisibles de Brawl à ±130
-PFX = 'gob_'
+PFX = os.environ.get('GOB_PFX', 'gob_')
 DOS = 'stc_bg_set'
 
 from PIL import Image
