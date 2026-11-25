@@ -139,7 +139,28 @@ def _coupe_x(att, xc):
     return out
 
 
+def _coupe_sol(att):
+    """garde la partie du triangle sous le sol de combat (y <= sol(x)) ; sol linéaire dans le morceau"""
+    d = att[0][:, 1] - _sol_b(att[0][:, 0])
+    if (d <= 1e-6).all():
+        return [att]
+    if (d >= -1e-6).all():
+        return []
+    poly = []
+    for i in range(3):
+        j = (i + 1) % 3
+        da, db = -d[i], -d[j]
+        if da >= 0:
+            poly.append([a_[i] for a_ in att])
+        if (da >= 0) != (db >= 0):
+            t = da / (da - db)
+            poly.append([a_[i] + (a_[j] - a_[i]) * t for a_ in att])
+    return [[np.array([poly[0][m], poly[k][m], poly[k + 1][m]]) for m in range(len(att))] for k in range(1, len(poly) - 1)]
+
+
 if COUPE:
+    # v8 : les murs de devant sont arasés à la hauteur du sol (au lieu d'être retirés) : leur face reste jusqu'au sol et
+    # bouche le trou noir qui apparaissait au bord du sol (demande du joueur)
     retires = 0
     for _, o in garde:
         if o['tex'] not in ('Blue', 'Grid'):
@@ -148,7 +169,7 @@ if COUPE:
         neufs = {k: [] for k in cles}
         for i in range(len(o['pos'])):
             morceaux = [[o[k][i].astype(np.float64) for k in cles]]
-            for xc in (-140.0, 111.85, 159.06, X_DROITE):
+            for xc in (-140.0, 111.85, 159.06, 180.64, 182.61, X_DROITE):
                 morceaux = [q for m_ in morceaux for q in _coupe_x(m_, xc)]
             for m_ in morceaux:
                 P = m_[0]
@@ -156,12 +177,15 @@ if COUPE:
                 dedans = any(lo <= cx <= hi for lo, hi in ZONES_COUPE)
                 if dedans and P[:, 2].min() >= 8.0 and (P[:, 1] - _sol_b(P[:, 0])).max() > 1.0:
                     retires += 1
-                    continue
-                for k, v in zip(cles, m_):
-                    neufs[k].append(v)
+                    garde_m = _coupe_sol(m_)
+                else:
+                    garde_m = [m_]
+                for g_ in garde_m:
+                    for k, v in zip(cles, g_):
+                        neufs[k].append(v)
         for k in cles:
             o[k] = np.array(neufs[k])
-    print('murs de devant retirés :', retires, 'morceaux de triangles')
+    print('murs de devant arasés au niveau du sol :', retires, 'morceaux de triangles')
 
 def surface(x, z=0.0):
     """hauteur la plus haute du décor sous y +15 à la verticale de (x, z) (Brawl)"""
