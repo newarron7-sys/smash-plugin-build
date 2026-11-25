@@ -1,0 +1,45 @@
+name: Sol Badguy - telechargement Drive (version d'origine)
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/sol-drive.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Telechargement
+        run: |
+          set +e
+          pip install gdown >/dev/null
+          mkdir -p /tmp/dl /tmp/out
+          gdown --fuzzy "https://drive.google.com/file/d/1QCbWgbbZRY2zakBHM8Q616Gp2van4ZZe/view" -O /tmp/dl/ 2>&1 | tail -3
+          ls -la /tmp/dl
+          f=$(ls /tmp/dl/* | head -1); file "$f"
+          mkdir -p /tmp/x; (cd /tmp/x && (unzip -qo "$f" || 7z x -y "$f" >/dev/null)) 2>&1 | tail -2
+          find /tmp/x -type f | sed 's#/tmp/x/##' | sort > /tmp/out/liste.txt; wc -l < /tmp/out/liste.txt
+          find /tmp/x -type f -printf '%s %P\n' | sort -k2 > /tmp/out/tailles.txt
+          find /tmp/x -name "info.toml" -exec cat {} \; > /tmp/out/info.txt
+          find /tmp/x -name "plugin.nro" -exec cp {} /tmp/out/plugin_origine.nro \;
+          find /tmp/x -name "config_param.toml" -exec cp {} /tmp/out/ \;
+          find /tmp/x -path "*model/body*" -name "*.numatb" | head -20 > /tmp/out/numatb.txt
+          d=$(dirname "$(find /tmp/x -name info.toml | head -1)"); mkdir -p /tmp/out/modele; cp -r "$d/fighter/dolly/model" /tmp/out/modele/ 2>/dev/null; ls /tmp/out/modele/model/body 2>/dev/null
+          cp "$f" /tmp/out/archive_origine.bin
+          du -sh /tmp/out
+      - name: Chiffrer et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_soldrive && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "soldrive" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_soldrive
