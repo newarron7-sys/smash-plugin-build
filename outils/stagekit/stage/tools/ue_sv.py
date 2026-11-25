@@ -114,7 +114,43 @@ X_GAUCHE = float(os.environ.get('UE_X_GAUCHE', '-392.45'))
 TOIT = None
 ZONE_TOIT = None                  # v11 : (x0, x1, y0, y1, z0, z1) zone couverte par le toit (ombre peinte)
 X_BLEU, X_BLEU1, Y_BLEU = -140.0, -110.87, 70.49
-OMBRE_TOIT = float(os.environ.get('UE_OMBRE_TOIT', '0.45'))
+OMBRE_TOIT = float(os.environ.get('UE_OMBRE_TOIT', '0.0'))   # v12 : ombre portée par le texel sombre (uv1), plus de multiplicateur
+
+
+UV_SOMBRE = None
+
+
+def zone_toit(P):
+    """P : (N, 3) coordonnées Brawl -> masque des sommets sous le toit"""
+    if ZONE_TOIT is None:
+        return np.zeros(len(P), dtype=bool)
+    x0, x1, y0, y1, z0, z1 = ZONE_TOIT
+    return (P[:, 0] >= x0 - 0.01) & (P[:, 0] <= x1 + 0.01) & (P[:, 1] >= y0) & (P[:, 1] <= y1 + 0.01) & (P[:, 2] >= z0 - 0.01) & (P[:, 2] <= z1 + 0.01)
+
+
+def uv_sombre():
+    """v12 : texel uni et sombre de la carte d'ombres (ombre pleine sous le toit, au lieu de l'éclairage cuit d'origine
+    qui laissait des zones claires) : bloc uniforme proche du centile UE_OMBRE_PCT des texels utilisés par le décor"""
+    global UV_SOMBRE
+    if UV_SOMBRE is None:
+        bk_ = np.asarray(TEX['BakeMap'].convert('RGB')).astype(np.float32)
+        h_, w_ = bk_.shape[:2]
+        lum_ = bk_.mean(2)
+        U_ = np.concatenate([o['uv1'].reshape(-1, 2) for _, o in garde if o.get('uv1') is not None])
+        rr_ = np.clip((U_[:, 1] % 1.0) * h_, 0, h_ - 1).astype(int)
+        cc_ = np.clip((U_[:, 0] % 1.0) * w_, 0, w_ - 1).astype(int)
+        cible_ = float(np.percentile(lum_[rr_, cc_], float(os.environ.get('UE_OMBRE_PCT', '15'))))
+        best_, buv_ = 1e9, (0.5, 0.5)
+        pas_ = max(1, min(h_, w_) // 256)
+        for y_ in range(3, h_ - 3, pas_):
+            for x_ in range(3, w_ - 3, pas_):
+                blk_ = lum_[y_ - 3:y_ + 4, x_ - 3:x_ + 4]
+                sc_ = abs(float(blk_.mean()) - cible_) + float(blk_.std()) * 2
+                if sc_ < best_:
+                    best_, buv_ = sc_, ((x_ + 0.5) / w_, (y_ + 0.5) / h_)
+        UV_SOMBRE = buv_
+        print('ombre pleine sous le toit : texel %s (luminance visée %.1f, écart %.2f)' % (tuple(round(v, 4) for v in buv_), cible_, best_))
+    return UV_SOMBRE
 
 
 def fac_toit(P):
@@ -523,6 +559,11 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     first[inv.ravel()[::-1]] = np.arange(len(inv.ravel()))[::-1]
     pos, nrm, uv, uv1 = pos[first], nrm[first], uv[first], uv1[first]
     ftoit = fac_toit(pos)
+    mtoit = zone_toit(pos)
+    if cuit and mtoit.any() and os.environ.get('UE_OMBRE_PLEINE', '1') == '1':
+        uv1 = uv1.copy()
+        uv1[mtoit] = uv_sombre()
+        print('  ombre pleine : %d sommets sous le toit' % int(mtoit.sum()))
     pos[:, 1] -= Y0
     pos *= ECH
     nrm = nrm / np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-6)
@@ -633,7 +674,11 @@ if os.environ.get('UE_SCENE'):
             el = {'p': np.round(p.reshape(-1), 4).tolist(), 'uv': np.round(u.reshape(-1), 5).tolist(), 't': noms[t], 'a': bool(alpha(t))}
             if GAB_CUIT is not None and o.get('uv1') is not None and 'BakeMap' in o.get('texs', []):
                 el['b'] = 'bake'
-                el['u1'] = np.round(o['uv1'][:, [0, 2, 1]].reshape(-1), 5).tolist()
+                u1_ = o['uv1'][:, [0, 2, 1]].reshape(-1, 2).copy()
+                mt_ = zone_toit(o['pos'][:, [0, 2, 1]].reshape(-1, 3).astype(np.float64))
+                if mt_.any() and os.environ.get('UE_OMBRE_PLEINE', '1') == '1':
+                    u1_[mt_] = uv_sombre()
+                el['u1'] = np.round(u1_.reshape(-1), 5).tolist()
                 ft_ = fac_toit(o['pos'][:, [0, 2, 1]].reshape(-1, 3).astype(np.float64))
                 if (ft_ < 1).any():
                     el['c'] = np.round(np.repeat(ft_[:, None], 3, axis=1).reshape(-1), 3).tolist()
