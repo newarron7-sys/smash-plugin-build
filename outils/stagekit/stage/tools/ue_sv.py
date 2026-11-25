@@ -164,6 +164,7 @@ if COUPE:
     # v8 : les murs de devant sont arasés à la hauteur du sol (au lieu d'être retirés) : leur face reste jusqu'au sol et
     # bouche le trou noir qui apparaissait au bord du sol (demande du joueur)
     retires = 0
+    EMPRISE = []
     for _, o in garde:
         if o['tex'] not in ('Blue', 'Grid'):
             continue
@@ -171,7 +172,7 @@ if COUPE:
         neufs = {k: [] for k in cles}
         for i in range(len(o['pos'])):
             morceaux = [[o[k][i].astype(np.float64) for k in cles]]
-            for xc in (-140.0, 111.85, 159.06, 180.64, 182.61, X_DROITE):
+            for xc in (-140.0, 111.85, 159.06, 180.64, 182.61, 216.8, 218.89, X_DROITE):
                 morceaux = [q for m_ in morceaux for q in _coupe_x(m_, xc)]
             for m_ in morceaux:
                 P = m_[0]
@@ -180,6 +181,7 @@ if COUPE:
                 if dedans and P[:, 2].min() >= 8.0 and (P[:, 1] - _sol_b(P[:, 0])).max() > 1.0:
                     retires += 1
                     garde_m = _coupe_sol(m_)
+                    EMPRISE.append((P[:, 0].min(), P[:, 0].max(), P[:, 2].min(), P[:, 2].max()))
                 else:
                     garde_m = [m_]
                 for g_ in garde_m:
@@ -217,6 +219,25 @@ if COUPE and os.environ.get('UE_MUR_BAS', '1') == '1':
         og['nrm'] = np.concatenate([og['nrm'], nrm])
         if og.get('uv1') is not None:
             og['uv1'] = np.concatenate([og['uv1'], np.tile(u1, (2, 3, 1))])
+    # v9 : dessus des murs arasés (le creux entre le bord du sol et le mur arasé laissait voir un trou) : bandes
+    # horizontales juste sous le sol (y - 0,3, cachées là où le sol existe), sur l'emprise des morceaux retirés
+    for lo_, hi_ in ZONES_COUPE:
+        em = [e for e in EMPRISE if lo_ <= (e[0] + e[1]) / 2 <= hi_]
+        if not em:
+            continue
+        xa_, xb_ = max(lo_, min(e[0] for e in em)), min(hi_, max(e[1] for e in em))
+        za_, zb_ = min(e[2] for e in em), max(e[3] for e in em)
+        xs_ = sorted(set([xa_, xb_] + [p_[0] for p_ in SOL_B if xa_ < p_[0] < xb_]))
+        for x0_, x1_ in zip(xs_, xs_[1:]):
+            y0_, y1_ = float(_sol_b(x0_)) - 0.3, float(_sol_b(x1_)) - 0.3
+            pos = np.array([[(x0_, y0_, za_), (x1_, y1_, za_), (x1_, y1_, zb_)], [(x0_, y0_, za_), (x1_, y1_, zb_), (x0_, y0_, zb_)]])
+            uv = np.array([[(p_[0] * dens, p_[2] * dens) for p_ in t] for t in pos])
+            og['pos'] = np.concatenate([og['pos'], pos])
+            og['uv'] = np.concatenate([og['uv'], uv])
+            og['nrm'] = np.concatenate([og['nrm'], np.tile(np.array([0.0, 1.0, 0.0]), (2, 3, 1))])
+            if og.get('uv1') is not None:
+                og['uv1'] = np.concatenate([og['uv1'], np.tile(u1, (2, 3, 1))])
+        print('dessus des murs arasés : x %.1f..%.1f z %.1f..%.1f' % (xa_, xb_, za_, zb_))
     print('mur sous la dalle de gauche : x %.1f..%.1f, z %.1f, y %.1f..%.1f (densité uv %.4f)' % (XA, XB, zf, YBAS, yh, dens))
 
 def surface(x, z=0.0):
