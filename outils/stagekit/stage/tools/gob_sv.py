@@ -424,37 +424,146 @@ tmp = os.path.join(OUT, '_lvd.yml')
 subprocess.run(['yamlvd', LVD, tmp], check=True, capture_output=True)
 d = yaml.safe_load(open(tmp))
 bz = d['blast_zone'][0]
-X, XM, YB = MUR * ECH, (MUR + 10) * ECH, -30.0
-YH = min(170.0, bz['top'] - 10.0)
-pts = [(XM, YB), (-XM, YB), (-XM, YH), (-X, YH), (-X, 0.0), (X, 0.0), (X, YH), (XM, YH), (XM, YB)]
-sol = next(c for c in d['collisions'] if c['entry']['name'] == 'COL_00_Floor01')
-sol['vertices'] = [{'x': float(x), 'y': float(y)} for x, y in pts]
-nrm = []
-for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
-    dx, dy = x1 - x0, y1 - y0
-    n = (dx * dx + dy * dy) ** 0.5
-    nrm.append({'x': float(-dy / n), 'y': float(dx / n)})
-sol['normals'] = nrm
-sol['cliffs'] = []
-sol['materials'] = [sol['materials'][0]] * len(nrm)
-for c in d['collisions']:
-    if c is sol:
-        continue
-    # plate-forme mobile (relative à son os) : petit segment 45 sous elle -> toujours dans le bloc du sol
-    c['vertices'] = [{'x': -5.0, 'y': -45.0}, {'x': 5.0, 'y': -45.0}]
-    c['normals'] = [{'x': 0.0, 'y': 1.0}]
-    print('enterrée :', c['entry']['name'])
-for s in d['spawns']:
-    s['pos']['y'] = 0.1
-for r in d['respawns']:
-    r['pos']['x'] = max(-X + 15, min(X - 15, r['pos']['x']))
-cb = d['camera_boundary'][0]
-cb['left'], cb['right'] = min(cb['left'], -XM - 10), max(cb['right'], XM + 10)
-print('sol plat x ±%.0f, murs jusqu\'à y %.0f ; caméra %s ; zones de K.O. %s' % (X, YH, {k: cb[k] for k in ('left', 'right', 'top', 'bottom')},
-                                                                      {k: bz[k] for k in ('left', 'right', 'top', 'bottom')}))
-yaml.safe_dump(d, open(tmp, 'w'), sort_keys=False)
-subprocess.run(['yamlvd', tmp, os.path.join(P_, 'xvillage00.lvd')], check=True, capture_output=True)
-os.remove(tmp)
+if os.environ.get('GOB_COLL_BRAWL', '0') == '1':
+    # Halberd : collisions complètes de Brawl (chaînes de plans -> collisions lvd), plates-formes à la place des
+    # échelles, caméra / zones de K.O. / apparitions d'après l'étendue du terrain
+    import copy, struct as _st
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import brawl_coll as _bc  # noqa: E402
+    PTS, PLS = None, None
+    _out = []
+    _bc.blobs(open(PAC, 'rb').read(), 'pac', _out)
+    for _n, _d in _out:
+        _r = _bc.essai(_d)
+        if _r and (PLS is None or len(_r[1]) > len(PLS)):
+            PTS, PLS = _r[0], _r[1]
+    # chaînes : segments reliés par leurs extrémités (même point), sens de Brawl conservé
+    segs = [(PTS[a], PTS[b], ty, fl) for a, b, ty, fl in PLS]
+    def _k(p): return (round(p[0], 2), round(p[1], 2))
+    libres = list(range(len(segs)))
+    chaines = []
+    while libres:
+        i = libres.pop(0); ch = [i]
+        while True:
+            fin = _k(segs[ch[-1]][1]); nx = [j for j in libres if _k(segs[j][0]) == fin]
+            if not nx: break
+            ch.append(nx[0]); libres.remove(nx[0])
+        while True:
+            deb = _k(segs[ch[0]][0]); pv = [j for j in libres if _k(segs[j][1]) == deb]
+            if not pv: break
+            ch.insert(0, pv[0]); libres.remove(pv[0])
+        chaines.append(ch)
+    sol0 = next(c for c in d['collisions'] if c['entry']['name'] == 'COL_00_Floor01')
+    mat0 = copy.deepcopy(sol0['materials'][0])
+    for k_ in mat0['line_flags']:
+        mat0['line_flags'][k_] = False
+    cols = []
+    def _poly(c, pts):
+        c['vertices'] = [{'x': float(x * ECH), 'y': float((y - Y0) * ECH)} for x, y in pts]
+        nrm = []
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            dx, dy = x1 - x0, y1 - y0; n = (dx * dx + dy * dy) ** 0.5 or 1.0
+            nrm.append({'x': float(-dy / n), 'y': float(dx / n)})
+        c['normals'] = nrm; c['cliffs'] = []
+        c['materials'] = [copy.deepcopy(mat0) for _ in nrm]
+    for k_, ch in enumerate(chaines):
+        pts = [segs[ch[0]][0]] + [segs[j][1] for j in ch]
+        c = copy.deepcopy(sol0)
+        c['entry']['name'] = 'COL_00_Brawl%02d' % k_
+        c['entry']['subname'] = 'Brawl%02d' % k_
+        thr = all(segs[j][3] & 0x100 for j in ch)
+        c['col_flags']['drop_through'] = bool(thr)
+        _poly(c, pts); cols.append(c)
+    # échelles -> petites plates-formes traversables (tous les 30)
+    lad = np.concatenate([o['pos'].reshape(-1, 3) for _, o in garde if o['tex'] and 'ladder' in o['tex'].lower()]) if any(o['tex'] and 'ladder' in o['tex'].lower() for _, o in garde) else np.zeros((0, 3))
+    nplat = 0
+    if len(lad):
+        xs = np.sort(np.unique(np.round(lad[:, 0], 1)))
+        groupes, cur = [], [xs[0]]
+        for x in xs[1:]:
+            if x - cur[-1] > 8: groupes.append(cur); cur = [x]
+            else: cur.append(x)
+        groupes.append(cur)
+        for g in groupes:
+            x0_, x1_ = g[0], g[-1]
+            m_ = (lad[:, 0] >= x0_ - 0.1) & (lad[:, 0] <= x1_ + 0.1)
+            y0_, y1_ = float(lad[m_, 1].min()), float(lad[m_, 1].max())
+            if x1_ - x0_ < 4 or y1_ - y0_ < 25: continue
+            cx_ = (x0_ + x1_) / 2; hw = max(10.0, (x1_ - x0_) / 2 + 6)
+            y_ = y0_ + 30
+            while y_ < y1_ - 12:
+                c = copy.deepcopy(sol0)
+                c['entry']['name'] = 'COL_00_Ladder%02d' % nplat; c['entry']['subname'] = 'Ladder%02d' % nplat
+                c['col_flags']['drop_through'] = True
+                _poly(c, [(cx_ - hw, y_), (cx_ + hw, y_)]); cols.append(c); nplat += 1
+                y_ += 30
+            print('échelle x %.0f..%.0f y %.0f..%.0f' % (x0_, x1_, y0_, y1_))
+    autres = [c for c in d['collisions'] if c is not sol0]
+    for c in autres:
+        c['vertices'] = [{'x': -5.0, 'y': -2000.0}, {'x': 5.0, 'y': -2000.0}]
+        c['normals'] = [{'x': 0.0, 'y': 1.0}]
+    d['collisions'] = cols + autres
+    allp = np.array(PTS)
+    xmin, xmax, ymin, ymax = allp[:, 0].min(), allp[:, 0].max(), allp[:, 1].min(), allp[:, 1].max()
+    cb = d['camera_boundary'][0]
+    cb.update({'left': float((xmin - 40) * ECH), 'right': float((xmax + 40) * ECH), 'top': float((ymax - Y0 + 50) * ECH), 'bottom': float((ymin - Y0 - 40) * ECH)})
+    bz.update({'left': float((xmin - 150) * ECH), 'right': float((xmax + 150) * ECH), 'top': float((ymax - Y0 + 170) * ECH), 'bottom': float((ymin - Y0 - 160) * ECH)})
+    xs_sp = [float(v) for v in os.environ.get('GOB_SPAWNS', '-180,-30,60,250').split(',')]
+    for i_, s_ in enumerate(d['spawns']):
+        s_['pos']['x'] = xs_sp[i_ % len(xs_sp)] * ECH; s_['pos']['y'] = 0.1
+    for i_, r_ in enumerate(d['respawns']):
+        r_['pos']['x'] = xs_sp[i_ % len(xs_sp)] * ECH; r_['pos']['y'] = float(os.environ.get('GOB_RESPAWN_Y', '30')) * ECH
+    print('collisions de Brawl : %d chaînes (%d traversables), %d plates-formes d\'échelle ; caméra %s ; K.O. %s' % (
+        len(chaines), sum(1 for c in cols if c['col_flags']['drop_through']), nplat, {k: cb[k] for k in ('left', 'right', 'top', 'bottom')}, {k: bz[k] for k in ('left', 'right', 'top', 'bottom')}))
+    if os.environ.get('GOB_COLL_PNG'):
+        from PIL import Image as _Im, ImageDraw as _Dr
+        sc = 2.0; W_ = int((bz['right'] - bz['left']) * sc); H_ = int((bz['top'] - bz['bottom']) * sc)
+        im_ = _Im.new('RGB', (W_, H_), (20, 24, 40)); dr = _Dr.Draw(im_)
+        P = lambda x, y: ((x - bz['left']) * sc, (bz['top'] - y) * sc)
+        dr.rectangle([P(cb['left'], cb['top']), P(cb['right'], cb['bottom'])], outline=(90, 90, 140))
+        for c in cols:
+            v = [(q['x'], q['y']) for q in c['vertices']]
+            col = (80, 200, 255) if c['col_flags']['drop_through'] else (255, 255, 255)
+            if 'Ladder' in c['entry']['name']: col = (255, 200, 60)
+            dr.line([P(*q) for q in v], fill=col, width=3)
+        for s_ in d['spawns']:
+            x_, y_ = P(s_['pos']['x'], s_['pos']['y']); dr.ellipse([x_ - 5, y_ - 10, x_ + 5, y_], fill=(80, 255, 80))
+        im_.save(os.environ['GOB_COLL_PNG'])
+    yaml.safe_dump(d, open(tmp, 'w'), sort_keys=False)
+    subprocess.run(['yamlvd', tmp, os.path.join(P_, 'xvillage00.lvd')], check=True, capture_output=True)
+    os.remove(tmp)
+if os.environ.get('GOB_COLL_BRAWL', '0') != '1':
+    X, XM, YB = MUR * ECH, (MUR + 10) * ECH, -30.0
+    YH = min(170.0, bz['top'] - 10.0)
+    pts = [(XM, YB), (-XM, YB), (-XM, YH), (-X, YH), (-X, 0.0), (X, 0.0), (X, YH), (XM, YH), (XM, YB)]
+    sol = next(c for c in d['collisions'] if c['entry']['name'] == 'COL_00_Floor01')
+    sol['vertices'] = [{'x': float(x), 'y': float(y)} for x, y in pts]
+    nrm = []
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        dx, dy = x1 - x0, y1 - y0
+        n = (dx * dx + dy * dy) ** 0.5
+        nrm.append({'x': float(-dy / n), 'y': float(dx / n)})
+    sol['normals'] = nrm
+    sol['cliffs'] = []
+    sol['materials'] = [sol['materials'][0]] * len(nrm)
+    for c in d['collisions']:
+        if c is sol:
+            continue
+        # plate-forme mobile (relative à son os) : petit segment 45 sous elle -> toujours dans le bloc du sol
+        c['vertices'] = [{'x': -5.0, 'y': -45.0}, {'x': 5.0, 'y': -45.0}]
+        c['normals'] = [{'x': 0.0, 'y': 1.0}]
+        print('enterrée :', c['entry']['name'])
+    for s in d['spawns']:
+        s['pos']['y'] = 0.1
+    for r in d['respawns']:
+        r['pos']['x'] = max(-X + 15, min(X - 15, r['pos']['x']))
+    cb = d['camera_boundary'][0]
+    cb['left'], cb['right'] = min(cb['left'], -XM - 10), max(cb['right'], XM + 10)
+    print('sol plat x ±%.0f, murs jusqu\'à y %.0f ; caméra %s ; zones de K.O. %s' % (X, YH, {k: cb[k] for k in ('left', 'right', 'top', 'bottom')},
+                                                                          {k: bz[k] for k in ('left', 'right', 'top', 'bottom')}))
+    yaml.safe_dump(d, open(tmp, 'w'), sort_keys=False)
+    subprocess.run(['yamlvd', tmp, os.path.join(P_, 'xvillage00.lvd')], check=True, capture_output=True)
+    os.remove(tmp)
 
 import json
 # config.json (Stage Alts) : chaque fichier du jeu de stage/animal_village/normal non fourni est partagé vers la variante

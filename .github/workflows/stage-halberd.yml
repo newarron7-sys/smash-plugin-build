@@ -1,0 +1,150 @@
+name: Stage - Halberd Interior sur Smashville (variante Stage Alts)
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/stage-halberd.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: stage-halberd
+  cancel-in-progress: true
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+    env:
+      MID: '718286'
+      BRAWL_CHR0: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Outils
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar fonts-dejavu-core >/dev/null 2>&1 || true
+          pip install ssbh_data_py numpy pillow scipy pyyaml >/dev/null
+          mkdir -p /tmp/out/travail
+      - name: Page du mod (description)
+        run: |
+          set +e
+          curl -sSL -A "Mozilla/5.0" "https://gamebanana.com/apiv11/Mod/$MID/ProfilePage" -o /tmp/out/page.json
+          python3 - <<'PY'
+          import json, re, html
+          p = json.load(open('/tmp/out/page.json'))
+          t = re.sub(r'<[^>]+>', ' ', html.unescape(p.get('_sText', '') or ''))
+          open('/tmp/out/page.txt', 'w').write('%s\n%s\n%s\n\n%s\n' % (p.get('_sName'), p.get('_aGame', {}).get('_sName'),
+              p.get('_aCategory', {}).get('_sName'), re.sub(r'\s+', ' ', t)))
+          print('page ok')
+          PY
+      - name: Telechargement
+        run: |
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod $MID /tmp/gb > /tmp/out/fichiers.txt 2>&1; wc -l /tmp/out/fichiers.txt
+          cp "$(find /tmp/gb/$MID -iname "STGHALBERD*.pac" | head -1)" /tmp/out/travail/hal.pac
+          find /tmp/gb/$MID -iname "*.txt" -print0 | while IFS= read -r -d '' f; do echo "== $f"; head -60 "$f"; done > /tmp/out/lisezmoi.txt 2>&1
+          ls /tmp/out/travail | wc -l
+      - name: Smashville - refs (387162, UI 409684), HDR (lvd, variantes 0.49.11 / 0.50.10), chemins du jeu
+        run: |
+          set +e
+          mkdir -p /tmp/out/refs
+          curl -sSL -o /tmp/hashes.txt https://raw.githubusercontent.com/ultimate-research/archive-hashes/master/Hashes_FullPath
+          grep "^stage/animal_village/normal/" /tmp/hashes.txt > /tmp/liste_sv.txt; wc -l < /tmp/liste_sv.txt
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 387162 /tmp/ref > /dev/null 2>&1
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 409684 /tmp/ref > /dev/null 2>&1
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 382440 /tmp/ref > /dev/null 2>&1
+          find /tmp/ref/382440 -type d -path "*stage/animal_village" | head -1 > /tmp/nuit.txt; echo "jour : $(wc -l < /tmp/nuit.txt)"
+          find /tmp/ref/387162 -type d -path "*stage/animal_village" | head -1 > /tmp/ref_sv.txt; cat /tmp/ref_sv.txt | wc -l
+          mkdir -p /tmp/refui; for n in 1 2 3 4; do find /tmp/ref/409684 -ipath "*ui/replace*/stage/stage_$n/stage_${n}_animal_village.bntx" -exec cp {} /tmp/refui/ \; ; done
+          ls /tmp/refui | sed -E 's/stage_([0-9])_.*/\1/' | sort -u | paste -sd, > /tmp/ui_fournis.txt; echo "UI fournies : $(cat /tmp/ui_fournis.txt)"
+          cargo install smash-lvd --features cli --root /tmp/lvdtool >/dev/null 2>&1
+          mkdir -p /tmp/hdr && cd /tmp/hdr
+          curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
+          unzip -qo sp.zip "*hdr-stages/stage/animal_village/normal/param/*" -d x 2>/dev/null
+          for u in https://github.com/HDR-Development/hdr-releases/releases/download/v0.49.11/switch-package.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.49.11/switch-package.zip; do
+            curl -sSL -f -o old.zip "$u" && break
+          done
+          for z in old.zip sp.zip; do
+            echo "== $z : $(unzip -l $z 2>/dev/null | awk '{print $4}' | grep -oE 'hdr-stages/stage/(animal_village|battlefield)/normal_s[0-9]+' | sort -u | tr '\n' ' ')"
+          done | tee /tmp/out/refs/variantes_hdr.txt
+          # forme libre : après la dernière variante de Smashville de la 0.49.11 (version du joueur : Champ de bataille = normal + L)
+          src=old.zip; unzip -l old.zip > /dev/null 2>&1 || src=sp.zip
+          n=$(unzip -l $src | awk '{print $4}' | grep -oE 'hdr-stages/stage/animal_village/normal_s[0-9]+' | sed 's/.*_s//' | sort -n | tail -1)
+          printf 'normal_s%02d\n' $(( 10#${n:-0} + 4 )) > /tmp/forme.txt; echo "forme : $(cat /tmp/forme.txt) (d'apres $src)" | tee -a /tmp/out/refs/variantes_hdr.txt
+      - name: Materiau modele (Yoshi's Story 392643, bg2_set)
+        run: |
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 392643 /tmp/ys > /dev/null 2>&1
+          find /tmp/ys -path "*normal/model/bg2_set/model.numatb" | head -1 > /tmp/matl_modele.txt; wc -l < /tmp/matl_modele.txt
+      - name: Cache ultimate_tex_cli
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/ultimate_tex_cli
+          key: ultimate-tex-cli-v1
+      - name: ultimate_tex_cli
+        run: test -x ~/.cargo/bin/ultimate_tex_cli || cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli 2>&1 | tail -2
+      - name: Cache textures HD (x4)
+        uses: actions/cache@v4
+        with:
+          path: /tmp/hd
+          key: hal-hd-x4-v1
+      - name: Textures HD x4 (Real-ESRGAN x4plus)
+        env:
+          PP_Y0: '0.0'
+          PP_ECHELLE: '1.0'
+        run: |
+          set -o pipefail
+          if [ ! -f /tmp/hd/fini ]; then
+            pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision >/dev/null
+            pip install spandrel >/dev/null
+            curl -sSL -o /tmp/esr.pth https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
+            mkdir -p /tmp/hd
+            python3 -u outils/stagekit/stage/tools/pp_scene.py textures /tmp/out/travail/hal.pac /tmp/hdsrc > /dev/null 2>&1
+            for f in /tmp/hdsrc/*.png; do b=$(basename "$f" .png); python3 -u outils/stagekit/stage/tools/upscale_tex.py /tmp/esr.pth "$f" "/tmp/hd/${b}_x4.png" > /dev/null; done
+            touch /tmp/hd/fini
+          fi
+          ls /tmp/hd | wc -l
+      - name: Construction (Halberd Interior en variante de Smashville)
+        run: |
+          set -o pipefail
+          export PATH=$PATH:/tmp/lvdtool/bin:$HOME/.cargo/bin
+          LVD=$(find /tmp/hdr/x -path "*hdr-stages/stage/animal_village/normal/param/xvillage00.lvd" | head -1)
+          M="/tmp/out/mod/(Stage) Halberd Interior (Smashville)"
+          mkdir -p "$M"
+          GOB_PFX=hal_ GOB_OPAQUES= GOB_OPAQUES_AUTO=1 GOB_REPEINT=0 GOB_SOL=0 GOB_SOL_OMBRE=0 GOB_SANS_OBJ=none GOB_Y0=0 GOB_COLL_BRAWL=1 GOB_COLL_PNG=/tmp/out/collisions.png GOB_RENDER="$(cat /tmp/nuit.txt)" GOB_FORME=$(cat /tmp/forme.txt) GOB_UI_FOURNIS=$(cat /tmp/ui_fournis.txt) GOB_HD=/tmp/hd GOB_SCENE=/tmp/rendu python3 -u outils/stagekit/stage/tools/gob_sv.py /tmp/out/travail/hal.pac "$(cat /tmp/ref_sv.txt)" /tmp/liste_sv.txt "$(cat /tmp/matl_modele.txt)" "$LVD" "$M" > /tmp/out/construction.txt 2>&1
+          tail -3 /tmp/out/construction.txt | cut -c1-60
+      - name: Image de l'ecran des terrains
+        env:
+          PP_Y0: '0.0'
+          PP_ECHELLE: '1.0'
+          UI_NOM: animal_village
+          UI_CAM: '125,140,560,125,140,0,40,40'
+          UI_FOND: '1a1f33'
+        run: |
+          set +e
+          export PATH=$PATH:$HOME/.cargo/bin
+          export UI_SUFFIXE=_$(sed 's/normal_//' /tmp/forme.txt)
+          npm i --prefix /tmp/rn three@0.160.0 playwright@1.47.2 >/dev/null 2>&1
+          (cd /tmp/rn && npx playwright install --with-deps chromium >/dev/null 2>&1)
+          R=/tmp/rendu; mkdir -p $R; cp outils/stagekit/stage/tools/rendu/* $R/; cp /tmp/rn/node_modules/three/build/three.module.js $R/
+          (cd $R && nohup python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 3
+          M="/tmp/out/mod/(Stage) Halberd Interior (Smashville)"
+          NODE_PATH=/tmp/rn/node_modules python3 -u outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu > /tmp/out/ui.txt 2>&1
+          grep -c "greffé" /tmp/out/ui.txt
+          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=1a1f33 node rendu.js /tmp/out/apercu_recule.png 1280 720 125 140 620 125 140 0 40 > /dev/null 2>&1)
+          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=1a1f33 node rendu.js /tmp/out/apercu_jeu.png 1280 720 -100 40 260 -100 30 0 40 > /dev/null 2>&1)
+          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=1a1f33 node rendu.js /tmp/out/apercu_bas.png 1280 720 320 120 260 320 110 0 40 > /dev/null 2>&1)
+          (cd /tmp/out/mod && find . -type f | sort > /tmp/out/mod_liste.txt); wc -l < /tmp/out/mod_liste.txt
+          true
+      - name: Chiffrer (cle de la session) et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_halberd && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "halberd" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_halberd
