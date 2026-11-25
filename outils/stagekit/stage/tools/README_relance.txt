@@ -11,3 +11,8 @@ d'origine. ATTENTION : HDR du joueur = 0.49.11 (Champ de bataille normal_s01 seu
 les fichiers HDR utilisés pour le Champ de bataille venaient de la 0.50.10. Unreal sur Smashville = normal_s01 (L) :
 ue_sv.py + stage-uesv.yml (sortie_uesv), méthode de Sleepless Lamp (0 entrée pour 62 ensembles), forme libre calculée
 d'après la 0.49.11.
+Unreal Smashville v6 (25/11) : sol / murs à carte d'ombres (BakeMap Brawl, 2e UV) dans stc_mainstage_set, matériau
+ashiba_jimenkusa04 (Texture0 + Texture9, bake1) de 387162 ; v3 chargée ; textures d'origine (pas d'éclaircissement),
+BakeMap x0,9, quadrillage refait 2048 ; jour permanent = render d'Islandville 382440.
+Gathering of Old Blood v1 : gob_sv.py + stage-gobsv.yml (sortie_gobsv), Smashville normal_s02 (R), méthode de Lamp ;
+matériaux additifs Brawl (BP 0x41 src SRCALPHA dst DSTALPHA) -> Bottom One/One prémultiplié, passe _sort.
