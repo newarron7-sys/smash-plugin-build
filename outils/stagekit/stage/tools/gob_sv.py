@@ -113,6 +113,40 @@ def prolongement():
 if os.environ.get('GOB_PROLONGE', '0') == '1':
     garde.append(('prolongement', prolongement()))
 
+# v2 (demande du joueur) : trous dans le sol (le sol de Brawl est translucide, avec le décor en miroir dessous ; là où
+# le miroir ne couvre pas, on voyait le vide) et bord du sol visible devant :
+# - sol translucide (152F3974) prolongé devant et sur les côtés jusqu'à ±3000 (UV prolongés par un ajustement affine) ;
+# - plan opaque sombre sous le décor en miroir (fond du reflet), qui bouche tous les trous
+if os.environ.get('GOB_SOL', '1') == '1':
+    from PIL import Image as _I
+    sols = [o for _, o in garde if o['tex'] == '152F3974']
+    Ps = np.concatenate([o['pos'].reshape(-1, 3) for o in sols])
+    Us = np.concatenate([o['uv'].reshape(-1, 2) for o in sols])
+    co = np.linalg.lstsq(np.c_[Ps[:, 0], Ps[:, 2], np.ones(len(Ps))], Us, rcond=None)[0]
+    ys = float(np.median(Ps[:, 1]))
+    x0s, x1s, z0s, z1s = Ps[:, 0].min(), Ps[:, 0].max(), Ps[:, 2].min(), Ps[:, 2].max()
+    G = 3000.0
+
+    def quad(xa, xb, za, zb, y):
+        pos = np.array([[[xa, y, za], [xb, y, zb], [xb, y, za]], [[xa, y, za], [xa, y, zb], [xb, y, zb]]], dtype=np.float64)
+        uv = np.c_[pos.reshape(-1, 3)[:, 0], pos.reshape(-1, 3)[:, 2], np.ones(6)] @ co
+        return pos, uv.reshape(2, 3, 2)
+    morceaux = [quad(-G, G, z1s, G, ys), quad(-G, x0s, z0s, z1s, ys), quad(x1s, G, z0s, z1s, ys), quad(-G, G, -G, z0s, ys)]
+    pos = np.concatenate([m_[0] for m_ in morceaux])
+    uv = np.concatenate([m_[1] for m_ in morceaux])
+    garde.append(('sol_prolonge', {'name': 'sol_prolonge', 'tex': '152F3974', 'pos': pos, 'uv': uv,
+                                   'nrm': np.tile(np.array([0.0, 1.0, 0.0]), pos.shape[:2] + (1,)), 'add': False}))
+    # fond du reflet : sous le point le plus bas du décor dans la salle
+    ymin = min(float(o['pos'][(np.abs(o['pos'].mean(1)[:, 0]) < 700) & (np.abs(o['pos'].mean(1)[:, 2]) < 700)][:, :, 1].min())
+               for _, o in garde if ((np.abs(o['pos'].mean(1)[:, 0]) < 700) & (np.abs(o['pos'].mean(1)[:, 2]) < 700)).any())
+    yf = ymin - 5.0
+    coul = [int(v) for v in os.environ.get('GOB_FOND_SOL', '22,10,14').split(',')]
+    TEX['gob_fond_sol'] = _I.new('RGBA', (16, 16), tuple(coul) + (255,))
+    pf, _u = quad(-G, G, -G, G, yf)
+    garde.append(('fond_sol', {'name': 'fond_sol', 'tex': 'gob_fond_sol', 'pos': pf, 'uv': np.zeros((2, 3, 2)),
+                               'nrm': np.tile(np.array([0.0, 1.0, 0.0]), pf.shape[:2] + (1,)), 'add': False}))
+    print('sol prolongé à ±%.0f (y %.2f, sol d\'origine x %.0f..%.0f z %.0f..%.0f) ; fond du reflet y %.1f' % (G, ys, x0s, x1s, z0s, z1s, yf))
+
 
 def attr(name, data):
     a = A.AttributeData(name)

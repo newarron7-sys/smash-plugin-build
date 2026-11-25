@@ -104,6 +104,65 @@ for _, mn, ol in models:
         garde.append((mn, o))
 
 
+# v7 (demande du joueur) : murs de devant retirés là où ils cachent les persos (partie gauche x < -140, partie basse à
+# droite 111,85 < x < 216 : faces devant le plan de jeu (z > 8) qui dépassent du sol) ; murs invisibles aux deux bouts
+# (x -213,48 et 216) au lieu des rebords ; sol de droite arrêté à 216
+COUPE = os.environ.get('UE_COUPE', '1') == '1'
+X_DROITE = float(os.environ.get('UE_X_DROITE', '216.0'))
+ZONES_COUPE = [(-1e9, -140.0), (111.85, X_DROITE)]
+SOL_B = [(-213.48, 11.44), (-110.73, 11.44), (-87.29, 0.0), (111.85, 0.0), (159.06, -23.60), (180.64, -23.77),
+         (182.61, -23.01), (216.80, -23.01), (218.89, -23.82), (266.65, -23.82)]
+
+
+def _sol_b(x):
+    return np.interp(x, [p_[0] for p_ in SOL_B], [p_[1] for p_ in SOL_B])
+
+
+def _coupe_x(att, xc):
+    """att : liste de tableaux (3, k) d'un triangle (pos en premier) -> liste de triangles coupés par x = xc"""
+    d = att[0][:, 0] - xc
+    if (d >= -1e-6).all() or (d <= 1e-6).all():
+        return [att]
+    out = []
+    for sgn in (1, -1):
+        poly = []
+        for i in range(3):
+            j = (i + 1) % 3
+            da, db = d[i] * sgn, d[j] * sgn
+            if da >= 0:
+                poly.append([a_[i] for a_ in att])
+            if (da >= 0) != (db >= 0):
+                t = da / (da - db)
+                poly.append([a_[i] + (a_[j] - a_[i]) * t for a_ in att])
+        for k in range(1, len(poly) - 1):
+            out.append([np.array([poly[0][m], poly[k][m], poly[k + 1][m]]) for m in range(len(att))])
+    return out
+
+
+if COUPE:
+    retires = 0
+    for _, o in garde:
+        if o['tex'] not in ('Blue', 'Grid'):
+            continue
+        cles = [k for k in ('pos', 'uv', 'nrm', 'uv1') if o.get(k) is not None]
+        neufs = {k: [] for k in cles}
+        for i in range(len(o['pos'])):
+            morceaux = [[o[k][i].astype(np.float64) for k in cles]]
+            for xc in (-140.0, 111.85, 159.06, X_DROITE):
+                morceaux = [q for m_ in morceaux for q in _coupe_x(m_, xc)]
+            for m_ in morceaux:
+                P = m_[0]
+                cx = P[:, 0].mean()
+                dedans = any(lo <= cx <= hi for lo, hi in ZONES_COUPE)
+                if dedans and P[:, 2].min() >= 8.0 and (P[:, 1] - _sol_b(P[:, 0])).max() > 1.0:
+                    retires += 1
+                    continue
+                for k, v in zip(cles, m_):
+                    neufs[k].append(v)
+        for k in cles:
+            o[k] = np.array(neufs[k])
+    print('murs de devant retirés :', retires, 'morceaux de triangles')
+
 def surface(x, z=0.0):
     """hauteur la plus haute du décor sous y +15 à la verticale de (x, z) (Brawl)"""
     best = None
@@ -374,10 +433,17 @@ tmp = os.path.join(OUT, '_lvd.yml')
 subprocess.run(['yamlvd', LVD, tmp], check=True, capture_output=True)
 d = yaml.safe_load(open(tmp))
 YB = -60.0
+YH = 200.0
 haut = [(x * ECH, y * ECH) for x, y in SOL_HAUT]
+if COUPE:
+    haut = [(x, y) for x, y in haut if x < X_DROITE * ECH] + [(X_DROITE * ECH, float(_sol_b(X_DROITE)) * ECH)]
 (x0, y0), (x1, y1) = haut[0], haut[-1]
-haut = [haut[0], (x0 + 5, y0)] + haut[1:-1] + [(x1 - 5, y1), haut[-1]]
-pts = [(x1, YB), (x0, YB)] + haut + [(x1, YB)]
+if COUPE:
+    # murs invisibles aux deux bouts (sol + murs jusqu'à YH, comme Lamp), plus de rebords
+    pts = [(x1 + 10, YB), (x0 - 10, YB), (x0 - 10, YH), (x0, YH)] + haut + [(x1, YH), (x1 + 10, YH), (x1 + 10, YB)]
+else:
+    haut = [haut[0], (x0 + 5, y0)] + haut[1:-1] + [(x1 - 5, y1), haut[-1]]
+    pts = [(x1, YB), (x0, YB)] + haut + [(x1, YB)]
 sol = next(c for c in d['collisions'] if c['entry']['name'] == 'COL_00_Floor01')
 m_rien = copy.deepcopy(sol['materials'][0])
 for k in m_rien['line_flags']:
@@ -400,9 +466,9 @@ def poly(c, pts, mats):
 
 
 n_l = len(pts) - 1
-i_l = 2                         # segment (x0, y0) -> (x0 + 5, y0)
-i_r = n_l - 2                   # segment (x1 - 5, y1) -> (x1, y1)
-poly(sol, pts, [m_l if i == i_l else m_r if i == i_r else m_rien for i in range(n_l)])
+i_l = -1 if COUPE else 2                    # segment (x0, y0) -> (x0 + 5, y0)
+i_r = -1 if COUPE else n_l - 2              # segment (x1 - 5, y1) -> (x1, y1)
+poly(sol, pts, [m_l if i == i_l else m_r if i == i_r else copy.deepcopy(m_rien) for i in range(n_l)])
 bloc = copy.deepcopy(sol)
 bloc['entry']['name'] = 'COL_00_Block01'
 bloc['entry']['subname'] = 'Block01'
