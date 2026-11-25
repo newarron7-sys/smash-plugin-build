@@ -139,8 +139,8 @@ jobs:
           grep -c "greffé" /tmp/out/ui.txt
           (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_recule.png 1280 720 27 60 520 27 20 0 40 > /dev/null 2>&1)
           (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_jeu.png 1280 720 -40 45 230 -40 15 0 40 > /dev/null 2>&1)
-          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_gauche.png 1280 720 -230 45 210 -230 40 0 45 > /dev/null 2>&1)
-          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_toit.png 1280 720 -60 60 150 -150 55 0 45 > /dev/null 2>&1)
+          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_gauche.png 1280 720 -620 70 300 -330 40 20 45 > /dev/null 2>&1)
+          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=7fb3e0 node rendu.js /tmp/out/apercu_toit.png 1280 720 -235 62 175 -138 55 45 40 > /dev/null 2>&1)
           (cd /tmp/out/mod && find . -type f | sort > /tmp/out/mod_liste.txt); wc -l < /tmp/out/mod_liste.txt
           true
       - name: Chiffrer (cle de la session) et publier

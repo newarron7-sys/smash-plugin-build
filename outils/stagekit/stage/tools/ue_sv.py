@@ -278,17 +278,45 @@ if COUPE and os.environ.get('UE_MUR_BAS', '1') == '1':
             print('pilier : haut y %.2f, z %.1f..%.1f -> bouché jusqu\'au toit (y %.1f)' % (ptop, pz0, pz1, YT0))
         else:
             print('pilier : non trouvé (x -140..%.1f)' % XT1)
-    # v11 : mur prolongé loin à gauche (on voyait le ciel à gauche du mur quand la caméra s'approche, demande du joueur) :
-    # grande face avant au plan de la dalle, du bas jusqu'à y 600
-    if os.environ.get('UE_MUR_LOIN', '1') == '1':
-        XL = XA - float(os.environ.get('UE_MUR_LOIN_L', '3000'))
-        pos, uv, nrm = rect((XL, YBAS, zf), (XA, YBAS, zf), (XA, 600.0, zf), (XL, 600.0, zf), (0, 0, 1), lambda p: (p[0] * dens, -p[1] * dens))
-        og['pos'] = np.concatenate([og['pos'], pos])
-        og['uv'] = np.concatenate([og['uv'], uv])
-        og['nrm'] = np.concatenate([og['nrm'], nrm])
-        if og.get('uv1') is not None:
-            og['uv1'] = np.concatenate([og['uv1'], np.tile(u1, (2, 3, 1))])
-        print('mur prolongé à gauche : x %.0f..%.1f, y %.0f..600, z %.1f' % (XL, XA, YBAS, zf))
+    # v12 : couloir prolongé loin à gauche (au lieu de la grande face plate de la v11, demande du joueur) : sol de la dalle,
+    # face avant + mur dessous, mur du fond, toit (dessus, dessous, face avant), de XL jusqu'au mur du bout gauche
+    if os.environ.get('UE_COULOIR', '1') == '1' and TOIT is not None:
+        XL = XA - float(os.environ.get('UE_COULOIR_L', '3000'))
+        YS_ = 11.44
+        lot = [rect((XL, YS_, ZT0), (XL, YS_, zf), (XA, YS_, zf), (XA, YS_, ZT0), (0, 1, 0), lambda p: (p[0] * dens, p[2] * dens)),
+               rect((XL, YBAS, zf), (XA, YBAS, zf), (XA, YS_, zf), (XL, YS_, zf), (0, 0, 1), lambda p: (p[0] * dens, -p[1] * dens)),
+               rect((XL, YS_, ZT0), (XA, YS_, ZT0), (XA, YT0, ZT0), (XL, YT0, ZT0), (0, 0, 1), lambda p: (p[0] * dens, -p[1] * dens)),
+               rect((XL, YT1, ZT0), (XA, YT1, ZT0), (XA, YT1, zf), (XL, YT1, zf), (0, 1, 0), lambda p: (p[0] * dens, p[2] * dens)),
+               rect((XL, YT0, ZT0), (XL, YT0, zf), (XA, YT0, zf), (XA, YT0, ZT0), (0, -1, 0), lambda p: (p[0] * dens, p[2] * dens)),
+               rect((XL, YT0, zf), (XA, YT0, zf), (XA, YT1, zf), (XL, YT1, zf), (0, 0, 1), lambda p: (p[0] * dens, -p[1] * dens))]
+        for pos, uv, nrm in lot:
+            og['pos'] = np.concatenate([og['pos'], pos])
+            og['uv'] = np.concatenate([og['uv'], uv])
+            og['nrm'] = np.concatenate([og['nrm'], nrm])
+            if og.get('uv1') is not None:
+                og['uv1'] = np.concatenate([og['uv1'], np.tile(u1, (2, 3, 1))])
+        ZONE_TOIT = (XL, ZONE_TOIT[1], ZONE_TOIT[2], ZONE_TOIT[3], ZONE_TOIT[4], ZONE_TOIT[5])
+        print('couloir prolongé à gauche : x %.0f..%.1f (sol y %.2f, toit %.1f..%.1f, z %.1f..%.1f)' % (XL, XA, YS_, YT0, YT1, ZT0, zf))
+    # v12 : relevé du bloc bleu et du pilier près du bout du toit (pour les coller)
+    if os.environ.get('UE_RELEVE', '1') == '1':
+        for nom_, tx_ in (('Blue', 'Blue'), ('Grid', 'Grid')):
+            V_ = np.concatenate([o['pos'].reshape(-1, 3) for _, o in garde if o['tex'] == tx_])
+            V_ = V_[(V_[:, 0] > -175) & (V_[:, 0] < -95) & (V_[:, 1] > -5)]
+            print('relevé', nom_, len(V_), 'sommets')
+            for y0_ in range(-5, 90, 10):
+                m_ = (V_[:, 1] >= y0_) & (V_[:, 1] < y0_ + 10)
+                if m_.any():
+                    W_ = V_[m_]
+                    print('   y %3d..%3d : x %.2f..%.2f  z %.2f..%.2f' % (y0_, y0_ + 10, W_[:, 0].min(), W_[:, 0].max(), W_[:, 2].min(), W_[:, 2].max()))
+            T_ = np.concatenate([o['pos'] for _, o in garde if o['tex'] == tx_])
+            n_ = np.cross(T_[:, 1] - T_[:, 0], T_[:, 2] - T_[:, 0])
+            n_ /= np.linalg.norm(n_, axis=1, keepdims=True) + 1e-9
+            c_ = T_.mean(1)
+            sel_ = (c_[:, 0] > -175) & (c_[:, 0] < -95) & (c_[:, 1] > -5)
+            for i_ in np.where(sel_)[0][:400]:
+                if abs(n_[i_, 0]) > 0.9 or abs(n_[i_, 2]) > 0.9 or abs(n_[i_, 1]) > 0.9:
+                    P_ = T_[i_]
+                    print('   face %s n(%.1f,%.1f,%.1f) x %.2f..%.2f y %.2f..%.2f z %.2f..%.2f' % (nom_, n_[i_, 0], n_[i_, 1], n_[i_, 2], P_[:, 0].min(), P_[:, 0].max(), P_[:, 1].min(), P_[:, 1].max(), P_[:, 2].min(), P_[:, 2].max()))
         print('toit y %.1f..%.1f x %.1f..%.1f z %.1f..%.1f + mur plein au bout gauche' % (YT0, YT1, XA, XT1, ZT0, ZT1))
     # v9 : dessus des murs arasés (le creux entre le bord du sol et le mur arasé laissait voir un trou) : bandes
     # horizontales juste sous le sol (y - 0,3, cachées là où le sol existe), sur l'emprise des morceaux retirés
