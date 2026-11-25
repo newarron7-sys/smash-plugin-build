@@ -21,7 +21,7 @@ jobs:
           set +e
           pip install gdown >/dev/null
           mkdir -p /tmp/dl /tmp/out
-          (cd /tmp/dl && gdown "1QCbWgbbZRY2zakBHM8Q616Gp2van4ZZe" 2>&1 | tail -5)
+          (cd /tmp/dl && gdown "1yPpG3U2FAE3bJ5aJ814__YpCKLGkqCxF" 2>&1 | tail -5)
           ls -la /tmp/dl
           f=$(ls /tmp/dl/* | head -1); file "$f"
           mkdir -p /tmp/x; (cd /tmp/x && (unzip -qo "$f" || 7z x -y "$f" >/dev/null)) 2>&1 | tail -2
@@ -32,7 +32,7 @@ jobs:
           find /tmp/x -name "config_param.toml" -exec cp {} /tmp/out/ \;
           find /tmp/x -path "*model/body*" -name "*.numatb" | head -20 > /tmp/out/numatb.txt
           d=$(dirname "$(find /tmp/x -name info.toml | head -1)"); mkdir -p /tmp/out/modele; cp -r "$d/fighter/dolly/model" /tmp/out/modele/ 2>/dev/null; ls /tmp/out/modele/model/body 2>/dev/null
-          cp "$f" /tmp/out/archive_origine.bin
+          true
           du -sh /tmp/out
       - name: Chiffrer et publier
         if: always()
