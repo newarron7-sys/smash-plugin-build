@@ -345,6 +345,10 @@ if CUIT:
                 break
         if GAB_CUIT is not None:
             break
+    # v11 : SFX_PBS_0000000000088280 ne reçoit pas l'ombre des persos ; son jumeau 0000000008088280 (mêmes attributs et
+    # paramètres d'après la base de shaders ssbh_wgpu) la reçoit -> on change seulement le nom du shader
+    if GAB_CUIT is not None and os.environ.get('UE_SHADER_OMBRE', '1') == '1' and GAB_CUIT.shader_label.startswith('SFX_PBS_0000000000088280'):
+        GAB_CUIT.shader_label = GAB_CUIT.shader_label.replace('SFX_PBS_0000000000088280', 'SFX_PBS_0000000008088280')
     print('matériau à texture d\'ombre :', DOS_GAB, GAB_CUIT.shader_label if GAB_CUIT else None, GAB_CUIT.material_label if GAB_CUIT else None, ATTR_CUIT)
 
 # regroupement par texture
