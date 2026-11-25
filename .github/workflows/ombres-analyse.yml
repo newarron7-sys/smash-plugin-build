@@ -1,0 +1,114 @@
+name: Ombres des persos - analyse des shaders (base ssbh_wgpu) et des mods de terrains
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/ombres-analyse.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Base de shaders (decompilee par ssbh_wgpu / smush_shader)
+        run: |
+          set -e
+          mkdir -p /tmp/out
+          git clone -q https://github.com/ScanMountGoat/Smush-Material-Research /tmp/smr
+          git -C /tmp/smr checkout -q 8fa02f7
+          git clone -q --depth 1 https://github.com/ScanMountGoat/ssbh_wgpu /tmp/w
+          cd /tmp/smr
+          sed -i 's/members = \["smush_materials", "smush_shader"\]/members = ["smush_materials", "smush_shader", "dump"]/' Cargo.toml
+          mkdir -p dump/src
+          printf '[package]\nname = "dump"\nversion = "0.1.0"\nedition = "2024"\n[dependencies]\nsmush_shader = { path = "../smush_shader" }\n' > dump/Cargo.toml
+          cat > dump/src/main.rs <<'RS'
+          use smush_shader::ShaderDatabase;
+          fn main() {
+              let b = std::fs::read(std::env::args().nth(1).unwrap()).unwrap();
+              let db = ShaderDatabase::from_bytes(&b).unwrap();
+              for (k, p) in &db.programs {
+                  let a: Vec<&str> = p.attributes.iter().map(|s| s.as_str()).collect();
+                  let q: Vec<&str> = p.parameters.iter().map(|s| s.as_str()).collect();
+                  println!("{}\t{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t{}", k, p.receives_shadow as u8, p.sh as u8, p.lighting as u8,
+                      p.discard as u8, p.premultiplied as u8, p.complexity, a.join(","), q.join(","));
+              }
+          }
+          RS
+          cargo run -q --release -p dump -- /tmp/w/ssbh_wgpu/src/resources/shaders.bin > /tmp/out/shaders_db.tsv
+          wc -l /tmp/out/shaders_db.tsv
+      - name: Materiaux des mods de terrains
+        run: |
+          set +e
+          pip install ssbh_data_py numpy >/dev/null
+          for id in 387162 392643 382440 145592 409684 418721 410452 456264 349503 447810; do python3 -u outils/stagekit/stage/tools/gb_fetch.py mod $id /tmp/r > /dev/null 2>&1; done
+          python3 - <<'PY' > /tmp/out/ombres_analyse.txt 2>&1
+          import glob, collections, ssbh_data_py as S
+          db = {}
+          for l in open('/tmp/out/shaders_db.tsv'):
+              f = l.rstrip('\n').split('\t')
+              db[f[0]] = dict(ombre=f[1], sh=f[2], lum=f[3], disc=f[4], prem=f[5], cx=f[6], attr=f[7], par=f[8])
+          print('programmes', len(db), 'recoivent ombre', sum(v['ombre'] == '1' for v in db.values()))
+          def info(lab):
+              d = db.get(lab[:24])
+              return ('OMBRE=%s sh=%s lum=%s attr=%s' % (d['ombre'], d['sh'], d['lum'], d['attr'])) if d else 'inconnu'
+          print('\n=== shaders de reference')
+          for lab in ['SFX_PBS_0000000000088280', 'SFX_PBS_00000080090a8249', 'SFX_PBS_00000000090a8240', 'SFX_PBS_0000000009088240',
+                      'SFX_PBS_0000000009090241', 'SFX_PBS_0000000008088280', 'SFX_PBS_000000000008c080', 'SFX_PBS_0000000000088100',
+                      'SFX_PBS_0000000000080280', 'SFX_PBS_0000000000008080', 'SFX_PBS_0000000008008269', 'SFX_PBS_0100000008008269']:
+              print(lab, info(lab))
+          print('\n=== hypothese : bit 0x01000000 du 2e mot (09 / 08 / 01 / 00) <-> recoit l\'ombre')
+          cnt = collections.Counter()
+          for k, v in db.items():
+              try:
+                  w = int(k[16:24], 16)
+              except Exception:
+                  continue
+              cnt[(bool(w & 0x01000000), v['ombre'])] += 1
+          print(cnt)
+          print('\n=== materiaux utilises dans les mods (par ensemble)')
+          for f in sorted(glob.glob('/tmp/r/**/model.numatb', recursive=True)):
+              try:
+                  m = S.matl_data.read_matl(f)
+                  dl = S.modl_data.read_modl(f.replace('numatb', 'numdlb'))
+              except Exception:
+                  continue
+              use = collections.Counter(en.material_label for en in dl.entries)
+              lignes = []
+              for e in m.entries:
+                  if use.get(e.material_label, 0) == 0:
+                      continue
+                  lignes.append('  %-30s %-34s %-60s tex=%s' % (e.material_label[:30], e.shader_label, info(e.shader_label), [t.param_id.name for t in e.textures]))
+              if lignes:
+                  print('==', f.replace('/tmp/r/', ''))
+                  print('\n'.join(lignes))
+          print('\n=== candidats : recoivent l\'ombre, attributs proches du materiau cuit (map1 + bake1, sans normale complexe)')
+          for k, v in sorted(db.items(), key=lambda kv: float(kv[1]['cx'])):
+              a = set(x.split('.')[0] for x in v['attr'].split(',') if x)
+              p = set(x.split('.')[0] for x in v['par'].split(',') if x)
+              if v['ombre'] == '1' and 'bake1' in a and 'Texture0' in p and 'Texture9' in p:
+                  print(k, 'cx', v['cx'], 'sh', v['sh'], 'lum', v['lum'], 'attr', v['attr'], 'par', v['par'][:200])
+          print('\n=== candidats sans bake1 : recoivent l\'ombre, Texture0 seule (+ colorSet1), sans normal map')
+          n = 0
+          for k, v in sorted(db.items(), key=lambda kv: float(kv[1]['cx'])):
+              p = set(x.split('.')[0] for x in v['par'].split(',') if x)
+              if v['ombre'] == '1' and 'Texture0' in p and not (p & {'Texture4', 'Texture6', 'Texture7', 'Texture2', 'Texture1'}):
+                  print(k, 'cx', v['cx'], 'sh', v['sh'], 'lum', v['lum'], 'attr', v['attr'], 'par', v['par'][:200]); n += 1
+                  if n > 60: break
+          PY
+          wc -l /tmp/out/ombres_analyse.txt
+      - name: Chiffrer et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_omb && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "omb" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_omb
