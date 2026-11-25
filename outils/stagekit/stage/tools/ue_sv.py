@@ -189,6 +189,36 @@ if COUPE:
             o[k] = np.array(neufs[k])
     print('murs de devant arasés au niveau du sol :', retires, 'morceaux de triangles')
 
+# v9 : mur sous la dalle de gauche (il laissait un grand trou) : face avant (z de la dalle) et face du bout gauche,
+# du dessous de la dalle jusqu'à y -250 ; quadrillage à la même échelle, éclairage cuit pris sur la face avant de la dalle
+if COUPE and os.environ.get('UE_MUR_BAS', '1') == '1':
+    og = next(o for _, o in garde if o['tex'] == 'Grid')
+    Tg, Ug, U1g = og['pos'], og['uv'], og.get('uv1')
+    dens = float(np.median(np.linalg.norm(Ug[:, 1] - Ug[:, 0], axis=1) / (np.linalg.norm(Tg[:, 1] - Tg[:, 0], axis=1) + 1e-9)))
+    ng = np.cross(Tg[:, 1] - Tg[:, 0], Tg[:, 2] - Tg[:, 0])
+    ng /= np.linalg.norm(ng, axis=1, keepdims=True) + 1e-9
+    cg = Tg.mean(1)
+    fa = (np.abs(ng[:, 2]) > 0.9) & (cg[:, 0] < -216) & (cg[:, 1] < 15)
+    zf = float(Tg[fa][:, :, 2].max()) if fa.any() else 76.6
+    yh = float(Tg[fa][:, :, 1].min()) if fa.any() else -0.2
+    zb = float(Tg[fa][:, :, 2].min()) if fa.any() else -64.1
+    u1 = U1g[fa].reshape(-1, 2).mean(0) if (U1g is not None and fa.any()) else np.array([0.5, 0.5])
+    XA, XB, YBAS = X_GAUCHE, float(os.environ.get('UE_MUR_BAS_X', '-140.0')), -250.0
+
+    def rect(p0, p1, p2, p3, nrm, uvf):
+        pos = np.array([[p0, p1, p2], [p0, p2, p3]], dtype=np.float64)
+        uv = np.array([[uvf(p) for p in t] for t in pos])
+        return pos, uv, np.tile(np.array(nrm, dtype=np.float64), (2, 3, 1))
+    faces = [rect((XA, YBAS, zf), (XB, YBAS, zf), (XB, yh, zf), (XA, yh, zf), (0, 0, 1), lambda p: (p[0] * dens, -p[1] * dens)),
+             rect((XA, YBAS, zb), (XA, YBAS, zf), (XA, yh, zf), (XA, yh, zb), (-1, 0, 0), lambda p: (p[2] * dens, -p[1] * dens))]
+    for pos, uv, nrm in faces:
+        og['pos'] = np.concatenate([og['pos'], pos])
+        og['uv'] = np.concatenate([og['uv'], uv])
+        og['nrm'] = np.concatenate([og['nrm'], nrm])
+        if og.get('uv1') is not None:
+            og['uv1'] = np.concatenate([og['uv1'], np.tile(u1, (2, 3, 1))])
+    print('mur sous la dalle de gauche : x %.1f..%.1f, z %.1f, y %.1f..%.1f (densité uv %.4f)' % (XA, XB, zf, YBAS, yh, dens))
+
 def surface(x, z=0.0):
     """hauteur la plus haute du décor sous y +15 à la verticale de (x, z) (Brawl)"""
     best = None
@@ -506,7 +536,7 @@ for c in autres:              # plate-forme mobile : petit segment enterré (com
     c['vertices'] = [{'x': -5.0, 'y': -45.0}, {'x': 5.0, 'y': -45.0}]
     c['normals'] = [{'x': 0.0, 'y': 1.0}]
     print('enterrée :', c['entry']['name'])
-d['collisions'] = [sol, bloc] + autres
+d['collisions'] = ([sol] if (COUPE and os.environ.get('UE_BLOC', '0') != '1') else [sol, bloc]) + autres  # v9 : bloc retiré (plafond invisible)
 BZ = {'left': x0 - 130.0, 'right': x1 + 130.0, 'top': 260.0, 'bottom': -170.0}
 CAM = {'left': x0 - 90.0, 'right': x1 + 90.0, 'top': 190.0, 'bottom': -110.0}
 for k, v in BZ.items():
