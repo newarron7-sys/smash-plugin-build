@@ -42,6 +42,17 @@ for _t in [x for x in os.environ.get('GOB_OPAQUES', '152F3974').split(',') if x]
         _im = TEX[_t].convert('RGBA')
         _im.putalpha(255)
         TEX[_t] = _im
+# Lessons : textures sans vraie transparence (alpha jamais proche de 0) -> opaques (sinon découpe = trous en jeu)
+if os.environ.get('GOB_OPAQUES_AUTO', '0') == '1':
+    for _t in list(TEX):
+        _a = np.asarray(TEX[_t].convert('RGBA'))[:, :, 3]
+        _f = float((_a < 60).mean())
+        print('alpha %s : min %d, médiane %d, part < 60 : %.4f' % (_t, int(_a.min()), int(np.median(_a)), _f))
+        if _f < 0.002 and int(_a.min()) < 255:
+            _im = TEX[_t].convert('RGBA')
+            _im.putalpha(255)
+            TEX[_t] = _im
+            print('  -> opaque')
 # v6 (demande du joueur) : le sol miroir (152F3974) est noir / bleu nuit là où le reflet de Brawl ne montre rien -> on
 # repeint ces zones dans le rouge du tapis, et on pose un carré de rouge uni dans un coin (texel du prolongement)
 SOL_T = '152F3974'
@@ -161,6 +172,22 @@ def prolongement():
 
 if os.environ.get('GOB_PROLONGE', '0') == '1':
     garde.append(('prolongement', prolongement()))
+
+# Lessons : face avant sous le bord du sol (on voyait le vide sous le sol) : pour chaque sol listé, plan vertical au bord
+# avant, du sol jusqu'à y -400, motif du sol prolongé (ajustement affine des UV en (x, z), replié vers le bas)
+for _ts in [x for x in os.environ.get('GOB_FACE_AVANT', '').split(',') if x]:
+    for _, o in [g for g in garde if g[1]['tex'] == _ts]:
+        P_ = o['pos'].reshape(-1, 3)
+        U_ = o['uv'].reshape(-1, 2)
+        co_ = np.linalg.lstsq(np.c_[P_[:, 0], P_[:, 2], np.ones(len(P_))], U_, rcond=None)[0]
+        x0_, x1_, zf_, yf_ = float(P_[:, 0].min()), float(P_[:, 0].max()), float(P_[:, 2].max()), float(P_[:, 1].min())
+        yb_ = -400.0
+        q_ = np.array([[[x0_, yb_, zf_], [x1_, yb_, zf_], [x1_, yf_, zf_]], [[x0_, yb_, zf_], [x1_, yf_, zf_], [x0_, yf_, zf_]]])
+        uq_ = np.c_[q_.reshape(-1, 3)[:, 0], zf_ + (yf_ - q_.reshape(-1, 3)[:, 1]), np.ones(6)] @ co_
+        o['pos'] = np.concatenate([o['pos'], q_])
+        o['uv'] = np.concatenate([o['uv'], uq_.reshape(2, 3, 2)])
+        o['nrm'] = np.concatenate([o['nrm'], np.tile(np.array([0.0, 0.0, 1.0]), (2, 3, 1))])
+        print('face avant sous le sol %s : x %.1f..%.1f, z %.1f, y %.1f..%.1f' % (_ts, x0_, x1_, zf_, yb_, yf_))
 
 # v2 (demande du joueur) : trous dans le sol (le sol de Brawl est translucide, avec le décor en miroir dessous ; là où
 # le miroir ne couvre pas, on voyait le vide) et bord du sol visible devant :
