@@ -139,7 +139,9 @@ def uv_sombre():
         U_ = np.concatenate([o['uv1'].reshape(-1, 2) for _, o in garde if o.get('uv1') is not None])
         rr_ = np.clip((U_[:, 1] % 1.0) * h_, 0, h_ - 1).astype(int)
         cc_ = np.clip((U_[:, 0] % 1.0) * w_, 0, w_ - 1).astype(int)
-        cible_ = float(np.percentile(lum_[rr_, cc_], float(os.environ.get('UE_OMBRE_PCT', '15'))))
+        Lu_ = lum_[rr_, cc_]
+        Lu_ = Lu_[Lu_ > 12]
+        cible_ = float(np.percentile(Lu_, float(os.environ.get('UE_OMBRE_PCT', '20')))) if len(Lu_) else 60.0
         best_, buv_ = 1e9, (0.5, 0.5)
         pas_ = max(1, min(h_, w_) // 256)
         for y_ in range(3, h_ - 3, pas_):
@@ -545,6 +547,17 @@ D_SOL = os.path.join(ST, 'model', DOS_SOL)
 os.makedirs(D_SOL, exist_ok=True)
 os.makedirs(D, exist_ok=True)
 objs, labs, entries, nouveaux = [], [], [], []
+# v12 : ombre pleine sous le toit : triangles entiers (centre sous le toit) -> texel sombre uni de la carte d'ombres
+if os.environ.get('UE_OMBRE_PLEINE', '1') == '1' and ZONE_TOIT is not None:
+    for _, o in garde:
+        if o.get('uv1') is None:
+            continue
+        mt_ = zone_toit(o['pos'].mean(1))
+        if mt_.any():
+            u_ = o['uv1'].copy()
+            u_[mt_] = uv_sombre()
+            o['uv1'] = u_
+            print('ombre pleine :', o['tex'], int(mt_.sum()), 'triangles sous le toit')
 for k, (t, ol) in enumerate(sorted(par_tex.items())):
     pos = np.concatenate([o['pos'][:, [0, 2, 1]] for o in ol]).reshape(-1, 3).astype(np.float64)
     nrm = np.concatenate([o['nrm'][:, [0, 2, 1]] for o in ol]).reshape(-1, 3)
@@ -559,11 +572,6 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     first[inv.ravel()[::-1]] = np.arange(len(inv.ravel()))[::-1]
     pos, nrm, uv, uv1 = pos[first], nrm[first], uv[first], uv1[first]
     ftoit = fac_toit(pos)
-    mtoit = zone_toit(pos)
-    if cuit and mtoit.any() and os.environ.get('UE_OMBRE_PLEINE', '1') == '1':
-        uv1 = uv1.copy()
-        uv1[mtoit] = uv_sombre()
-        print('  ombre pleine : %d sommets sous le toit' % int(mtoit.sum()))
     pos[:, 1] -= Y0
     pos *= ECH
     nrm = nrm / np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-6)
@@ -674,11 +682,7 @@ if os.environ.get('UE_SCENE'):
             el = {'p': np.round(p.reshape(-1), 4).tolist(), 'uv': np.round(u.reshape(-1), 5).tolist(), 't': noms[t], 'a': bool(alpha(t))}
             if GAB_CUIT is not None and o.get('uv1') is not None and 'BakeMap' in o.get('texs', []):
                 el['b'] = 'bake'
-                u1_ = o['uv1'][:, [0, 2, 1]].reshape(-1, 2).copy()
-                mt_ = zone_toit(o['pos'][:, [0, 2, 1]].reshape(-1, 3).astype(np.float64))
-                if mt_.any() and os.environ.get('UE_OMBRE_PLEINE', '1') == '1':
-                    u1_[mt_] = uv_sombre()
-                el['u1'] = np.round(u1_.reshape(-1), 5).tolist()
+                el['u1'] = np.round(o['uv1'][:, [0, 2, 1]].reshape(-1), 5).tolist()
                 ft_ = fac_toit(o['pos'][:, [0, 2, 1]].reshape(-1, 3).astype(np.float64))
                 if (ft_ < 1).any():
                     el['c'] = np.round(np.repeat(ft_[:, None], 3, axis=1).reshape(-1), 3).tolist()
