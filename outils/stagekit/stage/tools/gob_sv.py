@@ -300,6 +300,11 @@ for k, ((t, add), ol) in enumerate(sorted(par_tex.items())):
             d_.alpha_sample_to_coverage = False
             x.data = d_
         e.shader_label = e.shader_label.rsplit('_', 1)[0] + '_sort'
+    elif t == SOL_T and os.environ.get('GOB_SOL_OMBRE', '1') == '1':
+        # v7 : le shader « Bottom » (000010000000c100) n'affiche pas l'ombre des persos ; 0000000008008100 a exactement les
+        # mêmes paramètres (Texture5, CustomVector3/8/27) et reçoit l'ombre (base de shaders ssbh_wgpu)
+        e.shader_label = 'SFX_PBS_0000000008008100_opaque'
+        print('  sol : shader qui reçoit l\'ombre des persos', e.shader_label)
     elif a:
         for x in e.blend_states:
             d_ = x.data

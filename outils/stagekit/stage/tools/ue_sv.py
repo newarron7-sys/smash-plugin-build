@@ -112,6 +112,21 @@ X_DROITE = float(os.environ.get('UE_X_DROITE', '240.9'))  # v9 : face du grand b
 # v9 : mur invisible de gauche au vrai bout de la dalle (x -392,45 au lieu de -213,48), sol prolongé jusque-là
 X_GAUCHE = float(os.environ.get('UE_X_GAUCHE', '-392.45'))
 TOIT = None
+ZONE_TOIT = None                  # v11 : (x0, x1, y0, y1, z0, z1) zone couverte par le toit (ombre peinte)
+X_BLEU, X_BLEU1, Y_BLEU = -140.0, -110.87, 70.49
+OMBRE_TOIT = float(os.environ.get('UE_OMBRE_TOIT', '0.45'))
+
+
+def fac_toit(P):
+    """P : (N, 3) coordonnées Brawl -> facteur d'ombre sous le toit (1 ailleurs) : plus sombre au fond qu'à l'ouverture"""
+    f = np.ones(len(P))
+    if ZONE_TOIT is None or OMBRE_TOIT <= 0:
+        return f
+    x0, x1, y0, y1, z0, z1 = ZONE_TOIT
+    m = (P[:, 0] >= x0 - 0.01) & (P[:, 0] <= x1 + 0.01) & (P[:, 1] >= y0) & (P[:, 1] <= y1 + 0.01) & (P[:, 2] >= z0 - 0.01) & (P[:, 2] <= z1 + 0.01)
+    d = np.clip((z1 - P[:, 2]) / max(z1 - z0, 1e-6), 0, 1)
+    f[m] = 1 - OMBRE_TOIT * (0.4 + 0.6 * d[m])
+    return f
 ZONES_COUPE = [(-1e9, -140.0), (111.85, X_DROITE)]
 SOL_B = [(-213.48, 11.44), (-110.73, 11.44), (-87.29, 0.0), (111.85, 0.0), (159.06, -23.60), (180.64, -23.77),
          (182.61, -23.01), (216.80, -23.01), (218.89, -23.82), (266.65, -23.82)]
@@ -220,9 +235,17 @@ if COUPE and os.environ.get('UE_MUR_BAS', '1') == '1':
         og['nrm'] = np.concatenate([og['nrm'], nrm])
         if og.get('uv1') is not None:
             og['uv1'] = np.concatenate([og['uv1'], np.tile(u1, (2, 3, 1))])
+    # v11 : bloc bleu (arche) à droite du toit : bord gauche, bord droit, dessus (pour le toit collé et sa collision)
+    _vb = np.concatenate([o['pos'].reshape(-1, 3) for _, o in garde if o['tex'] == 'Blue'])
+    _sel = _vb[(_vb[:, 1] > 50) & (_vb[:, 1] < 72) & (_vb[:, 0] > -139.9) & (_vb[:, 0] < -100)]
+    if len(_sel):
+        X_BLEU, X_BLEU1, Y_BLEU = float(_sel[:, 0].min()), float(_sel[:, 0].max()), float(_sel[:, 1].max())
+    print('bloc bleu : x %.2f..%.2f, dessus y %.2f (%d sommets)' % (X_BLEU, X_BLEU1, Y_BLEU, len(_sel)))
     # v10 : mur plein au bout gauche et toit sur la partie gauche (demande du joueur), hauteur du haut du mur du fond
     if os.environ.get('UE_TOIT', '1') == '1':
-        YT0, YT1, ZT0, ZT1, XT1 = 70.1, 75.0, -64.7, zf, float(os.environ.get('UE_TOIT_X', '-140.0'))
+        YT0, YT1, ZT0, ZT1 = 70.1, 75.0, -64.7, zf
+        # v11 : toit prolongé jusqu'au bloc bleu (il restait un espace entre le bout du toit et le bloc, demande du joueur)
+        XT1 = float(os.environ.get('UE_TOIT_X', str(max(-140.0, X_BLEU + 0.3))))
         lot = [rect((XA, YT1, ZT0), (XT1, YT1, ZT0), (XT1, YT1, ZT1), (XA, YT1, ZT1), (0, 1, 0), lambda p: (p[0] * dens, p[2] * dens)),
                rect((XA, YT0, ZT0), (XA, YT0, ZT1), (XT1, YT0, ZT1), (XT1, YT0, ZT0), (0, -1, 0), lambda p: (p[0] * dens, p[2] * dens)),
                rect((XA, YT0, ZT1), (XT1, YT0, ZT1), (XT1, YT1, ZT1), (XA, YT1, ZT1), (0, 0, 1), lambda p: (p[0] * dens, -p[1] * dens)),
@@ -234,6 +257,38 @@ if COUPE and os.environ.get('UE_MUR_BAS', '1') == '1':
             if og.get('uv1') is not None:
                 og['uv1'] = np.concatenate([og['uv1'], np.tile(u1, (2, 3, 1))])
         TOIT = [(XT1, YT0), (XA, YT0), (XA, YT1), (XT1, YT1), (XT1, YT0)]
+        ZONE_TOIT = (XA, -140.0, 11.0, YT0, ZT0, zf)
+        # v11 : pilier quadrillé entre x -140 et le bloc bleu (devant) : on bouche du haut du pilier jusqu'au toit
+        _vg = og['pos']
+        _cg = _vg.mean(1)
+        _pm = (_cg[:, 0] > -140.5) & (_cg[:, 0] < XT1 + 0.5) & (_cg[:, 2] >= 8.0)
+        if _pm.any() and XT1 > -140.0:
+            ptop = float(_vg[_pm][:, :, 1].max())
+            pz0, pz1 = float(_vg[_pm][:, :, 2].min()), float(_vg[_pm][:, :, 2].max())
+            if ptop < YT0 - 0.05:
+                bouche = [rect((-140.0, ptop, pz1), (XT1, ptop, pz1), (XT1, YT0, pz1), (-140.0, YT0, pz1), (0, 0, 1), lambda p: (p[0] * dens, -p[1] * dens)),
+                          rect((-140.0, ptop, pz0), (-140.0, ptop, pz1), (-140.0, YT0, pz1), (-140.0, YT0, pz0), (-1, 0, 0), lambda p: (p[2] * dens, -p[1] * dens)),
+                          rect((-140.0, ptop, pz0), (XT1, ptop, pz0), (XT1, YT0, pz0), (-140.0, YT0, pz0), (0, 0, -1), lambda p: (p[0] * dens, -p[1] * dens))]
+                for pos, uv, nrm in bouche:
+                    og['pos'] = np.concatenate([og['pos'], pos])
+                    og['uv'] = np.concatenate([og['uv'], uv])
+                    og['nrm'] = np.concatenate([og['nrm'], nrm])
+                    if og.get('uv1') is not None:
+                        og['uv1'] = np.concatenate([og['uv1'], np.tile(u1, (2, 3, 1))])
+            print('pilier : haut y %.2f, z %.1f..%.1f -> bouché jusqu\'au toit (y %.1f)' % (ptop, pz0, pz1, YT0))
+        else:
+            print('pilier : non trouvé (x -140..%.1f)' % XT1)
+    # v11 : mur prolongé loin à gauche (on voyait le ciel à gauche du mur quand la caméra s'approche, demande du joueur) :
+    # grande face avant au plan de la dalle, du bas jusqu'à y 600
+    if os.environ.get('UE_MUR_LOIN', '1') == '1':
+        XL = XA - float(os.environ.get('UE_MUR_LOIN_L', '3000'))
+        pos, uv, nrm = rect((XL, YBAS, zf), (XA, YBAS, zf), (XA, 600.0, zf), (XL, 600.0, zf), (0, 0, 1), lambda p: (p[0] * dens, -p[1] * dens))
+        og['pos'] = np.concatenate([og['pos'], pos])
+        og['uv'] = np.concatenate([og['uv'], uv])
+        og['nrm'] = np.concatenate([og['nrm'], nrm])
+        if og.get('uv1') is not None:
+            og['uv1'] = np.concatenate([og['uv1'], np.tile(u1, (2, 3, 1))])
+        print('mur prolongé à gauche : x %.0f..%.1f, y %.0f..600, z %.1f' % (XL, XA, YBAS, zf))
         print('toit y %.1f..%.1f x %.1f..%.1f z %.1f..%.1f + mur plein au bout gauche' % (YT0, YT1, XA, XT1, ZT0, ZT1))
     # v9 : dessus des murs arasés (le creux entre le bord du sol et le mur arasé laissait voir un trou) : bandes
     # horizontales juste sous le sol (y - 0,3, cachées là où le sol existe), sur l'emprise des morceaux retirés
@@ -394,6 +449,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     first = np.zeros(len(uk), dtype=np.int64)
     first[inv.ravel()[::-1]] = np.arange(len(inv.ravel()))[::-1]
     pos, nrm, uv, uv1 = pos[first], nrm[first], uv[first], uv1[first]
+    ftoit = fac_toit(pos)
     pos[:, 1] -= Y0
     pos *= ECH
     nrm = nrm / np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-6)
@@ -410,7 +466,14 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     mo.tangents = [attr('Tangent0', tg)]
     if cuit:
         mo.texture_coordinates = [attr(n_, uv1 if n_ == 'bake1' else uv) for n_ in ATTR_CUIT[0]]
-        mo.color_sets = [attr(n_, np.full((nv, 4), 0.502)) for n_ in ATTR_CUIT[1]]
+        _cs = []
+        for n_ in ATTR_CUIT[1]:
+            c_ = np.full((nv, 4), 0.502)
+            if n_ == 'colorSet1':
+                c_[:, :3] *= ftoit[:, None]
+            _cs.append(attr(n_, c_))
+        mo.color_sets = _cs
+        print('  ombre sous le toit :', int((ftoit < 1).sum()), 'sommets assombris')
     else:
         mo.texture_coordinates = [attr('map1', uv), attr('bake1', uv), attr('uvSet', uv)]
         c1 = np.full((nv, 4), 0.502)
@@ -498,6 +561,9 @@ if os.environ.get('UE_SCENE'):
             if GAB_CUIT is not None and o.get('uv1') is not None and 'BakeMap' in o.get('texs', []):
                 el['b'] = 'bake'
                 el['u1'] = np.round(o['uv1'][:, [0, 2, 1]].reshape(-1), 5).tolist()
+                ft_ = fac_toit(o['pos'][:, [0, 2, 1]].reshape(-1, 3).astype(np.float64))
+                if (ft_ < 1).any():
+                    el['c'] = np.round(np.repeat(ft_[:, None], 3, axis=1).reshape(-1), 3).tolist()
             else:
                 nn = o['nrm'][:, [0, 2, 1]].reshape(-1, 3)
                 nn = nn / np.maximum(np.linalg.norm(nn, axis=1, keepdims=True), 1e-6)
@@ -519,7 +585,17 @@ for dos, dd, garde_l in ((DOS, D, lambda l: not l.endswith('_cuit')), (DOS_SOL, 
     modl = S.modl_data.read_modl(os.path.join(BN, 'model', dos, 'model.numdlb'))
     modl.entries = [S.modl_data.ModlEntryData(objs[i].name, objs[i].subindex, labs[i]) for i in sel]
     modl.save(os.path.join(dd, 'model.numdlb'))
-    S.meshex_data.MeshExData.from_mesh_objects([objs[i] for i in sel]).save(os.path.join(dd, 'model.numshexb'))
+    mx = S.meshex_data.MeshExData.from_mesh_objects([objs[i] for i in sel])
+    if os.environ.get('UE_PROJETTE', '1') == '1':
+        try:
+            for g_ in mx.mesh_object_groups:
+                for fl_ in g_.entry_flags:
+                    fl_.cast_shadow = True
+                    fl_.draw_model = True
+            print('  projette une ombre :', dos, [(g_.mesh_object_name, [(f_.draw_model, f_.cast_shadow) for f_ in g_.entry_flags]) for g_ in mx.mesh_object_groups])
+        except Exception as ex_:  # noqa: BLE001
+            print('  drapeaux numshexb non modifiés :', ex_, [a_ for a_ in dir(mx) if not a_.startswith('_')])
+    mx.save(os.path.join(dd, 'model.numshexb'))
     print('DOSSIER', dos, len(sel), 'objets', sum(len(objs[i].vertex_indices) // 3 for i in sel), 'triangles', [labs[i] for i in sel])
 
 # collisions : sol de la carte, rebords aux deux bouts, bloc solide ; lvd de Smashville d'HDR
@@ -578,6 +654,15 @@ for c in autres:              # plate-forme mobile : petit segment enterré (com
     c['normals'] = [{'x': 0.0, 'y': 1.0}]
     print('enterrée :', c['entry']['name'])
 d['collisions'] = ([sol] if (COUPE and os.environ.get('UE_BLOC', '0') != '1') else [sol, bloc]) + autres  # v9 : bloc retiré (plafond invisible)
+if COUPE and os.environ.get('UE_BLOC_BLEU', '1') == '1':   # v11 : collision remise sur le bloc bleu seulement (demande du joueur)
+    bleu = copy.deepcopy(sol)
+    bleu['entry']['name'] = 'COL_00_Block02'
+    bleu['entry']['subname'] = 'Block02'
+    xb0 = max(X_BLEU, TOIT[0][0] if TOIT is not None else X_BLEU)
+    bb = [(X_BLEU1 * ECH, 52.08 * ECH), (xb0 * ECH, 52.08 * ECH), (xb0 * ECH, Y_BLEU * ECH), (X_BLEU1 * ECH, Y_BLEU * ECH), (X_BLEU1 * ECH, 52.08 * ECH)]
+    poly(bleu, bb, [copy.deepcopy(m_rien) for _ in range(len(bb) - 1)])
+    d['collisions'].insert(1, bleu)
+    print('collision du bloc bleu', bb)
 if TOIT is not None:          # v10 : toit = bloc solide (plafond) au-dessus de la partie gauche
     toit = copy.deepcopy(sol)
     toit['entry']['name'] = 'COL_00_Roof01'
