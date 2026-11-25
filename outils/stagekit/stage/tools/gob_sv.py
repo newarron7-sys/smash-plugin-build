@@ -143,22 +143,37 @@ if os.environ.get('GOB_SOL', '1') == '1':
         pos = np.array([[[xa, y, za], [xb, y, zb], [xb, y, za]], [[xa, y, za], [xa, y, zb], [xb, y, zb]]], dtype=np.float64)
         uv = np.c_[pos.reshape(-1, 3)[:, 0], pos.reshape(-1, 3)[:, 2], np.ones(6)] @ co
         return pos, uv.reshape(2, 3, 2)
-    morceaux = [quad(-G, G, z1s, G, ys), quad(-G, x0s, z0s, z1s, ys), quad(x1s, G, z0s, z1s, ys), quad(-G, G, -G, z0s, ys)]
-    pos = np.concatenate([m_[0] for m_ in morceaux])
-    uv = np.concatenate([m_[1] for m_ in morceaux])
-    moy = np.asarray(TEX['152F3974'].convert('RGB')).reshape(-1, 3).mean(0) * float(os.environ.get('GOB_SOL_PROL_LUM', '0.85'))
-    TEX['gob_sol_prolonge'] = _I.new('RGBA', (16, 16), tuple(int(v) for v in moy) + (255,))
-    garde.append(('sol_prolonge', {'name': 'sol_prolonge', 'tex': 'gob_sol_prolonge', 'pos': pos, 'uv': np.zeros_like(uv),
-                                   'nrm': np.tile(np.array([0.0, 1.0, 0.0]), pos.shape[:2] + (1,)), 'add': False}))
-    # fond du reflet : sous le point le plus bas du décor dans la salle
-    ymin = min(float(o['pos'][(np.abs(o['pos'].mean(1)[:, 0]) < 700) & (np.abs(o['pos'].mean(1)[:, 2]) < 700)][:, :, 1].min())
-               for _, o in garde if ((np.abs(o['pos'].mean(1)[:, 0]) < 700) & (np.abs(o['pos'].mean(1)[:, 2]) < 700)).any())
-    yf = ymin - 5.0
-    coul = [int(v) for v in os.environ.get('GOB_FOND_SOL', '22,10,14').split(',')]
-    TEX['gob_fond_sol'] = _I.new('RGBA', (16, 16), tuple(coul) + (255,))
-    pf, _u = quad(-G, G, -G, G, yf)
-    garde.append(('fond_sol', {'name': 'fond_sol', 'tex': 'gob_fond_sol', 'pos': pf, 'uv': np.zeros((2, 3, 2)),
-                               'nrm': np.tile(np.array([0.0, 1.0, 0.0]), pf.shape[:2] + (1,)), 'add': False}))
+    # v4 : les grands plans séparés (texture unie à part) restaient invisibles / transparents en jeu -> prolongement
+    # découpé en dalles de 200 unités, dans le MÊME objet que le sol (texture du sol, UV fixés sur un texel de la
+    # couleur moyenne du sol), comme le prolongement de Sleepless Lamp qui marche ; jusqu'à ±4000 ; plus de fond séparé
+    G = float(os.environ.get('GOB_SOL_G', '4000'))
+    PAS = 200.0
+    _a = np.asarray(TEX['152F3974'].convert('RGB')).astype(np.float32)
+    _h, _w = _a.shape[:2]
+    _med = np.median(_a.reshape(-1, 3), axis=0)
+    best, buv = 1e9, (0.5, 0.5)
+    for _y in range(3, _h - 3, 4):
+        for _x in range(3, _w - 3, 4):
+            blk = _a[_y - 3:_y + 4, _x - 3:_x + 4].reshape(-1, 3)
+            sc = np.abs(blk.mean(0) - _med).sum() + blk.std(0).sum()
+            if sc < best:
+                best, buv = sc, ((_x + 0.5) / _w, (_y + 0.5) / _h)
+    def dalles(xa, xb, za, zb):
+        out = []
+        xs_ = np.arange(xa, xb, PAS).tolist() + [xb]
+        zs_ = np.arange(za, zb, PAS).tolist() + [zb]
+        for x0_, x1_ in zip(xs_, xs_[1:]):
+            for z0_, z1_ in zip(zs_, zs_[1:]):
+                out += [[[x0_, ys, z0_], [x1_, ys, z1_], [x1_, ys, z0_]], [[x0_, ys, z0_], [x0_, ys, z1_], [x1_, ys, z1_]]]
+        return out
+    tri_ = dalles(-G, G, z1s, G) + dalles(-G, x0s, z0s, z1s) + dalles(x1s, G, z0s, z1s) + dalles(-G, G, -G, z0s)
+    pos = np.array(tri_, dtype=np.float64)
+    sol0 = sols[0]
+    sol0['pos'] = np.concatenate([sol0['pos'], pos])
+    sol0['uv'] = np.concatenate([sol0['uv'], np.tile(np.array(buv), pos.shape[:2] + (1,))])
+    sol0['nrm'] = np.concatenate([sol0['nrm'], np.tile(np.array([0.0, 1.0, 0.0]), pos.shape[:2] + (1,))])
+    yf = float('nan')
+    print('prolongement : %d dalles dans l\'objet du sol, texel %s (écart %.1f)' % (len(pos) // 2, tuple(round(v, 3) for v in buv), best))
     print('sol prolongé à ±%.0f (y %.2f, sol d\'origine x %.0f..%.0f z %.0f..%.0f) ; fond du reflet y %.1f' % (G, ys, x0s, x1s, z0s, z1s, yf))
 
 
