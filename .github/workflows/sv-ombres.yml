@@ -1,0 +1,57 @@
+name: Smashville - materiaux du terrain principal (ombres des persos) - reperage
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/sv-ombres.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Analyse
+        run: |
+          set +e
+          pip install ssbh_data_py numpy >/dev/null
+          for id in 387162 409684 418721 410452 382440 456264 145592; do python3 -u outils/stagekit/stage/tools/gb_fetch.py mod $id /tmp/r > /dev/null 2>&1; done
+          for q in "smashville retexture" "smashville hd"; do python3 -u outils/stagekit/stage/tools/gb_fetch.py cherche "$q" stage/animal_village/normal/model/stc_mainstage_set /tmp/r 6 > /dev/null 2>&1; done
+          mkdir -p /tmp/out
+          python3 - <<'PY' > /tmp/out/ombres.txt 2>&1
+          import glob, collections, ssbh_data_py as S
+          for f in sorted(glob.glob('/tmp/r/**/stage/animal_village/normal/model/stc_mainstage_set/model.numatb', recursive=True)):
+              print('==', f.replace('/tmp/r/', ''))
+              try:
+                  m = S.matl_data.read_matl(f)
+                  dl = S.modl_data.read_modl(f.replace('numatb', 'numdlb'))
+              except Exception as e:
+                  print('  illisible', e); continue
+              use = collections.Counter(en.material_label for en in dl.entries)
+              for e in m.entries:
+                  print('  %-32s %-36s %s x%d' % (e.material_label, e.shader_label, [t.param_id.name for t in e.textures], use.get(e.material_label, 0)))
+              print('  objets', [(en.mesh_object_name, en.material_label) for en in dl.entries][:40])
+          for f in sorted(glob.glob('/tmp/r/**/stage/animal_village/normal/model/stc_mainstage_set/model.nusrcmdlb', recursive=True))[:2]:
+              print('== nusrcmdlb', f.replace('/tmp/r/', ''))
+              b = open(f, 'rb').read(); print('  taille', len(b))
+              import re
+              print('  ', re.findall(rb'[ -~]{4,}', b)[:60])
+          for f in sorted(glob.glob('/tmp/r/**/stage/animal_village/normal/model/stc_bg_set/model.nusrcmdlb', recursive=True))[:1]:
+              b = open(f, 'rb').read(); import re
+              print('== nusrcmdlb bg', len(b), re.findall(rb'[ -~]{4,}', b)[:40])
+          PY
+          wc -l /tmp/out/ombres.txt
+      - name: Chiffrer et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_svo && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "svo" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_svo
