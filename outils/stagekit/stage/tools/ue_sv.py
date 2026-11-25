@@ -111,6 +111,7 @@ COUPE = os.environ.get('UE_COUPE', '1') == '1'
 X_DROITE = float(os.environ.get('UE_X_DROITE', '240.9'))  # v9 : face du grand bloc blanc de devant (demande du joueur)
 # v9 : mur invisible de gauche au vrai bout de la dalle (x -392,45 au lieu de -213,48), sol prolongé jusque-là
 X_GAUCHE = float(os.environ.get('UE_X_GAUCHE', '-392.45'))
+TOIT = None
 ZONES_COUPE = [(-1e9, -140.0), (111.85, X_DROITE)]
 SOL_B = [(-213.48, 11.44), (-110.73, 11.44), (-87.29, 0.0), (111.85, 0.0), (159.06, -23.60), (180.64, -23.77),
          (182.61, -23.01), (216.80, -23.01), (218.89, -23.82), (266.65, -23.82)]
@@ -219,6 +220,21 @@ if COUPE and os.environ.get('UE_MUR_BAS', '1') == '1':
         og['nrm'] = np.concatenate([og['nrm'], nrm])
         if og.get('uv1') is not None:
             og['uv1'] = np.concatenate([og['uv1'], np.tile(u1, (2, 3, 1))])
+    # v10 : mur plein au bout gauche et toit sur la partie gauche (demande du joueur), hauteur du haut du mur du fond
+    if os.environ.get('UE_TOIT', '1') == '1':
+        YT0, YT1, ZT0, ZT1, XT1 = 70.1, 75.0, -64.7, zf, float(os.environ.get('UE_TOIT_X', '-140.0'))
+        lot = [rect((XA, YT1, ZT0), (XT1, YT1, ZT0), (XT1, YT1, ZT1), (XA, YT1, ZT1), (0, 1, 0), lambda p: (p[0] * dens, p[2] * dens)),
+               rect((XA, YT0, ZT0), (XA, YT0, ZT1), (XT1, YT0, ZT1), (XT1, YT0, ZT0), (0, -1, 0), lambda p: (p[0] * dens, p[2] * dens)),
+               rect((XA, YT0, ZT1), (XT1, YT0, ZT1), (XT1, YT1, ZT1), (XA, YT1, ZT1), (0, 0, 1), lambda p: (p[0] * dens, -p[1] * dens)),
+               rect((XA, 11.44, ZT0), (XA, 11.44, ZT1), (XA, YT1, ZT1), (XA, YT1, ZT0), (1, 0, 0), lambda p: (p[2] * dens, -p[1] * dens))]
+        for pos, uv, nrm in lot:
+            og['pos'] = np.concatenate([og['pos'], pos])
+            og['uv'] = np.concatenate([og['uv'], uv])
+            og['nrm'] = np.concatenate([og['nrm'], nrm])
+            if og.get('uv1') is not None:
+                og['uv1'] = np.concatenate([og['uv1'], np.tile(u1, (2, 3, 1))])
+        TOIT = [(XT1, YT0), (XA, YT0), (XA, YT1), (XT1, YT1), (XT1, YT0)]
+        print('toit y %.1f..%.1f x %.1f..%.1f z %.1f..%.1f + mur plein au bout gauche' % (YT0, YT1, XA, XT1, ZT0, ZT1))
     # v9 : dessus des murs arasés (le creux entre le bord du sol et le mur arasé laissait voir un trou) : bandes
     # horizontales juste sous le sol (y - 0,3, cachées là où le sol existe), sur l'emprise des morceaux retirés
     for lo_, hi_ in ZONES_COUPE:
@@ -558,6 +574,14 @@ for c in autres:              # plate-forme mobile : petit segment enterré (com
     c['normals'] = [{'x': 0.0, 'y': 1.0}]
     print('enterrée :', c['entry']['name'])
 d['collisions'] = ([sol] if (COUPE and os.environ.get('UE_BLOC', '0') != '1') else [sol, bloc]) + autres  # v9 : bloc retiré (plafond invisible)
+if TOIT is not None:          # v10 : toit = bloc solide (plafond) au-dessus de la partie gauche
+    toit = copy.deepcopy(sol)
+    toit['entry']['name'] = 'COL_00_Roof01'
+    toit['entry']['subname'] = 'Roof01'
+    tp = [(x * ECH, y * ECH) for x, y in TOIT]
+    poly(toit, tp, [copy.deepcopy(m_rien) for _ in range(len(tp) - 1)])
+    d['collisions'].insert(1, toit)
+    print('collision du toit', tp)
 BZ = {'left': x0 - 130.0, 'right': x1 + 130.0, 'top': 260.0, 'bottom': -170.0}
 CAM = {'left': x0 - 90.0, 'right': x1 + 90.0, 'top': 190.0, 'bottom': -110.0}
 for k, v in BZ.items():
