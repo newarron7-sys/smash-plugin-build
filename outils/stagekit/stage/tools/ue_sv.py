@@ -246,6 +246,10 @@ if COUPE and os.environ.get('UE_MUR_BAS', '1') == '1':
         YT0, YT1, ZT0, ZT1 = 70.1, 75.0, -64.7, zf
         # v11 : toit prolongé jusqu'au bloc bleu (il restait un espace entre le bout du toit et le bloc, demande du joueur)
         XT1 = float(os.environ.get('UE_TOIT_X', str(max(-140.0, X_BLEU + 0.3))))
+        # v12 : le dessus du bloc bleu est arrondi (bord gauche à x -134,4 en haut) -> le toit va jusque-là
+        _top = _vb[(_vb[:, 1] > 65) & (_vb[:, 1] < 76) & (_vb[:, 0] > -139.9) & (_vb[:, 0] < -100)]
+        if len(_top) and 'UE_TOIT_X' not in os.environ:
+            XT1 = max(XT1, float(_top[:, 0].min()) + 0.4)
         lot = [rect((XA, YT1, ZT0), (XT1, YT1, ZT0), (XT1, YT1, ZT1), (XA, YT1, ZT1), (0, 1, 0), lambda p: (p[0] * dens, p[2] * dens)),
                rect((XA, YT0, ZT0), (XA, YT0, ZT1), (XT1, YT0, ZT1), (XT1, YT0, ZT0), (0, -1, 0), lambda p: (p[0] * dens, p[2] * dens)),
                rect((XA, YT0, ZT1), (XT1, YT0, ZT1), (XT1, YT1, ZT1), (XA, YT1, ZT1), (0, 0, 1), lambda p: (p[0] * dens, -p[1] * dens)),
@@ -278,6 +282,23 @@ if COUPE and os.environ.get('UE_MUR_BAS', '1') == '1':
             print('pilier : haut y %.2f, z %.1f..%.1f -> bouché jusqu\'au toit (y %.1f)' % (ptop, pz0, pz1, YT0))
         else:
             print('pilier : non trouvé (x -140..%.1f)' % XT1)
+    # v12 : joint entre le pilier et la face avant du bloc bleu (le bloc avance jusqu'à z ~100, le toit et le pilier
+    # s'arrêtent à z 88,4 : on voyait un trou noir) : colonne du sol au toit, affleurant la face avant du bloc
+    if os.environ.get('UE_JOINT', '1') == '1' and TOIT is not None:
+        _fr = _vb[(_vb[:, 0] > -139.9) & (_vb[:, 0] < -100) & (_vb[:, 1] > 40) & (_vb[:, 1] < 60)]
+        ZJ = float(_fr[:, 2].max()) if len(_fr) else 100.1
+        XJ0, XJ1, YJ0 = -140.0, X_BLEU + 0.1, -5.0
+        if ZJ > zf + 0.5 and XJ1 > XJ0:
+            lot = [rect((XJ0, YJ0, ZJ), (XJ1, YJ0, ZJ), (XJ1, YT1, ZJ), (XJ0, YT1, ZJ), (0, 0, 1), lambda p: (p[0] * dens, -p[1] * dens)),
+                   rect((XJ0, YJ0, zf - 0.5), (XJ0, YJ0, ZJ), (XJ0, YT1, ZJ), (XJ0, YT1, zf - 0.5), (-1, 0, 0), lambda p: (p[2] * dens, -p[1] * dens)),
+                   rect((XJ0, YT1, zf - 0.5), (XJ0, YT1, ZJ), (XJ1, YT1, ZJ), (XJ1, YT1, zf - 0.5), (0, 1, 0), lambda p: (p[0] * dens, p[2] * dens))]
+            for pos, uv, nrm in lot:
+                og['pos'] = np.concatenate([og['pos'], pos])
+                og['uv'] = np.concatenate([og['uv'], uv])
+                og['nrm'] = np.concatenate([og['nrm'], nrm])
+                if og.get('uv1') is not None:
+                    og['uv1'] = np.concatenate([og['uv1'], np.tile(u1, (2, 3, 1))])
+            print('joint pilier / bloc bleu : x %.2f..%.2f, y %.1f..%.1f, z %.1f..%.2f' % (XJ0, XJ1, YJ0, YT1, zf, ZJ))
     # v12 : couloir prolongé loin à gauche (au lieu de la grande face plate de la v11, demande du joueur) : sol de la dalle,
     # face avant + mur dessous, mur du fond, toit (dessus, dessous, face avant), de XL jusqu'au mur du bout gauche
     if os.environ.get('UE_COULOIR', '1') == '1' and TOIT is not None:
