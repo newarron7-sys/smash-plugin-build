@@ -21,7 +21,7 @@ jobs:
           set +e
           pip install gdown >/dev/null
           mkdir -p /tmp/dl /tmp/out
-          (cd /tmp/dl && gdown --id 1QCbWgbbZRY2zakBHM8Q616Gp2van4ZZe 2>&1 | tail -3 || gdown "https://drive.google.com/uc?id=1QCbWgbbZRY2zakBHM8Q616Gp2van4ZZe" 2>&1 | tail -3)
+          (cd /tmp/dl && gdown "1QCbWgbbZRY2zakBHM8Q616Gp2van4ZZe" 2>&1 | tail -5)
           ls -la /tmp/dl
           f=$(ls /tmp/dl/* | head -1); file "$f"
           mkdir -p /tmp/x; (cd /tmp/x && (unzip -qo "$f" || 7z x -y "$f" >/dev/null)) 2>&1 | tail -2
