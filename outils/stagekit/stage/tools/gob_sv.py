@@ -166,7 +166,10 @@ if os.environ.get('GOB_SOL', '1') == '1':
             for z0_, z1_ in zip(zs_, zs_[1:]):
                 out += [[[x0_, ys, z0_], [x1_, ys, z1_], [x1_, ys, z0_]], [[x0_, ys, z0_], [x0_, ys, z1_], [x1_, ys, z1_]]]
         return out
-    tri_ = dalles(-G, G, z1s, G) + dalles(-G, x0s, z0s, z1s) + dalles(x1s, G, z0s, z1s) + dalles(-G, G, -G, z0s)
+    # v4b : le sol d'origine n'est pas un rectangle (trous à l'intérieur de son emprise, devant à droite) -> dalles sur
+    # TOUTE la surface, juste sous le point le plus bas du sol d'origine (cachées là où il existe)
+    ys = float(Ps[:, 1].min()) - 0.3
+    tri_ = dalles(-G, G, -G, G)
     pos = np.array(tri_, dtype=np.float64)
     sol0 = sols[0]
     sol0['pos'] = np.concatenate([sol0['pos'], pos])
