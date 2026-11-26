@@ -256,8 +256,57 @@ if os.environ.get('GOB_SOL', '1') == '1':
     tri_ = dalles(-G, G, float(os.environ.get('GOB_SOL_ZMIN', -G)), G)
     pos = np.array(tri_, dtype=np.float64)
     sol0 = sols[0]
+    uvd = np.tile(np.array(buv), pos.shape[:2] + (1,))
+    if os.environ.get('GOB_SOL_MOTIF', '0') == '1':
+        # v6 (Destiny) : au lieu d'une couleur unie, chaque dalle reçoit un morceau du vrai bitume de la texture du sol
+        # (même échelle que le sol d'origine), en miroir une dalle sur deux -> pas de couture, pas besoin de « repeat »
+        dudx, dvdx, dudz, dvdz = co[0, 0], co[0, 1], co[1, 0], co[1, 1]
+        u_suit_x = abs(dudx) >= abs(dudz)
+        ku = abs(dudx) if u_suit_x else abs(dudz)
+        kv = abs(dvdz) if u_suit_x else abs(dvdx)
+        PASM = max(40.0, min(PAS, 0.45 / max(ku, kv, 1e-9)))
+        su_max = 0.95
+        if max(ku, kv) * PASM > su_max:
+            PASM = su_max / max(ku, kv)
+        tri_ = dalles(-G, G, float(os.environ.get('GOB_SOL_ZMIN', -G)), G) if PASM == PAS else None
+        if tri_ is None:
+            PAS_old = PAS
+            PAS = PASM
+            tri_ = dalles(-G, G, float(os.environ.get('GOB_SOL_ZMIN', -G)), G)
+            PAS = PAS_old
+        pos = np.array(tri_, dtype=np.float64)
+        su, sv = ku * PASM, kv * PASM
+        # morceau de texture : bitume uni (proche de la médiane, peu de variations), dans la zone utilisée par le sol
+        _sm = np.asarray(TEX[SOL_TEX].convert('RGB').resize((256, 256))).astype(np.float32)
+        _cible = np.median(_sm.reshape(-1, 3), axis=0)
+        bw, bh = max(2, int(su * 256)), max(2, int(sv * 256))
+        _umin, _umax = np.clip([Us[:, 0].min() % 1.0, 1.0], 0, 1)
+        meilleur, pu, pv = 1e9, 0.0, 0.0
+        for _y in range(0, 256 - bh, 4):
+            for _x in range(0, 256 - bw, 4):
+                blk = _sm[_y:_y + bh, _x:_x + bw].reshape(-1, 3)
+                sc = np.abs(blk.mean(0) - _cible).sum() + 0.5 * blk.std(0).sum()
+                if sc < meilleur:
+                    meilleur, pu, pv = sc, _x / 256.0, _y / 256.0
+        u0, u1, v0, v1 = pu, pu + su, pv, pv + sv
+        uvd = np.zeros(pos.shape[:2] + (2,))
+        x0g = -G; z0g = float(os.environ.get('GOB_SOL_ZMIN', -G))
+        for t_ in range(pos.shape[0]):
+            for k_ in range(3):
+                X, _, Z = pos[t_, k_]
+                ix = int(np.floor((X - x0g) / PASM + 1e-6)); iz = int(np.floor((Z - z0g) / PASM + 1e-6))
+                # sommet sur le bord haut de la dalle : rattacher à la dalle du triangle (centre)
+                cx_, cz_ = pos[t_, :, 0].mean(), pos[t_, :, 2].mean()
+                jx = int(np.floor((cx_ - x0g) / PASM)); jz = int(np.floor((cz_ - z0g) / PASM))
+                fx = (X - (x0g + jx * PASM)) / PASM; fz = (Z - (z0g + jz * PASM)) / PASM
+                fx = min(max(fx, 0.0), 1.0); fz = min(max(fz, 0.0), 1.0)
+                if jx % 2: fx = 1.0 - fx
+                if jz % 2: fz = 1.0 - fz
+                a_, b_ = (fx, fz) if u_suit_x else (fz, fx)
+                uvd[t_, k_] = (u0 + a_ * su, v0 + b_ * sv)
+        print('prolongement en motif : dalles de %.0f, morceau uv (%.3f,%.3f) taille (%.3f,%.3f), écart %.1f, u suit %s' % (PASM, pu, pv, su, sv, meilleur, 'x' if u_suit_x else 'z'))
     sol0['pos'] = np.concatenate([sol0['pos'], pos])
-    sol0['uv'] = np.concatenate([sol0['uv'], np.tile(np.array(buv), pos.shape[:2] + (1,))])
+    sol0['uv'] = np.concatenate([sol0['uv'], uvd])
     sol0['nrm'] = np.concatenate([sol0['nrm'], np.tile(np.array([0.0, 1.0, 0.0]), pos.shape[:2] + (1,))])
     yf = float('nan')
     print('prolongement : %d dalles dans l\'objet du sol, texel %s (écart %.1f, couleur %s)' % (len(pos) // 2, tuple(round(v, 3) for v in buv), best, tuple(int(v) for v in _a[int(buv[1] * _h), int(buv[0] * _w)])))
