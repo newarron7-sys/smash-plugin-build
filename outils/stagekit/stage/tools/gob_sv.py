@@ -446,6 +446,11 @@ if os.environ.get('GOB_COLL_BRAWL', '0') == '1':
         _r = _bc.essai(_d)
         if _r and (PLS is None or len(_r[1]) > len(PLS)):
             PTS, PLS = _r[0], _r[1]
+    if os.environ.get('GOB_MURS'):
+        # écarter les murs verticaux de Brawl : « ancien,nouveau » (|x| = ancien -> nouveau)
+        _xa, _xn = [float(v) for v in os.environ['GOB_MURS'].split(',')]
+        PTS = [((_xn if p_[0] > 0 else -_xn) if abs(abs(p_[0]) - _xa) < 0.01 else p_[0],) + tuple(p_[1:]) for p_ in PTS]
+        print('murs déplacés : |x| %.1f -> %.1f' % (_xa, _xn))
     # chaînes : segments reliés par leurs extrémités (même point), sens de Brawl conservé
     segs = [(PTS[a], PTS[b], ty, fl) for a, b, ty, fl in PLS]
     def _k(p): return (round(p[0], 2), round(p[1], 2))

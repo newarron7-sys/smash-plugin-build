@@ -114,7 +114,7 @@ jobs:
           LVD=$(find /tmp/hdr/x -path "*hdr-stages/stage/animal_village/normal/param/xvillage00.lvd" | head -1)
           M="/tmp/out/mod/(Stage) Destiny's Entrance (Smashville)"
           mkdir -p "$M"
-          GOB_PFX=des_ GOB_OPAQUES= GOB_OPAQUES_AUTO=1 GOB_REPEINT=0 GOB_SOL=1 GOB_SOL_TEX=1436B348 GOB_SOL_ROUGE=0 GOB_SOL_ZMIN=100 GOB_SOL_PCT=72 GOB_SOL_OMBRE=0 GOB_SANS_OBJ=none GOB_Y0=0 GOB_COLL_BRAWL=1 GOB_CAMERA=-175,175,170,-30 GOB_BLAST=-270,270,260,-140 GOB_SPAWNS=-70,-25,25,70 GOB_RESPAWN_Y=60 GOB_COLL_PNG=/tmp/out/collisions.png GOB_RENDER="$(cat /tmp/nuit.txt)" GOB_FORME=$(cat /tmp/forme.txt) GOB_UI_FOURNIS=$(cat /tmp/ui_fournis.txt) GOB_HD=/tmp/hd GOB_SCENE=/tmp/rendu python3 -u outils/stagekit/stage/tools/gob_sv.py /tmp/out/travail/des.pac "$(cat /tmp/ref_sv.txt)" /tmp/liste_sv.txt "$(cat /tmp/matl_modele.txt)" "$LVD" "$M" > /tmp/out/construction.txt 2>&1
+          GOB_PFX=des_ GOB_OPAQUES= GOB_OPAQUES_AUTO=1 GOB_REPEINT=0 GOB_SOL=1 GOB_SOL_TEX=1436B348 GOB_SOL_ROUGE=0 GOB_SOL_ZMIN=100 GOB_SOL_PCT=72 GOB_MURS=130,150 GOB_SOL_OMBRE=0 GOB_SANS_OBJ=none GOB_Y0=0 GOB_COLL_BRAWL=1 GOB_CAMERA=-175,175,170,-30 GOB_BLAST=-270,270,260,-140 GOB_SPAWNS=-70,-25,25,70 GOB_RESPAWN_Y=60 GOB_COLL_PNG=/tmp/out/collisions.png GOB_RENDER="$(cat /tmp/nuit.txt)" GOB_FORME=$(cat /tmp/forme.txt) GOB_UI_FOURNIS=$(cat /tmp/ui_fournis.txt) GOB_HD=/tmp/hd GOB_SCENE=/tmp/rendu python3 -u outils/stagekit/stage/tools/gob_sv.py /tmp/out/travail/des.pac "$(cat /tmp/ref_sv.txt)" /tmp/liste_sv.txt "$(cat /tmp/matl_modele.txt)" "$LVD" "$M" > /tmp/out/construction.txt 2>&1
           tail -3 /tmp/out/construction.txt | cut -c1-60
       - name: Image de l'ecran des terrains
         env:
