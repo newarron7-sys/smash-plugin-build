@@ -519,6 +519,12 @@ if os.environ.get('GOB_COLL_BRAWL', '0') == '1':
     cb = d['camera_boundary'][0]
     cb.update({'left': float((xmin - 40) * ECH), 'right': float((xmax + 40) * ECH), 'top': float((ymax - Y0 + 50) * ECH), 'bottom': float((ymin - Y0 - 40) * ECH)})
     bz.update({'left': float((xmin - 150) * ECH), 'right': float((xmax + 150) * ECH), 'top': float((ymax - Y0 + 170) * ECH), 'bottom': float((ymin - Y0 - 160) * ECH)})
+    if os.environ.get('GOB_CAMERA'):
+        l_, r_, t_, b_ = [float(v) for v in os.environ['GOB_CAMERA'].split(',')]
+        cb.update({'left': l_ * ECH, 'right': r_ * ECH, 'top': t_ * ECH, 'bottom': b_ * ECH})
+    if os.environ.get('GOB_BLAST'):
+        l_, r_, t_, b_ = [float(v) for v in os.environ['GOB_BLAST'].split(',')]
+        bz.update({'left': l_ * ECH, 'right': r_ * ECH, 'top': t_ * ECH, 'bottom': b_ * ECH})
     xs_sp = [float(v) for v in os.environ.get('GOB_SPAWNS', '-180,-30,60,250').split(',')]
     for i_, s_ in enumerate(d['spawns']):
         s_['pos']['x'] = xs_sp[i_ % len(xs_sp)] * ECH; s_['pos']['y'] = 0.1
