@@ -216,6 +216,14 @@ if os.environ.get('GOB_SOL', '1') == '1':
     _a = np.asarray(TEX[SOL_TEX].convert('RGB')).astype(np.float32)
     _h, _w = _a.shape[:2]
     _med = np.median(_a.reshape(-1, 3), axis=0)
+    if os.environ.get('GOB_SOL_PCT'):
+        # couleur visée = pixels autour d'un centile de luminosité (le médian du sol peut être trop sombre)
+        _px = _a.reshape(-1, 3); _lum = _px.mean(1)
+        _thr = np.percentile(_lum, float(os.environ['GOB_SOL_PCT']))
+        _sel = _px[np.abs(_lum - _thr) < 4]
+        if len(_sel) > 50:
+            _med = np.median(_sel, axis=0)
+        print('prolongement : couleur visée %s (centile %s)' % (tuple(int(v) for v in _med), os.environ['GOB_SOL_PCT']))
     if os.environ.get('GOB_SOL_ROUGE', '1') == '1':
         # v5 (demande du joueur) : la couleur médiane était presque noire -> le prolongement ressemblait à du vide ;
         # on vise le rouge du tapis : médiane des pixels nettement rouges, un peu assombrie (rouge foncé du bord)
