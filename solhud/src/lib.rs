@@ -1,13 +1,13 @@
 //! Jauge de Tension de Sol Badguy affichée dans le HUD (panes « sol_tension » / « sol_tg_00..14 »
 //! du layout info_melee). Le plugin de Sol appelle `sol_hud_tension(entry_id, tension)` à chaque frame.
-//! Offsets du jeu 13.0.4 (mêmes que HDR 0.49.11 / mode HDR 4 persos).
+//! Même méthode que le plugin de Potemkin (13.0.4) : hook inline sur le dessin des layouts
+//! (texte + 0x4b638, x0 = nn::ui2d::Layout*), puis recherche des panes par leur nom.
 #![allow(static_mut_refs)]
-use skyline::hooks::{getRegionAddress, InlineCtx, Region};
-use std::sync::atomic::{AtomicU32, Ordering};
+use skyline::hooks::InlineCtx;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
-const GET_PANE_BY_NAME: usize = 0x3776360;
-const MENU_MODE: usize = 0x53040f0;
 const N_IMG: usize = 15;
+const TIMEOUT: u64 = 600; // frames sans nouvelle de Sol avant de cacher la barre
 
 /// niveau (0..30, comme les effets sol_tension_00..30) -> image (0..14)
 const LEVEL_TO_IMG: [u8; 31] = [
@@ -19,6 +19,11 @@ static SLOT_VAL: [AtomicU32; 8] = [
     AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0),
     AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0),
 ];
+static SLOT_SEEN: [AtomicU64; 8] = [
+    AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+    AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+];
+static FRAME: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Copy)]
 struct Panes {
@@ -26,6 +31,8 @@ struct Panes {
     imgs: [u64; N_IMG],
 }
 static mut PANES: [Panes; 8] = [Panes { root: 0, imgs: [0; N_IMG] }; 8];
+static mut CACHED_LAYOUT: u64 = 0;
+static mut CACHED_ROOT: u64 = 0;
 
 extern "C" {
     #[link_name = "\u{1}_ZN3app8lua_bind38FighterManager__get_fighter_entry_implEPNS_14FighterManagerENS_14FighterEntryIDE"]
@@ -67,74 +74,113 @@ pub extern "C" fn sol_hud_tension(entry_id: u32, tension: u32) {
         }
         let lvl = level_of(tension).min(30);
         SLOT_VAL[slot].store(LEVEL_TO_IMG[lvl] as u32 + 1, Ordering::Relaxed);
+        SLOT_SEEN[slot].store(FRAME.load(Ordering::Relaxed), Ordering::Relaxed);
     }
 }
 
-fn pane_valid(pane: u64) -> bool {
-    unsafe { pane != 0 && *(pane as *const u64) != 0 }
-}
-
-fn set_visible(pane: u64, visible: bool) {
-    if !pane_valid(pane) {
-        return;
-    }
-    unsafe {
-        let internal = *(pane as *const u64) as *mut u8;
-        *internal.add(0x58) = (*internal.add(0x58) & 0xFE) | (visible as u8);
-    }
-}
-
-unsafe fn get_pane(layout: u64, name: &[u8]) -> u64 {
-    let func: extern "C" fn(u64, *const u8, ...) -> [u64; 4] =
-        std::mem::transmute((getRegionAddress(Region::Text) as *mut u8).add(GET_PANE_BY_NAME));
-    func(layout, name.as_ptr())[1]
-}
-
-#[skyline::hook(offset = 0x1b6cc08, inline)]
-unsafe fn set_info_alpha(ctx: &InlineCtx) {
-    let layout_udata = ctx.registers[0].x();
-    let layout_view = *(layout_udata as *const u64).add(1);
-    let layout_pane = *(layout_view as *const u64).add(3);
-    let ui2d_pane = *(layout_pane as *const u64);
-    let name_ptr = (ui2d_pane as *const u8).add(0xb0);
-    let len = skyline::libc::strlen(name_ptr as _);
-    let name = std::slice::from_raw_parts(name_ptr, len);
-    let index = match name {
-        b"p1" => 0,
-        b"p2" => 1,
-        b"p3" => 2,
-        b"p4" => 3,
-        b"p5" => 4,
-        b"p6" => 5,
-        b"p7" => 6,
-        b"p8" => 7,
-        _ => return,
-    };
-    let mut p = Panes { root: 0, imgs: [0; N_IMG] };
-    p.root = get_pane(layout_udata, b"sol_tension\0");
-    if p.root != 0 {
-        for i in 0..N_IMG {
-            let n = [b's', b'o', b'l', b'_', b't', b'g', b'_', b'0' + (i / 10) as u8, b'0' + (i % 10) as u8, 0];
-            p.imgs[i] = get_pane(layout_udata, &n);
+// ---- nn::ui2d (mêmes champs que nnsdk-rs / plugin du Potemkin) ----
+// Layout : +0x18 root_pane, +0x30 layout_name
+// Pane   : +0x20 liste des enfants (prev, next), +0x08 lien dans la liste du parent,
+//          +0x58 drapeaux (bit 0 = visible), +0xb0 nom
+// Parts  : +0xe8 Layout* de la partie
+unsafe fn name_is(pane: u64, name: &[u8]) -> bool {
+    let p = (pane + 0xb0) as *const u8;
+    for (i, c) in name.iter().enumerate() {
+        if *p.add(i) != *c {
+            return false;
         }
     }
-    PANES[index] = p;
-    SLOT_VAL[index].store(0, Ordering::Relaxed);
+    *p.add(name.len()) == 0
 }
 
-#[skyline::hook(offset = 0x138a710, inline)]
-unsafe fn hud_update(_ctx: &InlineCtx) {
-    let mode = (getRegionAddress(Region::Text) as u64 + MENU_MODE as u64) as *const u64;
-    if [0x6020000u64, 0x4050000].contains(&*mode) {
+unsafe fn find(pane: u64, name: &[u8], depth: u32) -> u64 {
+    if pane == 0 || depth > 32 {
+        return 0;
+    }
+    if name_is(pane, name) {
+        return pane;
+    }
+    let head = pane + 0x20;
+    let mut node = *((head + 8) as *const u64);
+    let mut guard = 0;
+    while node != 0 && node != head && guard < 4096 {
+        let r = find(node - 8, name, depth + 1);
+        if r != 0 {
+            return r;
+        }
+        node = *((node + 8) as *const u64);
+        guard += 1;
+    }
+    0
+}
+
+unsafe fn set_visible(pane: u64, visible: bool) {
+    if pane == 0 {
         return;
+    }
+    let f = (pane + 0x58) as *mut u8;
+    *f = (*f & 0xFE) | (visible as u8);
+}
+
+unsafe fn refresh_cache(root: u64) {
+    const PN: [&[u8]; 8] = [b"p1", b"p2", b"p3", b"p4", b"p5", b"p6", b"p7", b"p8"];
+    for s in 0..8 {
+        let mut p = Panes { root: 0, imgs: [0; N_IMG] };
+        let part = find(root, PN[s], 0);
+        if part != 0 {
+            let lay = *((part + 0xe8) as *const u64);
+            if lay != 0 {
+                let proot = *((lay + 0x18) as *const u64);
+                p.root = find(proot, b"sol_tension", 0);
+                if p.root != 0 {
+                    for i in 0..N_IMG {
+                        let n = [b's', b'o', b'l', b'_', b't', b'g', b'_', b'0' + (i / 10) as u8, b'0' + (i % 10) as u8];
+                        p.imgs[i] = find(p.root, &n, 0);
+                    }
+                }
+            }
+        }
+        PANES[s] = p;
+    }
+}
+
+#[skyline::hook(offset = 0x4b638, inline)]
+unsafe fn layout_draw(ctx: &InlineCtx) {
+    let layout = ctx.registers[0].x();
+    if layout == 0 {
+        return;
+    }
+    let name = *((layout + 0x30) as *const u64) as *const u8;
+    if name.is_null() {
+        return;
+    }
+    let want = b"info_melee\0";
+    for (i, c) in want.iter().enumerate() {
+        if *name.add(i) != *c {
+            return;
+        }
+    }
+    let root = *((layout + 0x18) as *const u64);
+    if root == 0 {
+        return;
+    }
+    let frame = FRAME.fetch_add(1, Ordering::Relaxed) + 1;
+    if layout != CACHED_LAYOUT || root != CACHED_ROOT {
+        CACHED_LAYOUT = layout;
+        CACHED_ROOT = root;
+        for s in 0..8 {
+            SLOT_VAL[s].store(0, Ordering::Relaxed);
+        }
+        refresh_cache(root);
     }
     for s in 0..8 {
         let p = PANES[s];
-        if !pane_valid(p.root) {
+        if p.root == 0 {
             continue;
         }
         let v = SLOT_VAL[s].load(Ordering::Relaxed);
-        if v == 0 {
+        let seen = SLOT_SEEN[s].load(Ordering::Relaxed);
+        if v == 0 || frame.saturating_sub(seen) > TIMEOUT {
             set_visible(p.root, false);
             continue;
         }
@@ -148,5 +194,5 @@ unsafe fn hud_update(_ctx: &InlineCtx) {
 
 #[skyline::main(name = "sol_hud")]
 pub fn main() {
-    skyline::install_hooks!(set_info_alpha, hud_update);
+    skyline::install_hooks!(layout_draw);
 }
