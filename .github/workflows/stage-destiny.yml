@@ -134,7 +134,7 @@ jobs:
           M="/tmp/out/mod/(Stage) Destiny's Entrance (Smashville)"
           NODE_PATH=/tmp/rn/node_modules python3 -u outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu > /tmp/out/ui.txt 2>&1
           grep -c "greffé" /tmp/out/ui.txt
-          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=1a1f33 node rendu.js /tmp/out/apercu_recule.png 1280 720 0 110 520 0 90 0 40 > /dev/null 2>&1)
+          (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=1a1f33 node rendu.js /tmp/out/apercu_recule.png 1280 720 0 70 368 0 70 0 30 > /dev/null 2>&1)
           (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=1a1f33 node rendu.js /tmp/out/apercu_jeu.png 1280 720 0 55 260 0 45 0 40 > /dev/null 2>&1)
           (cd $R && NODE_PATH=/tmp/rn/node_modules UI_FOND=1a1f33 node rendu.js /tmp/out/apercu_bas.png 1280 720 0 30 120 0 40 -200 40 > /dev/null 2>&1)
           (cd /tmp/out/mod && find . -type f | sort > /tmp/out/mod_liste.txt); wc -l < /tmp/out/mod_liste.txt
