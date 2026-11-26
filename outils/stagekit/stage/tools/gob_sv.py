@@ -194,8 +194,9 @@ for _ts in [x for x in os.environ.get('GOB_FACE_AVANT', '').split(',') if x]:
 # - sol translucide (152F3974) prolongé devant et sur les côtés jusqu'à ±3000 (UV prolongés par un ajustement affine) ;
 # - plan opaque sombre sous le décor en miroir (fond du reflet), qui bouche tous les trous
 if os.environ.get('GOB_SOL', '1') == '1':
+    SOL_TEX = os.environ.get('GOB_SOL_TEX', '152F3974')
     from PIL import Image as _I
-    sols = [o for _, o in garde if o['tex'] == '152F3974']
+    sols = [o for _, o in garde if o['tex'] == SOL_TEX]
     Ps = np.concatenate([o['pos'].reshape(-1, 3) for o in sols])
     Us = np.concatenate([o['uv'].reshape(-1, 2) for o in sols])
     co = np.linalg.lstsq(np.c_[Ps[:, 0], Ps[:, 2], np.ones(len(Ps))], Us, rcond=None)[0]
@@ -212,7 +213,7 @@ if os.environ.get('GOB_SOL', '1') == '1':
     # couleur moyenne du sol), comme le prolongement de Sleepless Lamp qui marche ; jusqu'à ±4000 ; plus de fond séparé
     G = float(os.environ.get('GOB_SOL_G', '4000'))
     PAS = 200.0
-    _a = np.asarray(TEX['152F3974'].convert('RGB')).astype(np.float32)
+    _a = np.asarray(TEX[SOL_TEX].convert('RGB')).astype(np.float32)
     _h, _w = _a.shape[:2]
     _med = np.median(_a.reshape(-1, 3), axis=0)
     if os.environ.get('GOB_SOL_ROUGE', '1') == '1':
@@ -244,7 +245,7 @@ if os.environ.get('GOB_SOL', '1') == '1':
     # v4b : le sol d'origine n'est pas un rectangle (trous à l'intérieur de son emprise, devant à droite) -> dalles sur
     # TOUTE la surface, juste sous le point le plus bas du sol d'origine (cachées là où il existe)
     ys = float(Ps[:, 1].min()) - 0.3
-    tri_ = dalles(-G, G, -G, G)
+    tri_ = dalles(-G, G, float(os.environ.get('GOB_SOL_ZMIN', -G)), G)
     pos = np.array(tri_, dtype=np.float64)
     sol0 = sols[0]
     sol0['pos'] = np.concatenate([sol0['pos'], pos])
