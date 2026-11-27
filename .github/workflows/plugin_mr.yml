@@ -1,0 +1,55 @@
+name: Plugin Mach Rider (code chiffre, sortie chiffree)
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'donnees/mr_src.tgz.enc', '.github/workflows/plugin_mr.yml' ]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: plugin_mr
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Code et donnees (dechiffres seulement ici, jamais affiches)
+        env:
+          CLE: ${{ secrets.CLE }}
+        run: |
+          printf '%s' "$CLE" > /tmp/cle && openssl enc -d -aes-256-cbc -pbkdf2 -pass file:/tmp/cle -in donnees/mr_src.tgz.enc | tar xz -C . && rm -f /tmp/cle
+          cd mr && test -s src/generated.rs && echo "donnees ok"
+      - name: Cache outils (cargo-skyline, toolchain Switch)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-skyline
+            ~/.cargo/skyline
+            ~/.rustup/toolchains/*skyline*
+            ~/.cargo/registry
+            ~/.cargo/git
+            plugin_chunli/target
+          # même cache que plugin_chunli.yml (outils déjà là : update-std échoue sur la limite de l'API GitHub)
+          key: skyline-cl-v1-${{ hashFiles('plugin_chunli/Cargo.toml') }}
+          restore-keys: skyline-
+      - name: Compiler
+        working-directory: mr
+        timeout-minutes: 35
+        run: |
+          command -v cargo-skyline >/dev/null || cargo install cargo-skyline
+          if ! (rustup toolchain list | grep -qi skyline && [ -d ~/.cargo/skyline/toolchain ]); then for i in 1 2 3 4 5; do cargo skyline update-std && break; sleep 20; done; fi
+          set +o pipefail; yes | CARGO_TERM_COLOR=never cargo skyline build --release > /tmp/log 2>&1 || true; set -o pipefail
+          grep -E "^error|-->" /tmp/log | head -60 || true; grep -vE "^\s*[0-9]*\s*\||^\s*=|^\s*$" /tmp/log | grep -vE "Compiling|Downloaded|Updating|Fetching|Locking|Adding" | tail -15 || true
+          N=$(ls target/aarch64-skyline-switch/release/*.nro | head -1); test -s "$N"
+          printf '%s' "$CLE" > /tmp/cle && openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/cle -in "$N" -out /tmp/plugin.nro.enc && rm -f /tmp/cle
+          rm -rf src
+        env:
+          CLE: ${{ secrets.CLE }}
+      - name: Sortie chiffree (branche sortie_mr)
+        run: |
+          mkdir -p /tmp/sortie && cp /tmp/plugin.nro.enc /tmp/sortie/ && cd /tmp/sortie
+          git init -q -b sortie_mr && git config user.name "github-actions" && git config user.email "github-actions@users.noreply.github.com"
+          git add -A && git commit -q -m "plugin chiffre ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" sortie_mr
