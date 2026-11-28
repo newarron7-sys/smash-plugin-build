@@ -39,6 +39,10 @@ jobs:
           find /tmp/neon -type d -path "*battlefield_s/normal/model/ring_nocastshadow_set" | head -1 > /tmp/neon.txt; cat /tmp/neon.txt
           curl -sSL -o /tmp/hashes.txt https://raw.githubusercontent.com/ultimate-research/archive-hashes/master/Hashes_FullPath
           grep "^stage/training/normal/" /tmp/hashes.txt > /tmp/liste_tr.txt; wc -l < /tmp/liste_tr.txt
+          # salle d'entraînement de 462054 (Boxed) : conteneurs training_base_set + UI stage_1/2_training
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 462054 /tmp/ref > /dev/null 2>&1
+          dirname "$(find /tmp/ref/462054 -path "*stage/training/normal/model/training_base_set/model.numdlb" | head -1)" > /tmp/refdos.txt; cat /tmp/refdos.txt
+          mkdir -p /tmp/refui; find /tmp/ref/462054 -ipath "*ui/replace*/stage/stage_*" -name "stage_*_training.bntx" -exec cp {} /tmp/refui/ \; ; ls /tmp/refui
           mkdir -p /tmp/hdr && cd /tmp/hdr
           curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
           unzip -qo sp.zip "*hdr-stages/stage/battlefield/normal/param/battlefield_00.lvd" -d x
@@ -63,6 +67,8 @@ jobs:
           export PATH=$PATH:/tmp/lvdtool/bin:$HOME/.cargo/bin
           M="/tmp/out/mod/(Stage) Training Rooms (Entrainement L)"
           mkdir -p "$M"
+          export TR_SUR=1 TR_BLOCS=1 TR_BLOC_BAS=-260 TR_REF_DOS="$(cat /tmp/refdos.txt)"
+          export TR_UI_FOURNIS=$(ls /tmp/refui | sed -E 's/stage_([0-9])_.*/\1/' | sort -u | paste -sd,); echo "UI fournies : $TR_UI_FOURNIS"
           TR_SCENE=/tmp/rendu TR_COLL_PNG=/tmp/out/collisions.png python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -5 | cut -c1-80
       - name: Apercus (image + animation des lignes)
         run: |
@@ -71,7 +77,11 @@ jobs:
           (cd /tmp/rn && npx playwright install --with-deps chromium >/dev/null 2>&1)
           R=/tmp/rendu; cp outils/stagekit/stage/tools/rendu/* $R/; cp /tmp/rn/node_modules/three/build/three.module.js $R/
           (cd $R && nohup python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 3
+          M="/tmp/out/mod/(Stage) Training Rooms (Entrainement L)"
+          UI_NOM=training UI_SUFFIXE=_s01 UI_CAM='-20,95,330,-20,70,0,42,50' UI_FOND=000000 NODE_PATH=/tmp/rn/node_modules python3 -u outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu > /tmp/out/ui.txt 2>&1
+          grep -c "greffé" /tmp/out/ui.txt
           cd $R
+          NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_dessous.png 1280 720 -25 60 430 -25 10 0 48 >> /tmp/out/rendu.txt 2>&1
           NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_jeu.png 1280 720 -20 105 310 -20 60 0 45 > /tmp/out/rendu.txt 2>&1
           NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_cote.png 1280 720 170 120 260 -40 60 -20 45 >> /tmp/out/rendu.txt 2>&1
           mkdir -p /tmp/gif
@@ -94,4 +104,3 @@ jobs:
           openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
           cd /tmp/pub && git init -q -b sortie_tralt && git config user.name gha && git config user.email gha@users.noreply.github.com
           git add -A && git commit -q -m "tralt" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_tralt
-# v2
