@@ -43,16 +43,19 @@ jobs:
           curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
           unzip -qo sp.zip "*hdr-stages/stage/battlefield/normal/param/battlefield_00.lvd" -d x
           find /tmp/hdr/x -name battlefield_00.lvd | head -1 > /tmp/lvd.txt; cat /tmp/lvd.txt
-      - name: Cache outils (ultimate_tex_cli, yamlvd)
+      - name: Cache ultimate_tex_cli
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cargo/bin/ultimate_tex_cli
-            /tmp/lvdtool
-          key: tex-lvd-v1
+          path: ~/.cargo/bin/ultimate_tex_cli
+          key: ultimate-tex-cli-v1
+      - name: Cache yamlvd
+        uses: actions/cache@v4
+        with:
+          path: /tmp/lvdtool
+          key: yamlvd-v1
       - name: ultimate_tex_cli et yamlvd
         run: |
-          test -x ~/.cargo/bin/ultimate_tex_cli || cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli 2>&1 | tail -1
+          test -x ~/.cargo/bin/ultimate_tex_cli || cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli 2>&1 | tail -15
           test -x /tmp/lvdtool/bin/yamlvd || cargo install smash-lvd --features cli --root /tmp/lvdtool 2>&1 | tail -1
       - name: Construction
         run: |
