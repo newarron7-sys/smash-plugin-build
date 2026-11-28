@@ -1,0 +1,55 @@
+name: Stage - salle d'entrainement (recherche)
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/stage-train-recherche.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Recherche
+        run: |
+          set +e
+          mkdir -p /tmp/out
+          sudo apt-get install -y p7zip-full p7zip-rar unrar >/dev/null 2>&1 || true
+          curl -sL "https://gamebanana.com/apiv11/Mod/460711?_csvProperties=_sName,_sText,_sVersion" | python3 -c "import json,sys,re,html;d=json.load(sys.stdin);print(d.get('_sName'),d.get('_sVersion'));print(html.unescape(re.sub('<[^>]+>','\n',d.get('_sText',''))))" > /tmp/out/stage_alts.txt
+          curl -sSL -o /tmp/hashes.txt https://raw.githubusercontent.com/ultimate-research/archive-hashes/master/Hashes_FullPath
+          grep -E "^stage/training/" /tmp/hashes.txt > /tmp/out/training_chemins.txt; wc -l /tmp/out/training_chemins.txt
+          grep -E "^ui/replace/stage/.*training|^ui/.*stage.*training" /tmp/hashes.txt > /tmp/out/training_ui.txt
+          python3 - <<'PY' > /tmp/out/recherche.txt
+          import json, urllib.request, urllib.parse
+          def get(u):
+              r = urllib.request.Request(u, headers={'User-Agent': 'Mozilla/5.0'})
+              return json.load(urllib.request.urlopen(r, timeout=60))
+          vus = {}
+          for t in ['Training Stage', 'Training Room', 'Training mode stage', 'Training stage retexture', 'Brawl Training']:
+              for page in (1, 2):
+                  u = 'https://gamebanana.com/apiv11/Util/Search/Results?_sModelName=Mod&_sOrder=best_match&_idGameRow=6498&_sSearchString=%s&_nPage=%d&_nPerpage=50' % (urllib.parse.quote(t), page)
+                  try: res = get(u).get('_aRecords', [])
+                  except Exception as e: print('ERR', e); break
+                  for m in res:
+                      if 'train' not in m.get('_sName', '').lower(): continue
+                      vus[m['_idRow']] = m
+          for i, m in sorted(vus.items()):
+              try:
+                  p = get('https://gamebanana.com/apiv11/Mod/%d/ProfilePage' % i)
+                  print('FICHE', i, '|', p.get('_sName'), '|', (p.get('_aCategory') or {}).get('_sName'), '| likes', p.get('_nLikeCount'), '| fichiers', [(f['_idRow'], f.get('_sFile'), f.get('_nFilesize')) for f in p.get('_aFiles', [])][:4])
+                  print('   desc', (p.get('_sDescription') or '')[:200])
+              except Exception as e: print('ERRF', i, e)
+          PY
+          cat /tmp/out/recherche.txt | head -80
+      - name: Chiffrer et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_trainrech && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "trainrech" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_trainrech
