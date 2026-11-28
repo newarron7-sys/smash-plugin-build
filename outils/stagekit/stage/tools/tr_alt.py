@@ -461,5 +461,15 @@ for n in range(5):
     if n not in UI_FOURNIS:
         partage['ui/replace/stage/stage_%d/stage_%d_%s.bntx' % (n, n, STAGE)] = \
             ['ui/replace/stage/stage_%d/stage_%d_%s_%s.bntx' % (n, n, STAGE, FORME.split('_')[-1])]
-json.dump({'share_to_vanilla': partage}, open(os.path.join(OUT, 'config.json'), 'w'), indent=2)
-print('fournis', len(fournis), '; partagés avec le jeu', len(partage))
+if FORME == 'normal':
+    # à la place du terrain normal (comme BSL Station) : pas de partage, nouvelles textures déclarées (new-dir-files)
+    vanille = set(l.strip() for l in open(LISTE))
+    cfg = {'new-dir-files': {}}
+    for f in sorted(fournis):
+        if f not in vanille:
+            cfg['new-dir-files'].setdefault(os.path.dirname(f), []).append(f)
+    json.dump(cfg, open(os.path.join(OUT, 'config.json'), 'w'), indent=2)
+    print('fournis', len(fournis), '; nouveaux fichiers', sum(len(v) for v in cfg['new-dir-files'].values()))
+else:
+    json.dump({'share_to_vanilla': partage}, open(os.path.join(OUT, 'config.json'), 'w'), indent=2)
+    print('fournis', len(fournis), '; partagés avec le jeu', len(partage))
