@@ -1,0 +1,93 @@
+name: Stage - Training Rooms (Brawl) en variante du stage d'entrainement (Stage Alts L)
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/stage-tralt.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: stage-tralt
+  cancel-in-progress: true
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Outils
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar unrar >/dev/null 2>&1 || true
+          pip install ssbh_data_py numpy pillow scipy pyyaml >/dev/null
+          python3 -c "import ssbh_data_py as S; print(S.matl_data)"
+          mkdir -p /tmp/out/travail
+      - name: Stage Brawl (149289), Yoshi's Story (392643), Neonfield (412003), chemins du jeu, lvd HDR
+        run: |
+          set +e
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 149289 /tmp/gb > /dev/null 2>&1
+          cp "$(find /tmp/gb/149289 -name "STGONLINETRAINING.pac" | head -1)" /tmp/out/travail/tr.pac; ls -la /tmp/out/travail
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 392643 /tmp/ys > /dev/null 2>&1
+          dirname "$(find /tmp/ys -path "*normal/model/bg2_set/model.numatb" | head -1)" > /tmp/ys.txt; cat /tmp/ys.txt
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 412003 /tmp/neon > /dev/null 2>&1
+          find /tmp/neon -type d -path "*battlefield_s/normal/model/ring_nocastshadow_set" | head -1 > /tmp/neon.txt; cat /tmp/neon.txt
+          curl -sSL -o /tmp/hashes.txt https://raw.githubusercontent.com/ultimate-research/archive-hashes/master/Hashes_FullPath
+          grep "^stage/training/normal/" /tmp/hashes.txt > /tmp/liste_tr.txt; wc -l < /tmp/liste_tr.txt
+          mkdir -p /tmp/hdr && cd /tmp/hdr
+          curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
+          unzip -qo sp.zip "*hdr-stages/stage/battlefield/normal/param/battlefield_00.lvd" -d x
+          find /tmp/hdr/x -name battlefield_00.lvd | head -1 > /tmp/lvd.txt; cat /tmp/lvd.txt
+      - name: Cache outils (ultimate_tex_cli, yamlvd)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/ultimate_tex_cli
+            /tmp/lvdtool
+          key: tex-lvd-v1
+      - name: ultimate_tex_cli et yamlvd
+        run: |
+          test -x ~/.cargo/bin/ultimate_tex_cli || cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli 2>&1 | tail -1
+          test -x /tmp/lvdtool/bin/yamlvd || cargo install smash-lvd --features cli --root /tmp/lvdtool 2>&1 | tail -1
+      - name: Construction
+        run: |
+          set -o pipefail
+          export PATH=$PATH:/tmp/lvdtool/bin:$HOME/.cargo/bin
+          M="/tmp/out/mod/(Stage) Training Rooms (Entrainement L)"
+          mkdir -p "$M"
+          TR_SCENE=/tmp/rendu TR_COLL_PNG=/tmp/out/collisions.png python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -5 | cut -c1-80
+      - name: Apercus (image + animation des lignes)
+        run: |
+          set +e
+          npm i --prefix /tmp/rn three@0.160.0 playwright@1.47.2 >/dev/null 2>&1
+          (cd /tmp/rn && npx playwright install --with-deps chromium >/dev/null 2>&1)
+          R=/tmp/rendu; cp outils/stagekit/stage/tools/rendu/* $R/; cp /tmp/rn/node_modules/three/build/three.module.js $R/
+          (cd $R && nohup python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 3
+          cd $R
+          NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_jeu.png 1280 720 -20 105 310 -20 60 0 45 > /tmp/out/rendu.txt 2>&1
+          NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_cote.png 1280 720 170 120 260 -40 60 -20 45 >> /tmp/out/rendu.txt 2>&1
+          mkdir -p /tmp/gif
+          for i in $(seq 0 11); do dv=$(python3 -c "print(round($i/12,4))")
+            DV=$dv NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/gif/f$(printf %02d $i).png 640 360 -20 105 310 -20 60 0 45 >> /tmp/out/rendu.txt 2>&1; done
+          python3 -c "
+          from PIL import Image; import glob
+          fs=sorted(glob.glob('/tmp/gif/f*.png')); ims=[Image.open(f).convert('RGB') for f in fs]
+          ims[0].save('/tmp/out/lignes_animees.gif', save_all=True, append_images=ims[1:], duration=278, loop=0)
+          print(len(ims), 'images')"
+          (cd /tmp/out/mod && find . -type f | sort > /tmp/out/mod_liste.txt); wc -l < /tmp/out/mod_liste.txt
+          (cd /tmp/out/mod && zip -qr /tmp/out/Training_Rooms_L.zip .)
+          true
+      - name: Chiffrer (cle de la session) et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_tralt && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "tralt" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_tralt

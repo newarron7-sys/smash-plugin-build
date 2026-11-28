@@ -10,6 +10,7 @@ const L=new THREE.TextureLoader();const d=await (await fetch('scene.json')).json
 let n=0;
 for(const o of d){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(o.p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(o.uv,2));if(o.c)g.setAttribute('color',new THREE.Float32BufferAttribute(o.c,3));if(o.u1)g.setAttribute('uv1',new THREE.Float32BufferAttribute(o.u1,2));
  if(!tx[o.t]){tx[o.t]=L.load('tex/'+o.t+'.png',()=>{n--;});n++;tx[o.t].wrapS=tx[o.t].wrapT=THREE.RepeatWrapping;tx[o.t].colorSpace=THREE.SRGBColorSpace;tx[o.t].flipY=false;tx[o.t].anisotropy=8;}
+ if(o.l&&q.get('dv'))tx[o.t].offset.y=+q.get('dv');
  if(o.b&&!tx[o.b]){tx[o.b]=L.load('tex/'+o.b+'.png',()=>{n--;});n++;tx[o.b].colorSpace=THREE.SRGBColorSpace;tx[o.b].flipY=false;tx[o.b].channel=1;}
  const m=new THREE.MeshBasicMaterial({map:tx[o.t],lightMap:o.b?tx[o.b]:null,lightMapIntensity:Math.PI,side:THREE.DoubleSide,transparent:o.a,alphaTest:o.a?0.3:0,depthWrite:!o.a&&!o.add,vertexColors:!!o.c});if(o.add){m.blending=THREE.AdditiveBlending;m.transparent=true;}
  sc.add(new THREE.Mesh(g,m));}
