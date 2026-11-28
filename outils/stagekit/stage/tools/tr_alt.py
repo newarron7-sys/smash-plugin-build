@@ -35,7 +35,7 @@ if os.path.isdir(os.path.join(OUT, 'stage')):
 ECH = float(os.environ.get('TR_ECHELLE', '1.0'))
 Y0 = float(os.environ.get('TR_Y0', '0.0'))
 DOS = os.environ.get('TR_DOS', 'training_base_set')
-PFX = 'tra_'
+PFX = os.environ.get('TR_PFX', 'tra_')
 MODELES = set(os.environ.get('TR_MODELES', 'StgTrain,zStgBattleFieldAshiba01,zStgBattleFieldAshiba02,'
                                            'zStgBattleFieldAshiba03').split(','))
 SANS_TEX = set(os.environ.get('TR_SANS_TEX', 'TShadow1').split(','))     # ombres plaquées de Brawl (fondu spécial)
@@ -65,6 +65,24 @@ for _, mn, ol in models:
             continue
         garde.append((mn, o))
 
+
+# Tracen Academy : ciel (objet *_Sky, rayon 18 000) réduit autour de l'origine (plan lointain de la caméra) ;
+# triangles trop près de la caméra (centre z > ZMAX) retirés
+_CE = float(os.environ.get('TR_CIEL_ECH', '1'))
+_ZMAX = float(os.environ.get('TR_ZMAX', '1e9'))
+for _, o in garde:
+    if _CE != 1 and '_Sky' in o['name']:
+        o['pos'] = o['pos'] * _CE
+        print('ciel réduit x%.2f :' % _CE, o['name'])
+    if _ZMAX < 1e8:
+        k_ = o['pos'][:, :, 2].mean(axis=1) <= _ZMAX
+        if not k_.all():
+            print('trop près de la caméra : %d / %d triangles retirés de %s' % ((~k_).sum(), len(k_), o['name']))
+            o['pos'] = o['pos'][k_]
+            o['nrm'] = o['nrm'][k_]
+            if o['uv'] is not None:
+                o['uv'] = o['uv'][k_]
+garde = [(m_, o) for m_, o in garde if len(o['pos'])]
 
 # v5 (demande du joueur) : bloc sous le sol jusqu'à y BAS (on voyait le vide) : façade avant (z 64,8) et côté droit (x 199,7)
 # en carreaux de 10 comme le sol (carreau 9,4 + joint 0,6), mêmes textures colonne par colonne que la rangée avant du sol
@@ -177,7 +195,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     nrm = nrm / np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-6)
     idx = inv.astype(np.uint32).ravel()
     nv = len(pos)
-    mo = A.MeshObjectData('tra_%02d' % k, 0)
+    mo = A.MeshObjectData(PFX + '%02d' % k, 0)
     mo.positions = [attr('Position0', pos)]
     mo.normals = [attr('Normal0', np.c_[nrm, np.zeros(nv)])]
     try:
@@ -187,7 +205,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
         tg = np.c_[np.cross(up, nrm), np.ones(nv)]
     mo.tangents = [attr('Tangent0', tg)]
     mo.vertex_indices = idx      # v4 : oublié avant -> maillages sans triangles = plantage au chargement (cross2+0x388a0cc)
-    lab = 'tra_%s' % t
+    lab = PFX + t
     if g == 'l' and M3 is not None:
         # mêmes attributs que les maillages de Neonfield (cot_sbf.py)
         mo.texture_coordinates = [attr('map1', uv), attr('uvSet', np.zeros((nv, 2))), attr('uvSet1', np.zeros((nv, 2)))]

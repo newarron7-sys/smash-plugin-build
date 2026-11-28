@@ -1,0 +1,104 @@
+name: Stage - Tracen Academy (Brawl 660599) en variante du Studio Wii Fit (Stage Alts L)
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/stage-umawf.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: stage-umawf
+  cancel-in-progress: true
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Outils
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar unrar >/dev/null 2>&1 || true
+          pip install ssbh_data_py numpy pillow scipy pyyaml >/dev/null
+          python3 -c "import ssbh_data_py as S; print(S.matl_data)"
+          mkdir -p /tmp/out/travail
+      - name: Stage Brawl (149289), Yoshi's Story (392643), Neonfield (412003), chemins du jeu, lvd HDR
+        run: |
+          set +e
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 660599 /tmp/gb > /dev/null 2>&1
+          cp "$(find /tmp/gb/660599 -iname "STGTRACENACADEMY.pac" | head -1)" /tmp/out/travail/tr.pac; ls -la /tmp/out/travail
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 392643 /tmp/ys > /dev/null 2>&1
+          dirname "$(find /tmp/ys -path "*normal/model/bg2_set/model.numatb" | head -1)" > /tmp/ys.txt; cat /tmp/ys.txt
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 412003 /tmp/neon > /dev/null 2>&1
+          find /tmp/neon -type d -path "*battlefield_s/normal/model/ring_nocastshadow_set" | head -1 > /tmp/neon.txt; cat /tmp/neon.txt
+          curl -sSL -o /tmp/hashes.txt https://raw.githubusercontent.com/ultimate-research/archive-hashes/master/Hashes_FullPath
+          grep "^stage/wiifit/normal/" /tmp/hashes.txt > /tmp/liste_tr.txt; wc -l < /tmp/liste_tr.txt
+          # refs du Studio Wii Fit de BSL Station : 319081 (conteneurs stc_floor_set), 482979 (numdlb à 0 entrée), 476217 (plateau)
+          for m in 319081 482979 476217; do python3 -u outils/stagekit/stage/tools/gb_fetch.py mod $m /tmp/ref > /dev/null 2>&1; done
+          dirname "$(find /tmp/ref/319081 -path "*stage/wiifit/normal/model/stc_floor_set/model.numdlb" | head -1)" > /tmp/refdos.txt; cat /tmp/refdos.txt
+          find /tmp/ref/482979 -path "*stage/wiifit/normal/model/dys_trainer_set/model.numdlb" | head -1 > /tmp/vide.txt; cat /tmp/vide.txt
+          dirname "$(find /tmp/ref/476217 -path "*stage/wiifit/normal/model/dyr_board01_hmdl_set/model.numshb" | head -1)" > /tmp/plateau.txt; cat /tmp/plateau.txt
+          mkdir -p /tmp/hdr && cd /tmp/hdr
+          curl -sSL -o hdr.zip https://github.com/HDR-Development/HewDraw-Remix/releases/download/v0.50.10/hdr-switch.zip
+          curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
+          for z in hdr.zip sp.zip; do unzip -qo $z "*wiifit*" -d x_$z 2>/dev/null; done
+          find /tmp/hdr -path "*hdr-stages/stage/wiifit/normal/param/wiifit00.lvd" | head -1 > /tmp/lvd.txt; cat /tmp/lvd.txt
+      - name: Cache ultimate_tex_cli
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/ultimate_tex_cli
+          key: ultimate-tex-cli-v1
+      - name: Cache yamlvd
+        uses: actions/cache@v4
+        with:
+          path: /tmp/lvdtool
+          key: yamlvd-v1
+      - name: ultimate_tex_cli et yamlvd
+        run: |
+          test -x ~/.cargo/bin/ultimate_tex_cli || cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli 2>&1 | tail -15
+          test -x /tmp/lvdtool/bin/yamlvd || cargo install smash-lvd --features cli --root /tmp/lvdtool 2>&1 | tail -1
+      - name: Construction
+        run: |
+          set -o pipefail
+          export PATH=$PATH:/tmp/lvdtool/bin:$HOME/.cargo/bin
+          export TR_STAGE=wiifit TR_FORME=normal_s01 TR_DOS=stc_floor_set TR_LVD_NOM=wiifit00.lvd TR_ENTERRE=1
+          export TR_REF_DOS="$(cat /tmp/refdos.txt)" TR_VIDE="$(cat /tmp/vide.txt)" TR_PLATEAU="$(cat /tmp/plateau.txt)"
+          mkdir -p /tmp/refui; find /tmp/ref/482979 -ipath "*ui/replace*/stage/stage_*" -name "stage_*_wiifit.bntx" -exec cp {} /tmp/refui/ \;
+          export TR_UI_FOURNIS=$(ls /tmp/refui | sed -E 's/stage_([0-9])_.*/\1/' | grep -v '^0$' | sort -u | paste -sd,); echo "UI fournies : $TR_UI_FOURNIS"
+          export TR_CACHES=dys_balancer_set,dys_trainer_far_set,dys_trainer_set,dys_trainerm_far_set,dys_trainerm_set,exercisebike_set,stc_cover_set,stc_eff_set,stc_machine_set,stc_room_set,stc_wall_set
+          M="/tmp/out/mod/(Stage) Tracen Academy (Wii Fit L)"; mkdir -p "$M"
+          export TR_FORME=normal_s01 TR_PFX=uma_ TR_MODELES=Uma TR_SUR=1 TR_CIEL_ECH=0.3 TR_ZMAX="${UMA_ZMAX:-1e9}"
+          export TR_CAMERA='-170,170,170,-40' TR_BLAST='-320,320,260,-130' TR_SPAWNS='-60,20,-100,60'
+          TR_SCENE=/tmp/rendu TR_COLL_PNG=/tmp/out/collisions.png python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -5 | cut -c1-80
+      - name: Apercus (image + animation des lignes)
+        run: |
+          set +e
+          npm i --prefix /tmp/rn three@0.160.0 playwright@1.47.2 >/dev/null 2>&1
+          (cd /tmp/rn && npx playwright install --with-deps chromium >/dev/null 2>&1)
+          R=/tmp/rendu; cp outils/stagekit/stage/tools/rendu/* $R/; cp /tmp/rn/node_modules/three/build/three.module.js $R/
+          (cd $R && nohup python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 3
+          M="/tmp/out/mod/(Stage) Tracen Academy (Wii Fit L)"
+          UI_NOM=wiifit UI_SUFFIXE=_s01 UI_CAM='0,45,330,0,60,-150,45,55' UI_FOND=000000 NODE_PATH=/tmp/rn/node_modules python3 -u outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu > /tmp/out/ui.txt 2>&1
+          grep -c "greffé" /tmp/out/ui.txt
+          cd $R
+          NODE_PATH=/tmp/rn/node_modules UI_FOND=8fb4d8 node rendu.js /tmp/out/apercu_jeu.png 1280 720 0 45 300 0 35 0 40 > /tmp/out/rendu.txt 2>&1
+          NODE_PATH=/tmp/rn/node_modules UI_FOND=8fb4d8 node rendu.js /tmp/out/apercu_recule.png 1280 720 0 70 450 0 45 0 45 >> /tmp/out/rendu.txt 2>&1
+          NODE_PATH=/tmp/rn/node_modules UI_FOND=8fb4d8 node rendu.js /tmp/out/apercu_haut.png 1280 720 0 900 900 0 0 0 50 >> /tmp/out/rendu.txt 2>&1
+          (cd /tmp/out/mod && find . -type f | sort > /tmp/out/mod_liste.txt); wc -l < /tmp/out/mod_liste.txt
+          (cd /tmp/out/mod && zip -qr /tmp/out/Tracen_Academy_WiiFit_L.zip .)
+          true
+      - name: Chiffrer (cle de la session) et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_umawf && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "umawf" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_umawf
