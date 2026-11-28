@@ -1,0 +1,64 @@
+name: Diag - Training Stage Boxed (462054)
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/diag-boxed.yml'
+permissions:
+  contents: write
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Diag
+        run: |
+          set +e
+          sudo apt-get install -y p7zip-full p7zip-rar unrar >/dev/null 2>&1 || true
+          pip install ssbh_data_py numpy pyyaml >/dev/null
+          mkdir -p /tmp/out
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 462054 /tmp/ref > /dev/null 2>&1
+          curl -sSL -A "Mozilla/5.0" "https://gamebanana.com/apiv11/Mod/462054/ProfilePage" | python3 -c "import json,sys,re,html;p=json.load(sys.stdin);print(p.get('_sName'));print(re.sub(r'\s+',' ',re.sub('<[^>]+>',' ',html.unescape(p.get('_sText','') or ''))))" > /tmp/out/page.txt
+          find /tmp/ref/462054 -type f -not -path "*archives*" | sed 's#/tmp/ref/462054/##' | sort > /tmp/out/fichiers.txt
+          find /tmp/ref/462054 -name config.json -exec cat {} \; > /tmp/out/config.json
+          find /tmp/ref/462054 -iname "*.txt" -not -path "*archives*" -exec sh -c 'echo "== $1"; cat "$1"' _ {} \; > /tmp/out/lisezmoi.txt
+          D=$(find /tmp/ref/462054 -type d -path "*stage/training/normal/model" | head -1)
+          python3 - "$D" <<'PY' > /tmp/out/modeles.txt 2>&1
+          import os, sys, numpy as np, ssbh_data_py as S
+          D = sys.argv[1]
+          for s in sorted(os.listdir(D)):
+              p = os.path.join(D, s); print('=====', s, sorted(os.listdir(p)))
+              if os.path.exists(os.path.join(p, 'model.numdlb')):
+                  dl = S.modl_data.read_modl(os.path.join(p, 'model.numdlb'))
+                  print(' numdlb', len(dl.entries), [(e.mesh_object_name, e.mesh_object_subindex, e.material_label) for e in dl.entries][:40])
+              if os.path.exists(os.path.join(p, 'model.numshb')):
+                  m = S.mesh_data.read_mesh(os.path.join(p, 'model.numshb'))
+                  for o in m.objects:
+                      P = np.asarray(o.positions[0].data)
+                      print('  obj %-30s sub%d os=%r nv=%d idx=%d min=%s max=%s attrs=%s' % (o.name, o.subindex, o.parent_bone_name, len(P), len(o.vertex_indices),
+                            np.round(P.min(0), 1).tolist(), np.round(P.max(0), 1).tolist(),
+                            [a.name for g in (o.texture_coordinates, o.color_sets) for a in g]))
+              if os.path.exists(os.path.join(p, 'model.numatb')):
+                  for e in S.matl_data.read_matl(os.path.join(p, 'model.numatb')).entries:
+                      print('  mat', e.material_label, e.shader_label, [(x.param_id.name, x.data) for x in e.textures])
+          M = os.path.join(os.path.dirname(D), 'motion')
+          for r, _, fs in os.walk(M):
+              for f in fs:
+                  a = S.anim_data.read_anim(os.path.join(r, f))
+                  print('MOTION', f, a.final_frame_index, [(g.group_type, [(n.name, [t.name for t in n.tracks]) for n in g.nodes]) for g in a.groups])
+          PY
+          cat /tmp/out/modeles.txt | cut -c1-300 | head -120
+          cat /tmp/out/config.json | head -50; cat /tmp/out/page.txt | head -c 2000
+      - name: Chiffrer et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_boxed && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "boxed" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_boxed
