@@ -69,11 +69,14 @@ for _, mn, ol in models:
 ADD = set(o['tex'] for _, o in garde if o.get('add'))   # bords lumineux des plates-formes : additifs dans Brawl
 
 
+SUR = os.environ.get('TR_SUR', '0') == '1'   # v3 : seulement les matériaux de BSL / Lamp (Bottom _opaque + découpe)
+
+
 def genre(t):
     if t == LIGNE:
         return 'l'
     if t in ADD:
-        return 'add'
+        return 'a' if SUR else 'add'
     a = np.asarray(TEX[t].convert('RGBA'))[:, :, 3]
     return 'a' if int(a.min()) < 200 else 'o'
 
@@ -173,7 +176,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
                 d_ = x.data
                 d_.alpha_sample_to_coverage = True
                 x.data = d_
-        else:
+        elif not SUR:
             # reçoit l'ombre des persos (même méthode que Gathering of Old Blood v7)
             e.shader_label = 'SFX_PBS_0000000008008100_opaque'
     entries.append(e)
@@ -184,6 +187,10 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     im = TEX[t].convert('RGBA')
     if g in ('o', 'add'):
         im.putalpha(255)
+    elif SUR and t in ADD:
+        _q = np.asarray(im).astype(np.float32)
+        _q[:, :, 3] = np.clip(_q[:, :, :3].max(axis=2) * 3.0, 0, 255)
+        im = Image.fromarray(_q.astype(np.uint8), 'RGBA')
     im.save(png)
     subprocess.run(['ultimate_tex_cli', png, os.path.join(D, tname(t) + '.nutexb'), '--format', 'BC7RgbaUnormSrgb'],
                    check=True, capture_output=True)
