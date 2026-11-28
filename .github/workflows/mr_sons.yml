@@ -31,9 +31,11 @@ jobs:
         run: |
           mkdir -p /tmp/out
           C=outils/machrider/carte_vc.json; [ -f "$C" ] || C=""
-          python3 outils/machrider/build_vc_mr.py /tmp/sons/21C /tmp/tpl/vc_captain_modele.nus3audio /tmp/out/vc_captain_c190.nus3audio $C > /tmp/out/build.txt 2>&1 || true
+          python3 outils/machrider/build_vc_mr.py /tmp/sons/21C /tmp/tpl/vc_captain_modele.nus3audio /tmp/out/vc_captain_c190.nus3audio $C vc > /tmp/out/build.txt 2>&1 || true
           cp /tmp/modele.txt /tmp/modele_se.txt /tmp/out/ 2>/dev/null || true
           [ -f /tmp/tpl/se_captain_modele.nus3audio ] && python3 outils/nus3.py /tmp/tpl/se_captain_modele.nus3audio > /tmp/out/se_pistes.txt 2>&1 || true
+          python3 outils/machrider/build_vc_mr.py /tmp/sons/21C /tmp/tpl/se_captain_modele.nus3audio /tmp/out/se_captain_c190.nus3audio outils/machrider/carte_vc.json se > /tmp/out/build_se.txt 2>&1 || true
+          tail -1 /tmp/out/build_se.txt | grep -oE "ok [0-9]+ pistes" || echo "echec se"
           tail -1 /tmp/out/build.txt | grep -oE "ok [0-9]+ pistes" || echo "echec"
           tar cz -C /tmp/out . | openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k -out /tmp/mr_sons.tgz.enc
           rm -f /tmp/k

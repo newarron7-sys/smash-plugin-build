@@ -1,0 +1,286 @@
+{
+ "vc": {
+  "vc_captain_001": [
+   261,
+   2
+  ],
+  "vc_captain_002": [
+   261,
+   3
+  ],
+  "vc_captain_003": [
+   261,
+   4
+  ],
+  "vc_captain_004": [
+   261,
+   5
+  ],
+  "vc_captain_005": [
+   261,
+   6
+  ],
+  "vc_captain_appeal01": [
+   261,
+   18
+  ],
+  "vc_captain_appeal02": [
+   261,
+   7
+  ],
+  "vc_captain_appeal03": [
+   261,
+   8
+  ],
+  "vc_captain_attack01": [
+   261,
+   21
+  ],
+  "vc_captain_attack02": [
+   261,
+   23
+  ],
+  "vc_captain_attack03": [
+   261,
+   24
+  ],
+  "vc_captain_attack04": [
+   261,
+   25
+  ],
+  "vc_captain_attack05": [
+   261,
+   26
+  ],
+  "vc_captain_attack06": [
+   261,
+   27
+  ],
+  "vc_captain_attack07": [
+   261,
+   37
+  ],
+  "vc_captain_damage01": [
+   261,
+   31
+  ],
+  "vc_captain_damage02": [
+   261,
+   32
+  ],
+  "vc_captain_damagefly01": [
+   261,
+   32
+  ],
+  "vc_captain_damagefly02": [
+   261,
+   33
+  ],
+  "vc_captain_knockout": [
+   261,
+   33
+  ],
+  "vc_captain_damage_twinkle": [
+   261,
+   33
+  ],
+  "vc_captain_furafura": [
+   261,
+   34
+  ],
+  "vc_captain_furasleep": [
+   261,
+   30
+  ],
+  "vc_captain_ottotto": [
+   261,
+   30
+  ],
+  "vc_captain_missfoot01": [
+   261,
+   31
+  ],
+  "vc_captain_missfoot02": [
+   261,
+   32
+  ],
+  "vc_captain_passive": [
+   261,
+   37
+  ],
+  "vc_captain_swimup": [
+   261,
+   37
+  ],
+  "vc_captain_win01": [
+   261,
+   44
+  ],
+  "vc_captain_win02": [
+   261,
+   45
+  ],
+  "vc_captain_win03": [
+   261,
+   1
+  ]
+ },
+ "se": {
+  "se_captain_final06": [
+   629,
+   1
+  ],
+  "se_captain_swing_s": [
+   629,
+   2
+  ],
+  "se_captain_swing_m": [
+   629,
+   3
+  ],
+  "se_captain_swing_l": [
+   629,
+   4
+  ],
+  "se_captain_swing_ll": [
+   629,
+   5
+  ],
+  "se_captain_attack100_01": [
+   629,
+   6
+  ],
+  "se_captain_attack100_02": [
+   629,
+   7
+  ],
+  "se_captain_attack100_03": [
+   629,
+   8
+  ],
+  "se_captain_attackhard_H01": [
+   629,
+   9
+  ],
+  "se_captain_final07": [
+   629,
+   10
+  ],
+  "se_captain_special_S01": [
+   629,
+   11
+  ],
+  "se_captain_special_S02": [
+   629,
+   91
+  ],
+  "se_captain_special_S03": [
+   629,
+   85
+  ],
+  "se_captain_special_N03": [
+   629,
+   84
+  ],
+  "se_captain_special_N04": [
+   629,
+   83
+  ],
+  "se_captain_special_H01": [
+   629,
+   82
+  ],
+  "se_captain_special_H02": [
+   629,
+   87
+  ],
+  "se_captain_special_H03": [
+   629,
+   66
+  ],
+  "se_captain_step_left_s": [
+   629,
+   103
+  ],
+  "se_captain_step_left_m": [
+   629,
+   103
+  ],
+  "se_captain_step_left_l": [
+   629,
+   103
+  ],
+  "se_captain_step_right_s": [
+   629,
+   105
+  ],
+  "se_captain_step_right_m": [
+   629,
+   105
+  ],
+  "se_captain_step_right_l": [
+   629,
+   105
+  ],
+  "se_captain_dash_start": [
+   629,
+   54
+  ],
+  "se_captain_dash_stop": [
+   629,
+   55
+  ],
+  "se_captain_dash_turn": [
+   629,
+   55
+  ],
+  "se_captain_jump01": [
+   629,
+   63
+  ],
+  "se_captain_jump02": [
+   629,
+   64
+  ],
+  "se_captain_landing01": [
+   629,
+   65
+  ],
+  "se_captain_landing02": [
+   629,
+   65
+  ],
+  "se_captain_landing03": [
+   629,
+   65
+  ],
+  "se_captain_escape": [
+   629,
+   2
+  ],
+  "se_captain_escapeair": [
+   629,
+   2
+  ],
+  "se_captain_cliffjump": [
+   629,
+   63
+  ],
+  "se_captain_appear01": [
+   629,
+   85
+  ],
+  "se_captain_appear02": [
+   629,
+   87
+  ],
+  "se_captain_appear03": [
+   629,
+   85
+  ],
+  "se_captain_appear04": [
+   629,
+   87
+  ]
+ }
+}

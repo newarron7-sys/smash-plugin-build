@@ -4,13 +4,13 @@ Identifiants du mod -> onde : voix n = id - 0xCB38 (261) ; bruitages n = id - 0x
 Pistes jouées par le jeu (dégâts, KO, rebord ...) : ses cris ; pistes des coups / spéciaux (jouées par les scripts de
 Falcon, retirés) : ses cris et bruitages, joués par le plugin aux images de son PSA. Pistes sans son de Mach Rider :
 muettes (onde vide du mod), pour ne plus entendre Falcon.
-usage : python3 build_vc_mr.py <dossier idsp 21C> <modèle> <sortie> [carte.json]"""
-import json, os, re, sys
+usage : python3 build_vc_mr.py <dossier idsp 21C> <modèle> <sortie> [carte.json [clé : vc / se]]"""
+import json, os, re, struct, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import nus3  # noqa: E402
 
 IDSP, MODELE, OUT = sys.argv[1:4]
-MAP = json.load(open(sys.argv[4])) if len(sys.argv) > 4 else {}
+MAP = json.load(open(sys.argv[4]))[sys.argv[5] if len(sys.argv) > 5 else 'vc'] if len(sys.argv) > 4 else {}
 D = {}
 for l in open(os.path.join(IDSP, 'extraction.txt')):
     if l.startswith('DATA'):
@@ -32,7 +32,13 @@ tracks = []
 for i, n in enumerate(noms):
     if n in MAP:
         f, w = MAP[n]
-        data = onde(f, w)
+        data = bytearray(onde(f, w))
+        # sons en boucle dans le mod (le PSA les arrête) : boucle retirée (comme Master Chief), sinon sans fin
+        boucle = struct.unpack_from('>II', data, 0x14)
+        if boucle[1]:
+            struct.pack_into('>II', data, 0x14, 0, 0)
+            print('BOUCLE RETIREE', n, boucle)
+        data = bytes(data)
         print('SON', n, '<-', f, w, len(data))
     else:
         data = muet
