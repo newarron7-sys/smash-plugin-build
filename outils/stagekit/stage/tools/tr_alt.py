@@ -92,7 +92,7 @@ YM = S.matl_data.read_matl(os.path.join(YS, 'model.numatb'))
 BOTTOM = next(e.material_label for e in YM.entries if e.material_label == 'Bottom')
 NEON_M = os.path.join(NEON, 'model.numatb') if NEON else ''
 M3 = None
-if NEON_M and os.path.exists(NEON_M):
+if NEON_M and os.path.exists(NEON_M) and os.environ.get('TR_LIGNES_FIXES', '0') != '1':
     M3 = next((e for e in S.matl_data.read_matl(NEON_M).entries if e.material_label == 'Material 3'), None)
 print('Material 3 de Neonfield :', M3.shader_label if M3 else 'ABSENT (lignes sans défilement)')
 
@@ -356,6 +356,46 @@ if os.environ.get('TR_ENTERRE', '0') == '1':
         c['materials'] = c['materials'][:1]
         print('enterrée :', c['entry']['name'])
     cols = cols + autres
+if os.environ.get('TR_COLL_BSL', '0') == '1':
+    # test B : collisions faites comme BSL Station (rien de nouveau dans le lvd) : seul le sol d'origine (COL_00_Floor01)
+    # reçoit la chaîne pleine de Brawl, avec ses propres matériaux (rien / hang_l / hang_r) et ses propres rebords
+    # déplacés ; les autres collisions d'origine enterrées sous le sol (sommets / normales seulement) ; pas de plates-formes
+    ch = next(c for c in chaines if not _thr(c[0]))
+    pts = [segs[ch[0]][0]] + [segs[j][1] for j in ch]
+    mats = sol0['materials']
+    m_rien = next(m for m in mats if not any(m['line_flags'].values()))
+    m_l = next((m for m in mats if m['line_flags']['hang_l']), m_rien)
+    m_r = next((m for m in mats if m['line_flags']['hang_r']), m_rien)
+    sol0['vertices'] = [{'x': float(x * ECH), 'y': float((y - Y0) * ECH)} for x, y in pts]
+    nrm, mm, gauche, droite = [], [], [], []
+    for li, j in enumerate(ch):
+        (x0, y0), (x1, y1) = segs[j][0], segs[j][1]
+        n = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5 or 1.0
+        nrm.append({'x': float(-(y1 - y0) / n), 'y': float((x1 - x0) / n)})
+        fl = segs[j][3]
+        mm.append(m_l if fl & 0x2000 else m_r if fl & 0x4000 else m_rien)
+        if fl & 0x2000:
+            gauche.append((segs[j][0], li))
+        if fl & 0x4000:
+            droite.append((segs[j][1], li))
+    sol0['normals'] = nrm
+    sol0['materials'] = mm
+    for cl in sol0['cliffs']:
+        lst = droite if cl['angle'] > 0 else gauche
+        if lst:
+            (x_, y_), li = lst.pop(0)
+            cl['pos'] = {'x': float(x_ * ECH), 'y': float((y_ - Y0) * ECH)}
+            cl['entry']['start_pos'] = {'x': float(x_ * ECH), 'y': float((y_ - Y0) * ECH), 'z': 0.0}
+            cl['line_index'] = li
+    print('test B : sol d\'origine = chaîne de Brawl, rebords d\'origine déplacés :',
+          [(cl['entry']['name'], cl['pos'], cl['angle'], cl['line_index']) for cl in sol0['cliffs']])
+    for c in d['collisions']:
+        if c is sol0:
+            continue
+        c['vertices'] = [{'x': -5.0, 'y': -30.0}, {'x': 5.0, 'y': -30.0}]
+        c['normals'] = [{'x': 0.0, 'y': 1.0}]
+        print('enterrée :', c['entry']['name'], c['entry'].get('bone_name'))
+    cols = d['collisions']
 d['collisions'] = cols
 # corniches : bords des sols pleins (accrochables) laissés au jeu (cliffs vides, comme Gathering of Old Blood)
 allp = np.array(PTS)
