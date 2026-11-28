@@ -1,0 +1,111 @@
+name: Stage - Training Rooms (Brawl) en variante de Smashville (Stage Alts L, a la place d'Unreal)
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/stage-trsv.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: stage-trsv
+  cancel-in-progress: true
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Outils
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar unrar >/dev/null 2>&1 || true
+          pip install ssbh_data_py numpy pillow scipy pyyaml >/dev/null
+          python3 -c "import ssbh_data_py as S; print(S.matl_data)"
+          mkdir -p /tmp/out/travail
+      - name: Stage Brawl (149289), Yoshi's Story (392643), Neonfield (412003), chemins du jeu, lvd HDR
+        run: |
+          set +e
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 149289 /tmp/gb > /dev/null 2>&1
+          cp "$(find /tmp/gb/149289 -name "STGONLINETRAINING.pac" | head -1)" /tmp/out/travail/tr.pac; ls -la /tmp/out/travail
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 392643 /tmp/ys > /dev/null 2>&1
+          dirname "$(find /tmp/ys -path "*normal/model/bg2_set/model.numatb" | head -1)" > /tmp/ys.txt; cat /tmp/ys.txt
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 412003 /tmp/neon > /dev/null 2>&1
+          find /tmp/neon -type d -path "*battlefield_s/normal/model/ring_nocastshadow_set" | head -1 > /tmp/neon.txt; cat /tmp/neon.txt
+          curl -sSL -o /tmp/hashes.txt https://raw.githubusercontent.com/ultimate-research/archive-hashes/master/Hashes_FullPath
+          grep "^stage/animal_village/normal/" /tmp/hashes.txt > /tmp/liste_tr.txt; wc -l < /tmp/liste_tr.txt
+          # refs de Gathering of Old Blood : 387162 (Smashville : conteneurs stc_bg_set, numdlb à 0 entrée), 409684 (UI)
+          for m in 387162 409684; do python3 -u outils/stagekit/stage/tools/gb_fetch.py mod $m /tmp/ref > /dev/null 2>&1; done
+          REF=$(find /tmp/ref/387162 -type d -path "*stage/animal_village" | head -1); echo "$REF"
+          echo "$REF/normal/model/stc_bg_set" > /tmp/refdos.txt; ls "$REF/normal/model/stc_bg_set"
+          echo "$REF/normal/model/dys_guest_asami_set/model.numdlb" > /tmp/vide.txt; ls -la "$(cat /tmp/vide.txt)"
+          mkdir -p /tmp/refui; for n in 1 2 3 4; do find /tmp/ref/409684 -ipath "*ui/replace*/stage/stage_$n/stage_${n}_animal_village.bntx" -exec cp {} /tmp/refui/ \; ; done; ls /tmp/refui
+          mkdir -p /tmp/hdr && cd /tmp/hdr
+          curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
+          unzip -qo sp.zip "*hdr-stages/stage/animal_village/normal/param/*" -d x
+          find /tmp/hdr/x -path "*hdr-stages/stage/animal_village/normal/param/xvillage00.lvd" | head -1 > /tmp/lvd.txt; cat /tmp/lvd.txt
+      - name: Cache ultimate_tex_cli
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/ultimate_tex_cli
+          key: ultimate-tex-cli-v1
+      - name: Cache yamlvd
+        uses: actions/cache@v4
+        with:
+          path: /tmp/lvdtool
+          key: yamlvd-v1
+      - name: ultimate_tex_cli et yamlvd
+        run: |
+          test -x ~/.cargo/bin/ultimate_tex_cli || cargo install --locked --git https://github.com/ScanMountGoat/ultimate_tex ultimate_tex_cli 2>&1 | tail -15
+          test -x /tmp/lvdtool/bin/yamlvd || cargo install smash-lvd --features cli --root /tmp/lvdtool 2>&1 | tail -1
+      - name: Construction
+        run: |
+          set -o pipefail
+          export PATH=$PATH:/tmp/lvdtool/bin:$HOME/.cargo/bin
+          export TR_STAGE=animal_village TR_FORME=normal_s01 TR_DOS=stc_bg_set TR_LVD_NOM=xvillage00.lvd TR_ENTERRE=1 TR_ENTERRE_Y=-2000
+          export TR_REF_DOS="$(cat /tmp/refdos.txt)" TR_VIDE="$(cat /tmp/vide.txt)" TR_CACHES='*' TR_SUR=1
+          export TR_UI_FOURNIS=$(ls /tmp/refui | sed -E 's/stage_([0-9])_.*/\1/' | sort -u | paste -sd,); echo "UI fournies : $TR_UI_FOURNIS"
+          M="/tmp/out/mod/(Stage) Training Rooms (Smashville L)"; mkdir -p "$M"
+          TR_SCENE=/tmp/rendu TR_COLL_PNG=/tmp/out/collisions.png python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -3 | cut -c1-80
+          M="/tmp/out/mod_secours/(Stage) Training Rooms (Smashville L) lignes fixes"; mkdir -p "$M"
+          TR_LIGNES_FIXES=1 python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction_secours.txt | tail -3 | cut -c1-80
+      - name: Apercus (image + animation des lignes)
+        run: |
+          set +e
+          npm i --prefix /tmp/rn three@0.160.0 playwright@1.47.2 >/dev/null 2>&1
+          (cd /tmp/rn && npx playwright install --with-deps chromium >/dev/null 2>&1)
+          R=/tmp/rendu; cp outils/stagekit/stage/tools/rendu/* $R/; cp /tmp/rn/node_modules/three/build/three.module.js $R/
+          (cd $R && nohup python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 3
+          M="/tmp/out/mod/(Stage) Training Rooms (Smashville L)"
+          UI_NOM=animal_village UI_SUFFIXE=_s01 UI_CAM='-20,95,330,-20,70,0,42,50' UI_FOND=000000 NODE_PATH=/tmp/rn/node_modules python3 -u outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu > /tmp/out/ui.txt 2>&1
+          grep -c "greffé" /tmp/out/ui.txt
+          cp -r "$M/ui" "/tmp/out/mod_secours/(Stage) Training Rooms (Smashville L) lignes fixes/"
+          cd $R
+          NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_jeu.png 1280 720 -20 105 310 -20 60 0 45 > /tmp/out/rendu.txt 2>&1
+          NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_cote.png 1280 720 170 120 260 -40 60 -20 45 >> /tmp/out/rendu.txt 2>&1
+          mkdir -p /tmp/gif
+          for i in $(seq 0 11); do dv=$(python3 -c "print(round($i/12,4))")
+            DV=$dv NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/gif/f$(printf %02d $i).png 640 360 -20 105 310 -20 60 0 45 >> /tmp/out/rendu.txt 2>&1; done
+          python3 -c "
+          from PIL import Image; import glob
+          fs=sorted(glob.glob('/tmp/gif/f*.png')); ims=[Image.open(f).convert('RGB') for f in fs]
+          ims[0].save('/tmp/out/lignes_animees.gif', save_all=True, append_images=ims[1:], duration=278, loop=0)
+          print(len(ims), 'images')"
+          (cd /tmp/out/mod && find . -type f | sort > /tmp/out/mod_liste.txt); wc -l < /tmp/out/mod_liste.txt
+          (cd /tmp/out/mod && zip -qr /tmp/out/Training_Rooms_Smashville_L.zip .)
+          (cd /tmp/out/mod_secours && zip -qr /tmp/out/Training_Rooms_Smashville_L_lignes_fixes.zip .)
+          true
+      - name: Chiffrer (cle de la session) et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_trsv && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "trsv" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_trsv

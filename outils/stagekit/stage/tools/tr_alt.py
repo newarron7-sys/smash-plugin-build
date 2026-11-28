@@ -221,6 +221,15 @@ if os.environ.get('TR_VIDE'):
     # Studio Wii Fit : exactement comme BSL Station (numdlb à 0 entrée de Bowser's Keep, liste de BSL)
     assert len(S.modl_data.read_modl(os.environ['TR_VIDE']).entries) == 0
     caches = [x for x in os.environ['TR_CACHES'].split(',') if x]
+    if caches == ['*']:
+        # Smashville (méthode Gathering of Old Blood) : tous les ensembles du stage (réf + liste du jeu) sauf le nôtre
+        ens = set()
+        RMD = os.path.dirname(REF_DOS.rstrip('/'))
+        ens.update(d_ for d_ in os.listdir(RMD) if os.path.isdir(os.path.join(RMD, d_)))
+        for l in open(LISTE):
+            if l.startswith('stage/%s/normal/model/' % STAGE):
+                ens.add(l.strip().split('/')[4])
+        caches = sorted(ens - {DOS})
     for d in caches:
         os.makedirs(os.path.join(ST, 'model', d), exist_ok=True)
         shutil.copy(os.environ['TR_VIDE'], os.path.join(ST, 'model', d, 'model.numdlb'))
@@ -357,7 +366,8 @@ autres = [c for c in d['collisions'] if c is not sol0]
 if os.environ.get('TR_ENTERRE', '0') == '1':
     # comme BSL Station : les autres collisions du lvd gardées, enterrées sous le sol
     for c in autres:
-        c['vertices'] = [{'x': -5.0, 'y': -30.0}, {'x': 5.0, 'y': -30.0}]
+        _ye = float(os.environ.get('TR_ENTERRE_Y', '-30'))
+        c['vertices'] = [{'x': -5.0, 'y': _ye}, {'x': 5.0, 'y': _ye}]
         c['normals'] = [{'x': 0.0, 'y': 1.0}]
         c['cliffs'] = []
         c['materials'] = c['materials'][:1]
