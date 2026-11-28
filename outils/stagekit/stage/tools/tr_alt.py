@@ -74,7 +74,8 @@ for _, o in garde:
     if _CE != 1 and '_Sky' in o['name']:
         o['pos'] = o['pos'] * _CE
         print('ciel réduit x%.2f :' % _CE, o['name'])
-    if _ZMAX < 1e8:
+    _zt = [x for x in os.environ.get('TR_ZMAX_TEX', '').split(',') if x]
+    if _ZMAX < 1e8 and (not _zt or o['tex'] in _zt):
         k_ = o['pos'][:, :, 2].mean(axis=1) <= _ZMAX
         if not k_.all():
             print('trop près de la caméra : %d / %d triangles retirés de %s' % ((~k_).sum(), len(k_), o['name']))

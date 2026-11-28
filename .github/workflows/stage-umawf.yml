@@ -73,7 +73,7 @@ jobs:
           export TR_UI_FOURNIS=$(ls /tmp/refui | sed -E 's/stage_([0-9])_.*/\1/' | grep -v '^0$' | sort -u | paste -sd,); echo "UI fournies : $TR_UI_FOURNIS"
           export TR_CACHES=dys_balancer_set,dys_trainer_far_set,dys_trainer_set,dys_trainerm_far_set,dys_trainerm_set,exercisebike_set,stc_cover_set,stc_eff_set,stc_machine_set,stc_room_set,stc_wall_set
           M="/tmp/out/mod/(Stage) Tracen Academy (Wii Fit L)"; mkdir -p "$M"
-          export TR_FORME=normal_s01 TR_PFX=uma_ TR_MODELES=Uma TR_SUR=1 TR_CIEL_ECH=0.3 TR_ZMAX="${UMA_ZMAX:-1e9}"
+          export TR_FORME=normal_s01 TR_PFX=uma_ TR_MODELES=Uma TR_SUR=1 TR_CIEL_ECH=0.3 TR_ZMAX=120 TR_ZMAX_TEX=tex_env_cutin1053_00_00_alpha00,tex_env_cutin1053_00_00_base00
           export TR_CAMERA='-170,170,170,-40' TR_BLAST='-320,320,260,-130' TR_SPAWNS='-60,20,-100,60'
           TR_SCENE=/tmp/rendu TR_COLL_PNG=/tmp/out/collisions.png python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -5 | cut -c1-80
       - name: Apercus (image + animation des lignes)
