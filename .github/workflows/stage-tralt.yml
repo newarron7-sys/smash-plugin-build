@@ -67,7 +67,7 @@ jobs:
           export PATH=$PATH:/tmp/lvdtool/bin:$HOME/.cargo/bin
           M="/tmp/out/mod/(Stage) Training Rooms (Entrainement L)"
           mkdir -p "$M"
-          export TR_SUR=1 TR_BLOCS=1 TR_BLOC_BAS=-260 TR_REF_DOS="$(cat /tmp/refdos.txt)"
+          export TR_SUR=1 TR_BLOCS=1 TR_BLOC_BAS=-260 TR_REF_DOS="$(cat /tmp/refdos.txt)" TR_BOXED="$(dirname "$(cat /tmp/refdos.txt)")"
           export TR_UI_FOURNIS=$(ls /tmp/refui | sed -E 's/stage_([0-9])_.*/\1/' | sort -u | paste -sd,); echo "UI fournies : $TR_UI_FOURNIS"
           TR_SCENE=/tmp/rendu TR_COLL_PNG=/tmp/out/collisions.png python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -5 | cut -c1-80
       - name: Apercus (image + animation des lignes)

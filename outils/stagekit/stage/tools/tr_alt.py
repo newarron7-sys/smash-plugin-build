@@ -259,20 +259,62 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
                       't': tname(t), 'a': g == 'a', 'add': g == 'add', 'l': g == 'l'})
 
 CONT = REF_DOS or YS
+BOXED = os.environ.get('TR_BOXED', '')     # v6 salle d'entraînement : méthode du mod « Training Stage: Boxed » (462054)
+
+
+def en_un_point(m, garde_noms=()):
+    for o in m.objects:
+        if o.name in garde_noms:
+            continue
+        q = np.zeros_like(np.asarray(o.positions[0].data, dtype=np.float32))
+        q[:, 1] = -30.0
+        o.positions[0].data = q
+
+
+base_objs, base_labs, base_entries = [], [], []
+if BOXED:
+    # Boxed garde TOUS les objets / matériaux d'origine (mêmes noms) dans chaque ensemble : le jeu les cherche (plantage
+    # cross2+0x3601e30 quand ils manquent) -> objets d'origine gardés (fichiers de Boxed), ramenés en un point sous le sol,
+    # sauf l'encre (inkMesh, invisible tant qu'il n'y a pas d'encre) ; nos objets ajoutés à côté
+    bm = A.read_mesh(os.path.join(BOXED, DOS, 'model.numshb'))
+    en_un_point(bm, garde_noms=('inkMesh_Shape6',))
+    bd = S.modl_data.read_modl(os.path.join(BOXED, DOS, 'model.numdlb'))
+    lab_de = {(e.mesh_object_name, e.mesh_object_subindex): e.material_label for e in bd.entries}
+    base_objs = list(bm.objects)
+    base_labs = [lab_de[(o.name, o.subindex)] for o in base_objs]
+    base_entries = list(S.matl_data.read_matl(os.path.join(BOXED, DOS, 'model.numatb')).entries)
+    CONT = os.path.join(BOXED, DOS)
+    print('Boxed : objets d\'origine gardés', [(o.name, o.subindex) for o in base_objs], 'matériaux', [e.material_label for e in base_entries])
 matl = S.matl_data.read_matl(os.path.join(CONT, 'model.numatb'))
-matl.entries = entries
+matl.entries = base_entries + entries
 matl.save(os.path.join(D, 'model.numatb'))
 mesh = A.read_mesh(os.path.join(CONT, 'model.numshb'))
-mesh.objects = objs
+mesh.objects = base_objs + objs
 mesh.save(os.path.join(D, 'model.numshb'))
 modl = S.modl_data.read_modl(os.path.join(CONT, 'model.numdlb'))
-modl.entries = [S.modl_data.ModlEntryData(o.name, o.subindex, l) for o, l in zip(objs, labs)]
+modl.entries = [S.modl_data.ModlEntryData(o.name, o.subindex, l) for o, l in zip(base_objs + objs, base_labs + labs)]
 modl.save(os.path.join(D, 'model.numdlb'))
+objs = base_objs + objs
 S.meshex_data.MeshExData.from_mesh_objects(objs).save(os.path.join(D, 'model.numshexb'))
 print('DOSSIER', DOS, len(objs), 'objets', sum(len(o.vertex_indices) // 3 for o in objs), 'triangles')
 
 # autres ensembles d'origine cachés : numdlb à 0 entrée
-if os.environ.get('TR_VIDE'):
+if BOXED:
+    # méthode Boxed : fichiers de Boxed de chaque ensemble (mêmes objets que le jeu), sommets ramenés en un point
+    for d in sorted(os.listdir(BOXED)):
+        if d == DOS or not os.path.isdir(os.path.join(BOXED, d)):
+            continue
+        dst = os.path.join(ST, 'model', d)
+        os.makedirs(dst, exist_ok=True)
+        for f in os.listdir(os.path.join(BOXED, d)):
+            if f.startswith('model.') and f not in ('model.numshb', 'model.numshexb'):
+                shutil.copy(os.path.join(BOXED, d, f), dst)
+        m = A.read_mesh(os.path.join(BOXED, d, 'model.numshb'))
+        en_un_point(m)
+        m.save(os.path.join(dst, 'model.numshb'))
+        S.meshex_data.MeshExData.from_mesh_objects(m.objects).save(os.path.join(dst, 'model.numshexb'))
+        print('Boxed en un point :', d, [(o.name, o.subindex) for o in m.objects], sorted(os.listdir(dst)))
+elif os.environ.get('TR_VIDE'):
     # Studio Wii Fit : exactement comme BSL Station (numdlb à 0 entrée de Bowser's Keep, liste de BSL)
     assert len(S.modl_data.read_modl(os.environ['TR_VIDE']).entries) == 0
     caches = [x for x in os.environ['TR_CACHES'].split(',') if x]
