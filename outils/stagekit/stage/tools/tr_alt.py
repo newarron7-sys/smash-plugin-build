@@ -63,9 +63,14 @@ for _, mn, ol in models:
         garde.append((mn, o))
 
 
+ADD = set(o['tex'] for _, o in garde if o.get('add'))   # bords lumineux des plates-formes : additifs dans Brawl
+
+
 def genre(t):
     if t == LIGNE:
         return 'l'
+    if t in ADD:
+        return 'add'
     a = np.asarray(TEX[t].convert('RGBA'))[:, :, 3]
     return 'a' if int(a.min()) < 200 else 'o'
 
@@ -151,7 +156,16 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
             d_ = x.data
             d_.cull_mode = S.matl_data.CullMode.Disabled
             x.data = d_
-        if g == 'a':
+        if g == 'add':
+            # additif (méthode Gathering of Old Blood) : One / One, passe triée
+            for x in e.blend_states:
+                d_ = x.data
+                d_.source_color = S.matl_data.BlendFactor.One
+                d_.destination_color = S.matl_data.BlendFactor.One
+                d_.alpha_sample_to_coverage = False
+                x.data = d_
+            e.shader_label = e.shader_label.rsplit('_', 1)[0] + '_sort'
+        elif g == 'a':
             for x in e.blend_states:
                 d_ = x.data
                 d_.alpha_sample_to_coverage = True
@@ -165,7 +179,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
     print('%-7s %-14s %s %6d tri %6d sommets' % (mo.name, t, g, len(idx) // 3, nv))
     png = os.path.join(OUT, '_tmp.png')
     im = TEX[t].convert('RGBA')
-    if g == 'o':
+    if g in ('o', 'add'):
         im.putalpha(255)
     im.save(png)
     subprocess.run(['ultimate_tex_cli', png, os.path.join(D, tname(t) + '.nutexb'), '--format', 'BC7RgbaUnormSrgb'],
@@ -177,7 +191,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
         p *= ECH
         u = o['uv'][:, [0, 2, 1]] if o['uv'] is not None else np.zeros(p.shape[:2] + (2,))
         scene.append({'p': np.round(p.reshape(-1), 4).tolist(), 'uv': np.round(u.reshape(-1), 5).tolist(),
-                      't': tname(t), 'a': g == 'a', 'add': False, 'l': g == 'l'})
+                      't': tname(t), 'a': g == 'a', 'add': g == 'add', 'l': g == 'l'})
 
 matl = S.matl_data.read_matl(os.path.join(YS, 'model.numatb'))
 matl.entries = entries
@@ -209,7 +223,7 @@ if os.environ.get('TR_SCENE'):
     os.makedirs(os.path.join(SC, 'tex'), exist_ok=True)
     for t in par_tex:
         im = TEX[t].convert('RGBA')
-        if genre(t) == 'o':
+        if genre(t) in ('o', 'add'):
             im.putalpha(255)
         im.save(os.path.join(SC, 'tex', tname(t) + '.png'))
     json.dump(scene, open(os.path.join(SC, 'scene.json'), 'w'))
