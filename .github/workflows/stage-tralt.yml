@@ -43,6 +43,10 @@ jobs:
           python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 462054 /tmp/ref > /dev/null 2>&1
           dirname "$(find /tmp/ref/462054 -path "*stage/training/normal/model/training_base_set/model.numdlb" | head -1)" > /tmp/refdos.txt; cat /tmp/refdos.txt
           mkdir -p /tmp/refui; find /tmp/ref/462054 -ipath "*ui/replace*/stage/stage_*" -name "stage_*_training.bntx" -exec cp {} /tmp/refui/ \; ; ls /tmp/refui
+          # caméra 3D : Param [Training] 3D (434054)
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 434054 /tmp/p3d > /dev/null 2>&1
+          find /tmp/p3d -name "stageparam_training.stprm" | head -1 > /tmp/stprm.txt; cat /tmp/stprm.txt
+          mkdir -p /tmp/out/param3d; P3=$(find /tmp/p3d -maxdepth 3 -type d -name "Param*" | head -1); [ -n "$P3" ] && cp -r "$P3" /tmp/out/param3d/; ls -R /tmp/out/param3d | head
           mkdir -p /tmp/hdr && cd /tmp/hdr
           curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
           unzip -qo sp.zip "*hdr-stages/stage/battlefield/normal/param/battlefield_00.lvd" -d x
@@ -67,7 +71,7 @@ jobs:
           export PATH=$PATH:/tmp/lvdtool/bin:$HOME/.cargo/bin
           M="/tmp/out/mod/(Stage) Training Rooms (Entrainement L)"
           mkdir -p "$M"
-          export TR_SUR=1 TR_BLOCS=1 TR_BLOC_BAS=-260 TR_REF_DOS="$(cat /tmp/refdos.txt)" TR_BOXED="$(dirname "$(cat /tmp/refdos.txt)")"
+          export TR_SUR=1 TR_BLOCS=1 TR_BLOC_BAS=-260 TR_REF_DOS="$(cat /tmp/refdos.txt)" TR_BOXED="$(dirname "$(cat /tmp/refdos.txt)")" TR_STPRM="$(cat /tmp/stprm.txt)"
           export TR_UI_FOURNIS=$(ls /tmp/refui | sed -E 's/stage_([0-9])_.*/\1/' | sort -u | paste -sd,); echo "UI fournies : $TR_UI_FOURNIS"
           TR_SCENE=/tmp/rendu TR_COLL_PNG=/tmp/out/collisions.png python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -5 | cut -c1-80
       - name: Apercus (image + animation des lignes)
@@ -94,6 +98,7 @@ jobs:
           print(len(ims), 'images')"
           (cd /tmp/out/mod && find . -type f | sort > /tmp/out/mod_liste.txt); wc -l < /tmp/out/mod_liste.txt
           (cd /tmp/out/mod && zip -qr /tmp/out/Training_Rooms_L.zip .)
+          (cd /tmp/out/param3d && zip -qr /tmp/out/Param_Training_3D_original.zip .)
           true
       - name: Chiffrer (cle de la session) et publier
         if: always()
@@ -104,4 +109,3 @@ jobs:
           openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
           cd /tmp/pub && git init -q -b sortie_tralt && git config user.name gha && git config user.email gha@users.noreply.github.com
           git add -A && git commit -q -m "tralt" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_tralt
-# v6b

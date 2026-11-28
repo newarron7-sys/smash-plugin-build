@@ -571,6 +571,11 @@ if os.environ.get('TR_LVD_ORIGINE', '0') == '1':
     shutil.copy(LVD, os.path.join(P_, LVD_NOM))
     print('test : lvd d\'origine tel quel', LVD)
 
+if os.environ.get('TR_STPRM'):
+    # caméra 3D du terrain Entraînement (mod « Param [Training] 3D », 434054), seulement dans la variante
+    shutil.copy(os.environ['TR_STPRM'], os.path.join(P_, os.path.basename(os.environ['TR_STPRM'])))
+    print('caméra : stprm fourni', os.path.basename(os.environ['TR_STPRM']))
+
 # config.json (Stage Alts)
 fournis = set()
 for racine, _, fichiers in os.walk(ST):
