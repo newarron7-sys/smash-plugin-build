@@ -1,0 +1,83 @@
+name: Stage - salle d'entrainement (references)
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/stage-train-refs.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Outils
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar unrar >/dev/null 2>&1 || true
+          pip install ssbh_data_py numpy pillow pyyaml >/dev/null
+          mkdir -p /tmp/out/refs
+      - name: Mods de reference du stage d'entrainement (462054, 145531, 516643, 434054, 145530)
+        run: |
+          set +e
+          for m in 462054 145531 516643 434054 145530; do
+            python3 -u outils/stagekit/stage/tools/gb_fetch.py mod $m /tmp/tr > /dev/null 2>&1
+            echo "== $m"; find /tmp/tr/$m -type f -not -path "*archives*" | sed "s#/tmp/tr/$m/##" | head -80
+          done > /tmp/out/refs/training_mods.txt 2>&1
+          # tous les dossiers stage/training trouves, copies (sans les textures lourdes)
+          find /tmp/tr -type d -path "*stage/training" | while read d; do
+            m=$(echo "$d" | cut -d/ -f4); mkdir -p /tmp/out/refs/tr_$m; cp -r "$d" /tmp/out/refs/tr_$m/ ; done
+          du -sh /tmp/out/refs/tr_* 2>/dev/null
+      - name: Neonfield (Material 3 a defilement automatique)
+        run: |
+          set +e
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py cherche "neonfield" stage/battlefield_s/normal/model /tmp/neon 3 > /tmp/out/refs/neon.txt 2>&1
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py cherche "neon field" stage/battlefield_s/normal/model /tmp/neon 3 >> /tmp/out/refs/neon.txt 2>&1
+          tail -20 /tmp/out/refs/neon.txt
+          d=$(find /tmp/neon -type d -path "*battlefield_s/normal/model/ring_nocastshadow_set" | head -1); echo "neon : $d"
+          if [ -n "$d" ]; then mkdir -p /tmp/out/refs/neon; cp "$d"/model.num* /tmp/out/refs/neon/; fi
+          python3 - <<'PY' > /tmp/out/refs/neon_mats.txt 2>&1
+          import glob, ssbh_data_py as S
+          for p in glob.glob('/tmp/out/refs/neon/model.numatb'):
+              for e in S.matl_data.read_matl(p).entries:
+                  print(e.material_label, e.shader_label, [(x.param_id.name, x.data) for x in e.textures], [(v.param_id.name, v.data) for v in e.vectors])
+          PY
+          cat /tmp/out/refs/neon_mats.txt | cut -c1-200
+      - name: Yoshi's Story (materiau Bottom) et HDR (stage training, variantes, lvd)
+        run: |
+          set +e
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod 392643 /tmp/ys > /dev/null 2>&1
+          f=$(find /tmp/ys -path "*normal/model/bg2_set/model.numatb" | head -1); mkdir -p /tmp/out/refs/ys; cp "$(dirname "$f")"/model.num* /tmp/out/refs/ys/
+          mkdir -p /tmp/hdr && cd /tmp/hdr
+          curl -sSL -o sp.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.50.10/switch-package.zip
+          for u in https://github.com/HDR-Development/hdr-releases/releases/download/v0.49.11/switch-package.zip https://github.com/HDR-Development/hdr-prereleases/releases/download/v0.49.11/switch-package.zip; do
+            curl -sSL -f -o old.zip "$u" && break
+          done
+          for z in old.zip sp.zip; do echo "== $z"; unzip -l $z | awk '{print $4}' | grep -E "stage/training|stage/battlefield/normal/param|stage/end/normal/param" ; done > /tmp/out/refs/hdr_training.txt
+          unzip -l old.zip | awk '{print $4}' | grep -oE 'hdr-stages/stage/[a-z_]+/normal_s[0-9]+' | sort -u > /tmp/out/refs/hdr_variantes.txt
+          unzip -qo sp.zip "*hdr-stages/stage/battlefield/normal/param/*" "*hdr-stages/stage/end/normal/param/*" "*hdr-stages/stage/training/*" -d x 2>/dev/null
+          unzip -qo old.zip "*hdr-stages/stage/training/*" -d x_old 2>/dev/null
+          find x x_old -type f | head -40 >> /tmp/out/refs/hdr_training.txt
+          mkdir -p /tmp/out/refs/hdr; find x x_old -name "*.lvd" -exec cp --parents {} /tmp/out/refs/hdr/ \;
+          cat /tmp/out/refs/hdr_training.txt | head -30
+      - name: lvd (yamlvd) - entrees des lvd
+        run: |
+          set +e
+          cargo install smash-lvd --features cli --root /tmp/lvdtool >/dev/null 2>&1
+          export PATH=$PATH:/tmp/lvdtool/bin
+          find /tmp/out/refs -name "*.lvd" | while read f; do yamlvd "$f" "$f.yml" >/dev/null 2>&1; echo "== $f"; python3 -c "
+          import yaml,sys; d=yaml.safe_load(open(sys.argv[1]))
+          for k,v in d.items():
+              if isinstance(v,list): print(' ',k,len(v),[ (x.get('entry') or {}).get('name') for x in v if isinstance(x,dict)][:12])
+          " "$f.yml"; done > /tmp/out/refs/lvd_entrees.txt 2>&1
+          cat /tmp/out/refs/lvd_entrees.txt | head -60
+      - name: Chiffrer et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_trainrefs && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "trainrefs" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_trainrefs
