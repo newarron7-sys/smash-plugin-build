@@ -74,6 +74,13 @@ jobs:
           TR_SCENE=/tmp/rendu TR_COLL_PNG=/tmp/out/collisions.png python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -3 | cut -c1-80
           M="/tmp/out/mod_secours/(Stage) Training Rooms (Smashville L) lignes fixes"; mkdir -p "$M"
           TR_LIGNES_FIXES=1 python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction_secours.txt | tail -3 | cut -c1-80
+      - name: Diagnostic des fichiers du modele (salle + references qui marchent)
+        run: |
+          set +e
+          M="/tmp/out/mod_secours/(Stage) Training Rooms (Smashville L) lignes fixes"
+          REF=$(dirname "$(cat /tmp/refdos.txt)")
+          python3 outils/stagekit/stage/tools/diag_modele.py "$M/stage/animal_village/normal_s01/model/stc_bg_set" "$(cat /tmp/refdos.txt)" "$(cat /tmp/ys.txt)" > /tmp/out/diag.txt 2>&1
+          head -c 6000 /tmp/out/diag.txt
       - name: Apercus (image + animation des lignes)
         run: |
           set +e
