@@ -449,6 +449,10 @@ if os.environ.get('TR_COLL_PNG'):
 yaml.safe_dump(d, open(tmp, 'w'), sort_keys=False)
 subprocess.run(['yamlvd', tmp, os.path.join(P_, LVD_NOM)], check=True, capture_output=True)
 os.remove(tmp)
+if os.environ.get('TR_LVD_ORIGINE', '0') == '1':
+    # test : lvd du stage d'origine (HDR) sans aucune modification
+    shutil.copy(LVD, os.path.join(P_, LVD_NOM))
+    print('test : lvd d\'origine tel quel', LVD)
 
 # config.json (Stage Alts)
 fournis = set()
