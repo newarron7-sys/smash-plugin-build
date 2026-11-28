@@ -26,12 +26,15 @@ import brawl_coll  # noqa: E402
 PAC, LISTE, YS, NEON, LVD, OUT = sys.argv[1:7]
 A = S.mesh_data
 FORME = os.environ.get('TR_FORME', 'normal_s01')
-ST = os.path.join(OUT, 'stage', 'training', FORME)
+STAGE = os.environ.get('TR_STAGE', 'training')          # v2 : wiifit (Studio Wii Fit, méthode de BSL Station)
+ST = os.path.join(OUT, 'stage', STAGE, FORME)
+REF_DOS = os.environ.get('TR_REF_DOS', '')              # dossier du même ensemble dans une réf du stage (conteneurs)
+LVD_NOM = os.environ.get('TR_LVD_NOM', 'blank_00.lvd')
 if os.path.isdir(os.path.join(OUT, 'stage')):
     shutil.rmtree(os.path.join(OUT, 'stage'))
 ECH = float(os.environ.get('TR_ECHELLE', '1.0'))
 Y0 = float(os.environ.get('TR_Y0', '0.0'))
-DOS = 'training_base_set'
+DOS = os.environ.get('TR_DOS', 'training_base_set')
 PFX = 'tra_'
 MODELES = set(os.environ.get('TR_MODELES', 'StgTrain,zStgBattleFieldAshiba01,zStgBattleFieldAshiba02,'
                                            'zStgBattleFieldAshiba03').split(','))
@@ -193,29 +196,53 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
         scene.append({'p': np.round(p.reshape(-1), 4).tolist(), 'uv': np.round(u.reshape(-1), 5).tolist(),
                       't': tname(t), 'a': g == 'a', 'add': g == 'add', 'l': g == 'l'})
 
-matl = S.matl_data.read_matl(os.path.join(YS, 'model.numatb'))
+CONT = REF_DOS or YS
+matl = S.matl_data.read_matl(os.path.join(CONT, 'model.numatb'))
 matl.entries = entries
 matl.save(os.path.join(D, 'model.numatb'))
-mesh = A.read_mesh(os.path.join(YS, 'model.numshb'))
+mesh = A.read_mesh(os.path.join(CONT, 'model.numshb'))
 mesh.objects = objs
 mesh.save(os.path.join(D, 'model.numshb'))
-modl = S.modl_data.read_modl(os.path.join(YS, 'model.numdlb'))
+modl = S.modl_data.read_modl(os.path.join(CONT, 'model.numdlb'))
 modl.entries = [S.modl_data.ModlEntryData(o.name, o.subindex, l) for o, l in zip(objs, labs)]
 modl.save(os.path.join(D, 'model.numdlb'))
 S.meshex_data.MeshExData.from_mesh_objects(objs).save(os.path.join(D, 'model.numshexb'))
 print('DOSSIER', DOS, len(objs), 'objets', sum(len(o.vertex_indices) // 3 for o in objs), 'triangles')
 
 # autres ensembles d'origine cachés : numdlb à 0 entrée
-ens = set()
-for l in open(LISTE):
-    if l.startswith('stage/training/normal/model/'):
-        ens.add(l.strip().split('/')[4])
-vide = S.modl_data.read_modl(os.path.join(YS, 'model.numdlb'))
-vide.entries = []
-for d in sorted(ens - {DOS}):
-    os.makedirs(os.path.join(ST, 'model', d), exist_ok=True)
-    vide.save(os.path.join(ST, 'model', d, 'model.numdlb'))
-print('cachés (0 entrée) :', ' '.join(sorted(ens - {DOS})))
+if os.environ.get('TR_VIDE'):
+    # Studio Wii Fit : exactement comme BSL Station (numdlb à 0 entrée de Bowser's Keep, liste de BSL)
+    assert len(S.modl_data.read_modl(os.environ['TR_VIDE']).entries) == 0
+    caches = [x for x in os.environ['TR_CACHES'].split(',') if x]
+    for d in caches:
+        os.makedirs(os.path.join(ST, 'model', d), exist_ok=True)
+        shutil.copy(os.environ['TR_VIDE'], os.path.join(ST, 'model', d, 'model.numdlb'))
+    print('cachés (0 entrée) :', ' '.join(caches))
+else:
+    ens = set()
+    for l in open(LISTE):
+        if l.startswith('stage/training/normal/model/'):
+            ens.add(l.strip().split('/')[4])
+    vide = S.modl_data.read_modl(os.path.join(YS, 'model.numdlb'))
+    vide.entries = []
+    for d in sorted(ens - {DOS}):
+        os.makedirs(os.path.join(ST, 'model', d), exist_ok=True)
+        vide.save(os.path.join(ST, 'model', d, 'model.numdlb'))
+    print('cachés (0 entrée) :', ' '.join(sorted(ens - {DOS})))
+if os.environ.get('TR_PLATEAU'):
+    # plateau du Studio Wii Fit : modèle entier (fichiers de mvc2_training) aux sommets ramenés en (0, -30, 0) (BSL)
+    PL = os.environ['TR_PLATEAU']
+    DPL = os.path.join(ST, 'model', os.path.basename(PL.rstrip('/')))
+    os.makedirs(DPL, exist_ok=True)
+    for f in ('model.numdlb', 'model.numatb'):
+        shutil.copy(os.path.join(PL, f), DPL)
+    m = A.read_mesh(os.path.join(PL, 'model.numshb'))
+    for o in m.objects:
+        q = np.zeros_like(np.asarray(o.positions[0].data, dtype=np.float32))
+        q[:, 1] = -30.0
+        o.positions[0].data = q
+    m.save(os.path.join(DPL, 'model.numshb'))
+    print('plateau ramené en un point :', len(m.objects), 'objets')
 
 # scène three.js (aperçu)
 if os.environ.get('TR_SCENE'):
@@ -319,6 +346,16 @@ for k_, ch in enumerate(chaines):
     cols.append(c)
     print('chaîne %d : rebords %s, %s %s' % (k_, [(cl['pos']['x'], cl['pos']['y'], cl['angle']) for cl in c['cliffs']], 'traversable' if c['col_flags']['drop_through'] else 'pleine',
                                   [(round(x, 1), round(y, 1)) for x, y in pts]))
+autres = [c for c in d['collisions'] if c is not sol0]
+if os.environ.get('TR_ENTERRE', '0') == '1':
+    # comme BSL Station : les autres collisions du lvd gardées, enterrées sous le sol
+    for c in autres:
+        c['vertices'] = [{'x': -5.0, 'y': -30.0}, {'x': 5.0, 'y': -30.0}]
+        c['normals'] = [{'x': 0.0, 'y': 1.0}]
+        c['cliffs'] = []
+        c['materials'] = c['materials'][:1]
+        print('enterrée :', c['entry']['name'])
+    cols = cols + autres
 d['collisions'] = cols
 # corniches : bords des sols pleins (accrochables) laissés au jeu (cliffs vides, comme Gathering of Old Blood)
 allp = np.array(PTS)
@@ -363,7 +400,7 @@ if os.environ.get('TR_COLL_PNG'):
         dr.ellipse([x_ - 5, y_ - 10, x_ + 5, y_], fill=(80, 255, 80))
     im_.save(os.environ['TR_COLL_PNG'])
 yaml.safe_dump(d, open(tmp, 'w'), sort_keys=False)
-subprocess.run(['yamlvd', tmp, os.path.join(P_, 'blank_00.lvd')], check=True, capture_output=True)
+subprocess.run(['yamlvd', tmp, os.path.join(P_, LVD_NOM)], check=True, capture_output=True)
 os.remove(tmp)
 
 # config.json (Stage Alts)
@@ -374,15 +411,15 @@ for racine, _, fichiers in os.walk(ST):
 partage = {}
 for l in open(LISTE):
     p = l.strip()
-    if not p.startswith('stage/training/normal/'):
+    if not p.startswith('stage/%s/normal/' % STAGE):
         continue
-    v = p.replace('stage/training/normal/', 'stage/training/%s/' % FORME, 1)
+    v = p.replace('stage/%s/normal/' % STAGE, 'stage/%s/%s/' % (STAGE, FORME), 1)
     if v not in fournis:
         partage[p] = [v]
 UI_FOURNIS = [int(x) for x in os.environ.get('TR_UI_FOURNIS', '').split(',') if x]
 for n in range(5):
     if n not in UI_FOURNIS:
-        partage['ui/replace/stage/stage_%d/stage_%d_training.bntx' % (n, n)] = \
-            ['ui/replace/stage/stage_%d/stage_%d_training_%s.bntx' % (n, n, FORME.split('_')[-1])]
+        partage['ui/replace/stage/stage_%d/stage_%d_%s.bntx' % (n, n, STAGE)] = \
+            ['ui/replace/stage/stage_%d/stage_%d_%s_%s.bntx' % (n, n, STAGE, FORME.split('_')[-1])]
 json.dump({'share_to_vanilla': partage}, open(os.path.join(OUT, 'config.json'), 'w'), indent=2)
 print('fournis', len(fournis), '; partagés avec le jeu', len(partage))
