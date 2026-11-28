@@ -132,6 +132,7 @@ for k, (t, ol) in enumerate(sorted(par_tex.items())):
         up = np.where(np.abs(nrm[:, 1:2]) > 0.9, np.array([[1, 0, 0]]), np.array([[0, 1, 0]]))
         tg = np.c_[np.cross(up, nrm), np.ones(nv)]
     mo.tangents = [attr('Tangent0', tg)]
+    mo.vertex_indices = idx      # v4 : oublié avant -> maillages sans triangles = plantage au chargement (cross2+0x388a0cc)
     lab = 'tra_%s' % t
     if g == 'l' and M3 is not None:
         # mêmes attributs que les maillages de Neonfield (cot_sbf.py)
