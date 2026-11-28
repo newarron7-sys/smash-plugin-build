@@ -1,0 +1,40 @@
+name: Shaders - passes existantes
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/shader-check.yml'
+permissions:
+  contents: write
+jobs:
+  s:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Recherche
+        run: |
+          set +e
+          mkdir -p /tmp/out
+          git clone -q --depth 1 https://github.com/ScanMountGoat/ssbh_wgpu /tmp/w
+          git clone -q --depth 1 https://github.com/ScanMountGoat/Smush-Material-Research /tmp/m
+          (cd /tmp/w && git ls-files | grep -i "shader\|database\|\.bin\|\.json" | head -50) > /tmp/out/w_fichiers.txt
+          (cd /tmp/m && git ls-files | grep -i "shader\|\.csv\|\.json" | head -80) > /tmp/out/m_fichiers.txt
+          for k in 000010000000c100 0000000008008100 0000000800098100 0000000008088280 0100000008008269 0000000000080100; do
+            echo "== $k"; grep -rIl "$k" /tmp/w /tmp/m 2>/dev/null | head -5
+            grep -rIoh "SFX_PBS_${k}_[a-z]*" /tmp/w /tmp/m 2>/dev/null | sort | uniq -c
+          done > /tmp/out/passes.txt 2>&1
+          # base binaire de ssbh_wgpu : chaînes
+          find /tmp/w -name "*.bin" -o -name "*.zst" | head > /tmp/out/bins.txt
+          for b in $(cat /tmp/out/bins.txt); do f=$b; case $b in *.zst) zstd -dq $b -o /tmp/x.bin; f=/tmp/x.bin;; esac
+            strings -n 8 $f | grep -E "SFX_PBS_(000010000000c100|0000000008008100|0000000800098100|0000000008088280)" | sort -u | head -20; done >> /tmp/out/passes.txt
+          cat /tmp/out/passes.txt
+      - name: Chiffrer et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_shaders && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "shaders" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_shaders
