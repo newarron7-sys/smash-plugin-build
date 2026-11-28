@@ -66,6 +66,60 @@ for _, mn, ol in models:
         garde.append((mn, o))
 
 
+# v5 (demande du joueur) : bloc sous le sol jusqu'à y BAS (on voyait le vide) : façade avant (z 64,8) et côté droit (x 199,7)
+# en carreaux de 10 comme le sol (carreau 9,4 + joint 0,6), mêmes textures colonne par colonne que la rangée avant du sol
+# (gris Main, bandes violettes 10mark / MiddleLine), côté droit violet (10mark) comme le bord du sol ; lignes vertes
+# (GreenLine, mêmes UV que le plan Line de Brawl, défilement) juste derrière les joints
+BLOCS = os.environ.get('TR_BLOCS', '0') == '1'
+BAS = float(os.environ.get('TR_BLOC_BAS', '-260'))
+
+
+def blocs():
+    col = {}
+    for mn, o in garde:
+        if mn != 'StgTrain' or o['name'] not in ('Walls', 'SideLines', 'MiddleLine'):
+            continue
+        P = o['pos']
+        m = (P[:, :, 2] > 64).all(1) & (P[:, :, 1] < 0.5).all(1) & (P[:, :, 1] > -10.5).all(1)
+        for t in P[m]:
+            col[int(np.floor((t[:, 0].mean() + 250) / 10))] = o['tex']
+    nrow = int(round((-10 - BAS) / 10))
+    par = {}
+
+    def quad(t, a, b, c, d, ua, ub, uc, ud, n):
+        par.setdefault(t, {'pos': [], 'uv': [], 'nrm': []})
+        par[t]['pos'] += [[a, b, c], [a, c, d]]
+        par[t]['uv'] += [[ua, ub, uc], [ua, uc, ud]]
+        par[t]['nrm'] += [[n, n, n], [n, n, n]]
+    zf, xr = 64.8, 199.73
+    for k in range(1, nrow + 1):
+        y1, y0 = -(10 * k + 0.3), -(10 * k + 9.7)
+        for ix in range(45):
+            x0 = -250 + 10 * ix + (0.1 if ix == 0 else 0.3)
+            x1 = -250 + 10 * ix + 9.7
+            t = col.get(ix, 'Main')
+            quad(t, (x0, y0, zf), (x1, y0, zf), (x1, y1, zf), (x0, y1, zf), (0, 1), (1, 1), (1, 0), (0, 0), (0, 0, 1))
+        for iz in range(12):
+            z0 = -55.05 + 10 * iz + 0.25
+            z1 = -55.05 + 10 * iz + 9.75
+            quad('10mark', (xr, y0, z1), (xr, y0, z0), (xr, y1, z0), (xr, y1, z1), (0, 1), (1, 1), (1, 0), (0, 0), (1, 0, 0))
+
+    def uvl(x, y):
+        return (-0.31 + (x + 252.24) / 451.9 * 1.62, -0.31 + (y + 9.0) / 308.0 * 1.62)
+    yb, yh = BAS - 2, -9.9
+    quad(LIGNE, (-250, yb, 64.6), (199.7, yb, 64.6), (199.7, yh, 64.6), (-250, yh, 64.6),
+         uvl(-250, yb), uvl(199.7, yb), uvl(199.7, yh), uvl(-250, yh), (0, 0, 1))
+    quad(LIGNE, (199.55, yb, 64.8), (199.55, yb, -55.0), (199.55, yh, -55.0), (199.55, yh, 64.8),
+         uvl(-55, yb), uvl(64.8, yb), uvl(64.8, yh), uvl(-55, yh), (1, 0, 0))
+    for t, d in par.items():
+        garde.append(('Blocs', {'name': 'bloc_' + t, 'tex': t, 'pos': np.array(d['pos'], dtype=np.float64),
+                                'uv': np.array(d['uv'], dtype=np.float64), 'nrm': np.array(d['nrm'], dtype=np.float64)}))
+        print('bloc sous le sol : %-10s %5d triangles' % (t, len(d['pos'])))
+
+
+if BLOCS:
+    blocs()
+
 ADD = set(o['tex'] for _, o in garde if o.get('add'))   # bords lumineux des plates-formes : additifs dans Brawl
 
 
@@ -287,6 +341,12 @@ for _n, _d in _out:
     _r = brawl_coll.essai(_d)
     if _r and (PLS is None or len(_r[1]) > len(PLS)):
         PTS, PLS = _r[0], _r[1]
+PTS0 = [tuple(p_) for p_ in PTS]
+if BLOCS:
+    # le bloc descend jusqu'à BAS : côté droit = mur (on peut s'y appuyer), dessous du bloc à BAS
+    _ymin = min(p_[1] for p_ in PTS)
+    PTS = [(p_[0], BAS) + tuple(p_[2:]) if abs(p_[1] - _ymin) < 0.01 else tuple(p_) for p_ in PTS]
+    print('collisions : bas du bloc %.1f -> %.1f (mur à droite)' % (_ymin, BAS))
 segs = [(PTS[a], PTS[b], ty, fl) for a, b, ty, fl in PLS]
 
 
@@ -416,7 +476,7 @@ if os.environ.get('TR_COLL_BSL', '0') == '1':
     cols = d['collisions']
 d['collisions'] = cols
 # corniches : bords des sols pleins (accrochables) laissés au jeu (cliffs vides, comme Gathering of Old Blood)
-allp = np.array(PTS)
+allp = np.array(PTS0)          # caméra / zones de K.O. d'après la salle (pas le bloc du dessous)
 xmin, xmax, ymin, ymax = allp[:, 0].min(), allp[:, 0].max(), allp[:, 1].min(), allp[:, 1].max()
 cb = d['camera_boundary'][0]
 bz = d['blast_zone'][0]

@@ -68,7 +68,7 @@ jobs:
           set -o pipefail
           export PATH=$PATH:/tmp/lvdtool/bin:$HOME/.cargo/bin
           export TR_STAGE=animal_village TR_FORME=normal_s01 TR_DOS=stc_bg_set TR_LVD_NOM=xvillage00.lvd TR_ENTERRE=1 TR_ENTERRE_Y=-2000
-          export TR_REF_DOS="$(cat /tmp/refdos.txt)" TR_VIDE="$(cat /tmp/vide.txt)" TR_CACHES='*' TR_SUR=1
+          export TR_REF_DOS="$(cat /tmp/refdos.txt)" TR_VIDE="$(cat /tmp/vide.txt)" TR_CACHES='*' TR_SUR=1 TR_BLOCS=1 TR_BLOC_BAS=-260
           export TR_UI_FOURNIS=$(ls /tmp/refui | sed -E 's/stage_([0-9])_.*/\1/' | sort -u | paste -sd,); echo "UI fournies : $TR_UI_FOURNIS"
           M="/tmp/out/mod/(Stage) Training Rooms (Smashville L)"; mkdir -p "$M"
           TR_SCENE=/tmp/rendu TR_COLL_PNG=/tmp/out/collisions.png python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -3 | cut -c1-80
@@ -94,6 +94,7 @@ jobs:
           cp -r "$M/ui" "/tmp/out/mod_secours/(Stage) Training Rooms (Smashville L) lignes fixes/"
           cd $R
           NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_jeu.png 1280 720 -20 105 310 -20 60 0 45 > /tmp/out/rendu.txt 2>&1
+          NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_dessous.png 1280 720 -25 60 430 -25 10 0 48 >> /tmp/out/rendu.txt 2>&1
           NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_cote.png 1280 720 170 120 260 -40 60 -20 45 >> /tmp/out/rendu.txt 2>&1
           mkdir -p /tmp/gif
           for i in $(seq 0 11); do dv=$(python3 -c "print(round($i/12,4))")
@@ -116,4 +117,3 @@ jobs:
           openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
           cd /tmp/pub && git init -q -b sortie_trsv && git config user.name gha && git config user.email gha@users.noreply.github.com
           git add -A && git commit -q -m "trsv" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_trsv
-# v4 indices
