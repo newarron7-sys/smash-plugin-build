@@ -20,6 +20,8 @@ OUT = sys.argv[1]
 KIND = sys.argv[2] if len(sys.argv) > 2 else 'ganon'
 QUERIES = sys.argv[3].split(',') if len(sys.argv) > 3 else ['ganondorf voice', 'ganondorf voice pack', 'ganon voice', 'ganondorf sound']
 os.makedirs(OUT, exist_ok=True)
+# Mach Rider : PREFIXE=se pour une banque de bruitages (se_<perso>*.nus3audio) ; défaut vc (voix)
+PRE = os.environ.get('PREFIXE', 'vc')
 UA = {'User-Agent': 'Mozilla/5.0'}
 
 
@@ -69,7 +71,7 @@ for model, idr, name in cands[:25]:
             continue
         x = os.path.join(d, 'x')
         subprocess.run(['7z', 'x', '-y', '-o' + x, arc], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for v in glob.glob(os.path.join(x, '**', 'vc_%s*.nus3audio' % KIND), recursive=True):
+        for v in glob.glob(os.path.join(x, '**', '%s_%s*.nus3audio' % (PRE, KIND)), recursive=True):
             try:
                 tr = nus3.read(v)
             except Exception as e:  # noqa: BLE001
@@ -78,13 +80,13 @@ for model, idr, name in cands[:25]:
             print('MODELE', idr, name, os.path.relpath(v, x), len(tr), 'pistes')
             if best is None or len(tr) > best[0]:
                 best = (len(tr), v, idr, name)
-        for v in glob.glob(os.path.join(x, '**', 'vc_%s*.nus3bank' % KIND), recursive=True):
+        for v in glob.glob(os.path.join(x, '**', '%s_%s*.nus3bank' % (PRE, KIND)), recursive=True):
             print('BANQUE', idr, os.path.relpath(v, x))
-            shutil.copy(v, os.path.join(OUT, 'vc_%s.nus3bank.' % KIND + str(idr)))
+            shutil.copy(v, os.path.join(OUT, '%s_%s.nus3bank.' % (PRE, KIND) + str(idr)))
     if best and best[0] >= 40:
         break
 if best:
-    shutil.copy(best[1], os.path.join(OUT, 'vc_%s_modele.nus3audio' % KIND))
+    shutil.copy(best[1], os.path.join(OUT, '%s_%s_modele.nus3audio' % (PRE, KIND)))
     print('CHOISI', best[2], best[3], best[0], 'pistes')
     for t in nus3.read(best[1]):
         print('TRACK %4d %-40s %8d %s' % t)
