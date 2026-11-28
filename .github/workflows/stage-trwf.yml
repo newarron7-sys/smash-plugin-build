@@ -71,6 +71,8 @@ jobs:
           mkdir -p "$M"
           export TR_STAGE=wiifit TR_FORME=normal_s01 TR_DOS=stc_floor_set TR_LVD_NOM=wiifit00.lvd TR_ENTERRE=1
           export TR_REF_DOS="$(cat /tmp/refdos.txt)" TR_VIDE="$(cat /tmp/vide.txt)" TR_PLATEAU="$(cat /tmp/plateau.txt)"
+          mkdir -p /tmp/refui; find /tmp/ref/482979 -ipath "*ui/replace*/stage/stage_*" -name "stage_*_wiifit.bntx" -exec cp {} /tmp/refui/ \;
+          export TR_UI_FOURNIS=$(ls /tmp/refui | sed -E 's/stage_([0-9])_.*/\1/' | grep -v '^0$' | sort -u | paste -sd,); echo "UI fournies : $TR_UI_FOURNIS"
           export TR_CACHES=dys_balancer_set,dys_trainer_far_set,dys_trainer_set,dys_trainerm_far_set,dys_trainerm_set,exercisebike_set,stc_cover_set,stc_eff_set,stc_machine_set,stc_room_set,stc_wall_set
           TR_SCENE=/tmp/rendu TR_COLL_PNG=/tmp/out/collisions.png python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -5 | cut -c1-80
       - name: Apercus (image + animation des lignes)
@@ -80,6 +82,9 @@ jobs:
           (cd /tmp/rn && npx playwright install --with-deps chromium >/dev/null 2>&1)
           R=/tmp/rendu; cp outils/stagekit/stage/tools/rendu/* $R/; cp /tmp/rn/node_modules/three/build/three.module.js $R/
           (cd $R && nohup python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 3
+          M="/tmp/out/mod/(Stage) Training Rooms (Wii Fit L)"
+          UI_NOM=wiifit UI_SUFFIXE=_s01 UI_CAM='-20,95,330,-20,70,0,42,50' UI_FOND=000000 NODE_PATH=/tmp/rn/node_modules python3 -u outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu > /tmp/out/ui.txt 2>&1
+          grep -c "greffé" /tmp/out/ui.txt
           cd $R
           NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_jeu.png 1280 720 -20 105 310 -20 60 0 45 > /tmp/out/rendu.txt 2>&1
           NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_cote.png 1280 720 170 120 260 -40 60 -20 45 >> /tmp/out/rendu.txt 2>&1
