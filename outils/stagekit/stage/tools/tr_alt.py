@@ -306,9 +306,13 @@ if BOXED:
             continue
         dst = os.path.join(ST, 'model', d)
         os.makedirs(dst, exist_ok=True)
+        vanille = set(l.strip() for l in open(LISTE))
         for f in os.listdir(os.path.join(BOXED, d)):
             if f.startswith('model.') and f not in ('model.numshb', 'model.numshexb'):
                 shutil.copy(os.path.join(BOXED, d, f), dst)
+            elif f.endswith('.nutexb') and 'stage/%s/normal/model/%s/%s' % (STAGE, d, f) not in vanille:
+                shutil.copy(os.path.join(BOXED, d, f), dst)      # texture ajoutée par Boxed (utilisée par ses matériaux)
+                print('  texture de Boxed absente du jeu, fournie :', d, f)
         m = A.read_mesh(os.path.join(BOXED, d, 'model.numshb'))
         en_un_point(m)
         m.save(os.path.join(dst, 'model.numshb'))

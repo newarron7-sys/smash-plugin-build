@@ -104,3 +104,4 @@ jobs:
           openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
           cd /tmp/pub && git init -q -b sortie_tralt && git config user.name gha && git config user.email gha@users.noreply.github.com
           git add -A && git commit -q -m "tralt" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_tralt
+# v6b
