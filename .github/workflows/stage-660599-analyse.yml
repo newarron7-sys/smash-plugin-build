@@ -1,0 +1,62 @@
+name: Stage - Stage GameBanana 660599 - analyse
+on:
+  push:
+    branches: [ marioults ]
+    paths:
+      - '.github/workflows/stage-660599-analyse.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  r:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MID: '660599'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Outils
+        run: |
+          sudo apt-get install -y p7zip-full p7zip-rar unrar >/dev/null 2>&1 || true
+          pip install ssbh_data_py numpy pillow scipy pyyaml >/dev/null
+          mkdir -p /tmp/out/travail
+      - name: Page du mod
+        run: |
+          set +e
+          curl -sSL -A "Mozilla/5.0" "https://gamebanana.com/apiv11/Mod/$MID/ProfilePage" -o /tmp/out/page.json
+          python3 - <<'PY'
+          import json, re, html
+          p = json.load(open('/tmp/out/page.json'))
+          t = re.sub(r'<[^>]+>', ' ', html.unescape(p.get('_sText', '') or ''))
+          open('/tmp/out/page.txt', 'w').write('%s\n%s\n\n%s\n' % (p.get('_sName'), p.get('_aCategory', {}).get('_sName'), re.sub(r'\s+', ' ', t)))
+          PY
+          for u in $(python3 -c "import json;[print(m['_sBaseUrl']+'/'+m['_sFile']) for m in json.load(open('/tmp/out/page.json')).get('_aPreviewMedia',{}).get('_aImages',[])]"); do curl -sSL -o "/tmp/out/photo_$(basename $u)" "$u"; done
+          ls /tmp/out
+      - name: Telechargement
+        run: |
+          python3 -u outils/stagekit/stage/tools/gb_fetch.py mod $MID /tmp/gb > /tmp/out/fichiers.txt 2>&1; tail -5 /tmp/out/fichiers.txt
+          find /tmp/gb/$MID -type f | sed "s#/tmp/gb/$MID/##" > /tmp/out/contenu.txt; cat /tmp/out/contenu.txt
+          find /tmp/gb/$MID -iname "*.pac" -print0 | while IFS= read -r -d '' f; do cp "$f" /tmp/out/travail/; done
+          find /tmp/gb/$MID -iname "*.txt" -print0 | while IFS= read -r -d '' f; do echo "== $f"; head -60 "$f"; done > /tmp/out/lisezmoi.txt 2>&1
+      - name: Analyse (modeles, collisions, apercu de face)
+        run: |
+          set +e
+          for f in /tmp/out/travail/*.pac; do
+            b=$(basename "$f" .pac)
+            python3 -u outils/stagekit/stage/tools/analyse_brawl_stage.py "$f" /tmp/out/apercu_$b.png "$b" -56,56,0 > /tmp/out/analyse_$b.txt 2>&1
+            python3 -u outils/stagekit/stage/tools/brawl_coll.py "$f" > /tmp/out/collisions_$b.txt 2>&1
+            echo "=== $b $(wc -l < /tmp/out/analyse_$b.txt) $(wc -l < /tmp/out/collisions_$b.txt)"
+          done
+          true
+      - name: Chiffrer et publier
+        if: always()
+        run: |
+          mkdir -p /tmp/pub; tar cz -C /tmp/out . > /tmp/o.tgz
+          openssl rand -hex 32 > /tmp/k.bin
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass file:/tmp/k.bin -in /tmp/o.tgz | split -b 90m - /tmp/pub/out.session.enc.
+          openssl pkeyutl -encrypt -pubin -inkey cle_session.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k.bin -out /tmp/pub/k.session.enc; rm -f /tmp/k.bin /tmp/o.tgz
+          cd /tmp/pub && git init -q -b sortie_s660599 && git config user.name gha && git config user.email gha@users.noreply.github.com
+          git add -A && git commit -q -m "s660599" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" sortie_s660599
