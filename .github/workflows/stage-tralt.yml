@@ -74,6 +74,9 @@ jobs:
           export TR_SUR=1 TR_BLOCS=1 TR_BLOC_BAS=-260 TR_REF_DOS="$(cat /tmp/refdos.txt)" TR_BOXED="$(dirname "$(cat /tmp/refdos.txt)")" TR_STPRM="$(cat /tmp/stprm.txt)"
           export TR_UI_FOURNIS=$(ls /tmp/refui | sed -E 's/stage_([0-9])_.*/\1/' | sort -u | paste -sd,); echo "UI fournies : $TR_UI_FOURNIS"
           TR_SCENE=/tmp/rendu TR_COLL_PNG=/tmp/out/collisions.png python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction.txt | tail -5 | cut -c1-80
+          # variante R : même salle sans le bloc sous le sol (version d'avant), caméra 3D aussi
+          M="/tmp/out/mod_r/(Stage) Training Rooms (Entrainement R) sans blocs"; mkdir -p "$M"
+          TR_FORME=normal_s02 TR_BLOCS=0 TR_SCENE=/tmp/rendu2 python3 -u outils/stagekit/stage/tools/tr_alt.py /tmp/out/travail/tr.pac /tmp/liste_tr.txt "$(cat /tmp/ys.txt)" "$(cat /tmp/neon.txt)" "$(cat /tmp/lvd.txt)" "$M" 2>&1 | tee /tmp/out/construction_r.txt | tail -5 | cut -c1-80
       - name: Apercus (image + animation des lignes)
         run: |
           set +e
@@ -99,6 +102,13 @@ jobs:
           (cd /tmp/out/mod && find . -type f | sort > /tmp/out/mod_liste.txt); wc -l < /tmp/out/mod_liste.txt
           (cd /tmp/out/mod && zip -qr /tmp/out/Training_Rooms_L.zip .)
           (cd /tmp/out/param3d && zip -qr /tmp/out/Param_Training_3D_original.zip .)
+          # images de l'écran des terrains de la variante R (scène sans le bloc)
+          cp /tmp/rendu2/scene.json $R/scene.json; cp /tmp/rendu2/tex/* $R/tex/
+          M="/tmp/out/mod_r/(Stage) Training Rooms (Entrainement R) sans blocs"
+          UI_NOM=training UI_SUFFIXE=_s02 UI_CAM='-20,95,330,-20,70,0,42,50' UI_FOND=000000 NODE_PATH=/tmp/rn/node_modules python3 -u $GITHUB_WORKSPACE/outils/stagekit/stage/tools/ui_pp.py $R /tmp/refui "$M/ui" /tmp/out/ui_apercu_r > /tmp/out/ui_r.txt 2>&1
+          grep -c "greffé" /tmp/out/ui_r.txt
+          NODE_PATH=/tmp/rn/node_modules UI_FOND=000000 node rendu.js /tmp/out/apercu_r.png 1280 720 -25 60 430 -25 10 0 48 >> /tmp/out/rendu.txt 2>&1
+          (cd /tmp/out/mod_r && zip -qr /tmp/out/Training_Rooms_Entrainement_R_sans_blocs.zip .)
           true
       - name: Chiffrer (cle de la session) et publier
         if: always()
